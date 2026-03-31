@@ -34,6 +34,9 @@ export async function createMemberAction(
   const isManagement = !!managementRole;
 
   if (isManagement) {
+    if (!email?.trim()) {
+      return { success: false, error: "Pro admin/moderator roli je nutny email." };
+    }
     if (!password || password.length < 8) {
       return { success: false, error: "Pro admin/moderator roli je nutne zadat heslo (min. 8 znaku)." };
     }

@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { MeetingControls } from "@/components/meetings/MeetingControls";
 import { VoteResults } from "@/components/votes/VoteResults";
 import { ReportButton } from "@/components/meetings/ReportButton";
+import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
 
 export default async function MeetingDetailPage({
@@ -29,6 +30,7 @@ export default async function MeetingDetailPage({
   const isManagement =
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
+  const isAdmin = session.managementRole === "admin";
 
   // Get all guests for the "add guest" dropdown
   const allGuests = isManagement && meeting.status === "draft"
@@ -99,10 +101,13 @@ export default async function MeetingDetailPage({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {isManagement && <MeetingControls meetingId={id} status={meeting.status} />}
           {isManagement && meeting.status === "closed" && (
             <ReportButton meetingId={id} />
+          )}
+          {isAdmin && (
+            <DeleteMeetingButton meetingId={id} meetingDate={meeting.date} />
           )}
         </div>
       </div>

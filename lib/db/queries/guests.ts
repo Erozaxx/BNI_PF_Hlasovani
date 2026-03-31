@@ -115,6 +115,13 @@ export async function updateGuest(
 }
 
 /**
+ * Delete a guest by ID (cascades notes, votes, meeting_guest rows).
+ */
+export async function deleteGuest(id: string) {
+  await getDb().delete(guest).where(eq(guest.id, id));
+}
+
+/**
  * Update a guest's category.
  */
 export async function updateGuestCategory(id: string, categoryId: string) {

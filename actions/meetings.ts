@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requireManagementRole, requireAdmin } from "@/lib/auth/guards";
 import {
   createMeeting as dbCreateMeeting,
+  deleteMeeting as dbDeleteMeeting,
   addGuestToMeeting as dbAddGuestToMeeting,
   removeGuestFromMeeting as dbRemoveGuestFromMeeting,
   getMeetingById,
@@ -28,9 +29,38 @@ export async function createMeetingAction(
     const mtg = await dbCreateMeeting(date);
     revalidatePath("/meetings");
     return { success: true, data: { id: mtg.id } };
-  } catch (error) {
+  } catch (error: unknown) {
+    const dbError = error as { code?: string };
+    if (dbError?.code === "23505") {
+      return { success: false, error: `Schuzka na datum ${date} jiz existuje.` };
+    }
     console.error("createMeetingAction error:", error);
     return { success: false, error: "Nepodarilo se vytvorit schuzku." };
+  }
+}
+
+/**
+ * Delete a meeting and all related data (votes, meeting_guests). Requires admin role.
+ */
+export async function deleteMeetingAction(
+  meetingId: string
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    const mtg = await getMeetingById(meetingId);
+    if (!mtg) {
+      return { success: false, error: "Schuzka nebyla nalezena." };
+    }
+
+    await dbDeleteMeeting(meetingId);
+    revalidatePath("/meetings");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    console.error("deleteMeetingAction error:", error);
+    return { success: false, error: "Nepodarilo se smazat schuzku." };
   }
 }
 
