@@ -69,9 +69,19 @@ export default async function GuestDetailPage({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-main">{guest.name}</h1>
+          {guest.company && (
+            <p className="text-base text-text-muted">{guest.company}</p>
+          )}
           <Badge variant="category" className="mt-2">
             {guest.categoryName ?? "[bez kategorie]"}
           </Badge>
+          {guest.email && (
+            <p className="text-sm text-text-muted mt-1">
+              <a href={`mailto:${guest.email}`} className="hover:underline">
+                {guest.email}
+              </a>
+            </p>
+          )}
           {lastMeetingDate && (
             <p className="text-sm text-text-muted mt-1">
               Naposledy na schůzce: {lastMeetingDate}

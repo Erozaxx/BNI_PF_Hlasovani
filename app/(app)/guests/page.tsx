@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getGuests } from "@/lib/db/queries/guests";
-import { getCategories } from "@/lib/db/queries/categories";
+import { getCategoriesWithGuests } from "@/lib/db/queries/categories";
 import { getSession } from "@/lib/auth/session";
 import {
   getActiveVotingMeeting,
@@ -26,7 +26,7 @@ export default async function GuestsPage({
   const session = await getSession();
   const categoryFilter = params.category;
   const guests = await getGuests(categoryFilter);
-  const categories = await getCategories();
+  const categories = await getCategoriesWithGuests();
 
   const activeMeeting = await getActiveVotingMeeting();
   const guestIds = guests.map((g) => g.id);
@@ -93,6 +93,8 @@ export default async function GuestsPage({
               <Link key={g.id} href={`/guests/${g.id}`}>
                 <GuestCard
                   name={g.name}
+                  company={g.company}
+                  email={g.email}
                   description={g.description}
                   categoryName={g.categoryName}
                   lastMeetingDate={lastMeetingDate}

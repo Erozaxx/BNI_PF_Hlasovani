@@ -80,6 +80,8 @@ export const guest = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    company: text("company"),
+    email: text("email"),
     description: text("description"),
     categoryId: uuid("category_id").references(() => category.id, {
       onDelete: "set null",

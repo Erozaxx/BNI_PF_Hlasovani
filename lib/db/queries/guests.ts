@@ -14,6 +14,8 @@ export async function getGuests(categoryId?: string) {
     .select({
       id: guest.id,
       name: guest.name,
+      company: guest.company,
+      email: guest.email,
       description: guest.description,
       categoryId: guest.categoryId,
       categoryName: category.name,
@@ -38,6 +40,8 @@ export async function getGuestById(id: string) {
     .select({
       id: guest.id,
       name: guest.name,
+      company: guest.company,
+      email: guest.email,
       description: guest.description,
       categoryId: guest.categoryId,
       categoryName: category.name,
@@ -78,6 +82,8 @@ export async function getGuestWithNotes(id: string) {
  */
 export async function createGuest(data: {
   name: string;
+  company?: string;
+  email?: string;
   description?: string;
   categoryId?: string;
   createdBy?: string;
@@ -86,6 +92,8 @@ export async function createGuest(data: {
     .insert(guest)
     .values({
       name: data.name,
+      company: data.company || null,
+      email: data.email || null,
       description: data.description || null,
       categoryId: data.categoryId || null,
       createdBy: data.createdBy || null,
@@ -100,12 +108,14 @@ export async function createGuest(data: {
  */
 export async function updateGuest(
   id: string,
-  data: { name: string; description?: string }
+  data: { name: string; company?: string; email?: string; description?: string }
 ) {
   const results = await getDb()
     .update(guest)
     .set({
       name: data.name,
+      company: data.company ?? null,
+      email: data.email ?? null,
       description: data.description ?? null,
     })
     .where(eq(guest.id, id))

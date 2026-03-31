@@ -15,6 +15,8 @@ interface GuestFormProps {
   guest?: {
     id: string;
     name: string;
+    company?: string | null;
+    email?: string | null;
     description?: string | null;
     categoryId?: string | null;
   };
@@ -30,6 +32,8 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
   const isEdit = Boolean(guest);
 
   const [name, setName] = useState(guest?.name ?? "");
+  const [company, setCompany] = useState(guest?.company ?? "");
+  const [email, setEmail] = useState(guest?.email ?? "");
   const [description, setDescription] = useState(guest?.description ?? "");
   const [categoryId, setCategoryId] = useState(guest?.categoryId ?? "");
   const [categoryOptions, setCategoryOptions] = useState(
@@ -74,11 +78,11 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
     try {
       let result;
       if (isEdit && guest) {
-        result = await updateGuestAction(guest.id, name, description);
+        result = await updateGuestAction(guest.id, name, description, company, email);
       } else {
         const meetingId =
           activeMeeting && addToMeeting ? activeMeeting.id : undefined;
-        result = await createGuestAction(name, categoryId, description, meetingId);
+        result = await createGuestAction(name, categoryId, description, meetingId, company, email);
       }
 
       if (!result.success) {
@@ -118,15 +122,42 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
         placeholder="Celé jméno"
       />
 
-      <CreatableSelect
-        label="Kategorie *"
-        options={categoryOptions}
-        value={categoryId}
-        onChange={setCategoryId}
-        onCreateOption={handleCreateCategory}
-        placeholder="Vyberte nebo napište kategorii"
-        error={categoryError}
+      <Input
+        label="Firma"
+        name="company"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        placeholder="Název firmy (nepovinné)"
       />
+
+      <Input
+        label="Email"
+        name="email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="email@example.com (nepovinné)"
+      />
+
+      <div>
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-sm font-medium text-text-main">Kategorie *</span>
+          <span
+            title="Kategorie vychází z číselníku CZ-NACE. Doporučujeme přiřadit standardní kategorii ze seznamu."
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-text-muted/20 text-text-muted text-xs cursor-help select-none"
+          >
+            ?
+          </span>
+        </div>
+        <CreatableSelect
+          options={categoryOptions}
+          value={categoryId}
+          onChange={setCategoryId}
+          onCreateOption={handleCreateCategory}
+          placeholder="Vyberte nebo napište kategorii"
+          error={categoryError}
+        />
+      </div>
 
       <Textarea
         label="Popis"

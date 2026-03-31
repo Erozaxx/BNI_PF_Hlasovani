@@ -1,7 +1,7 @@
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { category } from "@/lib/db/schema";
+import { category, guest } from "@/lib/db/schema";
 
 function getDb() { return drizzle(getSql()); }
 
@@ -10,6 +10,19 @@ function getDb() { return drizzle(getSql()); }
  */
 export async function getCategories() {
   return getDb().select().from(category).orderBy(asc(category.name));
+}
+
+/**
+ * Get only categories that have at least one guest assigned.
+ * Used for filter UI to avoid showing empty categories.
+ */
+export async function getCategoriesWithGuests() {
+  return getDb()
+    .selectDistinct({ id: category.id, name: category.name, createdAt: category.createdAt })
+    .from(category)
+    .innerJoin(guest, eq(guest.categoryId, category.id))
+    .where(isNotNull(guest.categoryId))
+    .orderBy(asc(category.name));
 }
 
 /**

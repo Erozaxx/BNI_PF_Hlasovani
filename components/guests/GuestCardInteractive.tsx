@@ -17,6 +17,8 @@ interface GuestCardInteractiveProps {
   guest: {
     id: string;
     name: string;
+    company?: string | null;
+    email?: string | null;
     description?: string | null;
     categoryName?: string | null;
     lastMeetingDate?: string | null;
@@ -87,6 +89,8 @@ export function GuestCardInteractive({
       <Link href={`/guests/${guest.id}`}>
         <GuestCard
           name={guest.name}
+          company={guest.company}
+          email={guest.email}
           description={guest.description}
           categoryName={guest.categoryName}
           lastMeetingDate={guest.lastMeetingDate}
