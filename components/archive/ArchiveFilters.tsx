@@ -3,9 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 
 interface ArchiveFiltersProps {
-  meetings: Array<{ id: string; date: string }>;
+  meetings: Array<{ id: string; date: string; status: string | null }>;
   categories: Array<{ id: string; name: string }>;
 }
 
@@ -124,7 +125,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
                   type="button"
                   onClick={() => handleMeetingToggle(m.id)}
                   className={`
-                    inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
+                    inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
                     ${
                       isSelected
                         ? "bg-primary text-white border-primary"
@@ -133,13 +134,16 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
                   `.trim()}
                 >
                   {formatDate(m.date)}
+                  {m.status !== "closed" && (
+                    <Badge variant="success">aktivní</Badge>
+                  )}
                 </button>
               );
             })}
           </div>
         ) : (
           <p className="text-sm text-text-muted">
-            Zadne uzavrene schuzky.
+            Zadne schuzky.
           </p>
         )}
       </div>
