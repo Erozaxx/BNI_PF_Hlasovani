@@ -115,6 +115,16 @@ export async function updateTokenUsed(memberId: string) {
 }
 
 /**
+ * Update password hash for a member (used for password change).
+ */
+export async function updatePasswordHash(memberId: string, passwordHash: string) {
+  await getDb()
+    .update(member)
+    .set({ passwordHash })
+    .where(eq(member.id, memberId));
+}
+
+/**
  * Update magic token for a member (used during token generation/renewal).
  * Moves current token to previous before setting the new one.
  * Uses a single atomic UPDATE to avoid race conditions in serverless.

@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { compare } from "bcryptjs";
-import { getMemberByEmail } from "@/lib/db/queries/members";
-import { createSession, destroySession } from "@/lib/auth/session";
+import { getMemberByEmail, getMemberById, updatePasswordHash } from "@/lib/db/queries/members";
+import { createSession, destroySession, getSession } from "@/lib/auth/session";
+import { hash } from "bcryptjs";
 import type { ActionResult } from "@/lib/types";
 
 /**
@@ -50,6 +51,52 @@ export async function loginAction(
   });
 
   redirect("/dashboard");
+}
+
+/**
+ * Change password action for admin/moderator.
+ *
+ * - Requires an active management session
+ * - Verifies current password via bcrypt.compare
+ * - Validates new password (min 8 chars, confirmation match)
+ * - Hashes new password (bcrypt cost 12) and persists to DB
+ */
+export async function changePasswordAction(
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<ActionResult> {
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return { success: false, error: "Vsechna pole jsou povinna." };
+  }
+
+  if (newPassword.length < 8) {
+    return { success: false, error: "Nove heslo musi mit alespon 8 znaku." };
+  }
+
+  if (newPassword !== confirmPassword) {
+    return { success: false, error: "Nova hesla se neshoduji." };
+  }
+
+  const session = await getSession();
+  if (!session.memberId || !session.managementRole) {
+    return { success: false, error: "Nemate opravneni pro tuto akci." };
+  }
+
+  const member = await getMemberById(session.memberId);
+  if (!member || !member.passwordHash) {
+    return { success: false, error: "Uzivatel nenalezen." };
+  }
+
+  const currentValid = await compare(currentPassword, member.passwordHash);
+  if (!currentValid) {
+    return { success: false, error: "Aktualni heslo je nespravne." };
+  }
+
+  const newHash = await hash(newPassword, 12);
+  await updatePasswordHash(session.memberId, newHash);
+
+  return { success: true };
 }
 
 /**

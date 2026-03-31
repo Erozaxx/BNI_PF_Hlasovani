@@ -2,6 +2,12 @@ import Link from "next/link";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getCategories } from "@/lib/db/queries/categories";
 import { getSession } from "@/lib/auth/session";
+import {
+  getActiveVotingMeeting,
+  getUserVotesForMeeting,
+} from "@/lib/db/queries/votes";
+import { GuestCard } from "@/components/guests/GuestCard";
+import { GuestCardInteractive } from "@/components/guests/GuestCardInteractive";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +23,12 @@ export default async function GuestsPage({
   const categoryFilter = params.category;
   const guests = await getGuests(categoryFilter);
   const categories = await getCategories();
+
+  const activeMeeting = await getActiveVotingMeeting();
+  const votedGuestIds: Set<string> =
+    activeMeeting && session.memberId
+      ? await getUserVotesForMeeting(session.memberId, activeMeeting.id)
+      : new Set();
 
   const isManagement =
     session.managementRole === "admin" ||
@@ -54,23 +66,25 @@ export default async function GuestsPage({
       {/* Guest list */}
       {guests.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {guests.map((g) => (
-            <Link key={g.id} href={`/guests/${g.id}`}>
-              <Card variant="interactive">
-                <h3 className="font-medium text-text-main">{g.name}</h3>
-                {g.categoryName && (
-                  <Badge variant="category" className="mt-2">
-                    {g.categoryName}
-                  </Badge>
-                )}
-                {g.description && (
-                  <p className="text-sm text-text-muted mt-2 line-clamp-2">
-                    {g.description}
-                  </p>
-                )}
-              </Card>
-            </Link>
-          ))}
+          {guests.map((g) =>
+            activeMeeting ? (
+              <GuestCardInteractive
+                key={g.id}
+                guest={g}
+                votingMeetingId={activeMeeting.id}
+                alreadyVoted={votedGuestIds.has(g.id)}
+              />
+            ) : (
+              <Link key={g.id} href={`/guests/${g.id}`}>
+                <GuestCard
+                  name={g.name}
+                  description={g.description}
+                  categoryName={g.categoryName}
+                  interactive
+                />
+              </Link>
+            )
+          )}
         </div>
       ) : (
         <Card>

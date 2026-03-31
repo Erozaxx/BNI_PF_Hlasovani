@@ -7,15 +7,18 @@ import {
   updateGuest as dbUpdateGuest,
   updateGuestCategory as dbUpdateGuestCategory,
 } from "@/lib/db/queries/guests";
+import { addGuestToMeeting } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
 
 /**
  * Create a new guest. Requires admin or moderator role.
+ * Optionally add the guest to a meeting by passing addToMeetingId.
  */
 export async function createGuestAction(
   name: string,
   categoryId: string,
-  description?: string
+  description?: string,
+  addToMeetingId?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -36,8 +39,20 @@ export async function createGuestAction(
       createdBy: auth.session.memberId,
     });
 
+    if (addToMeetingId) {
+      try {
+        await addGuestToMeeting(addToMeetingId, guest.id);
+      } catch (meetingError) {
+        console.error("createGuestAction: addGuestToMeeting error:", meetingError);
+        // Non-fatal: guest was created, just not added to meeting
+      }
+    }
+
     revalidatePath("/guests");
     revalidatePath("/dashboard");
+    if (addToMeetingId) {
+      revalidatePath(`/meetings/${addToMeetingId}`);
+    }
     return { success: true, data: { id: guest.id } };
   } catch (error) {
     console.error("createGuestAction error:", error);

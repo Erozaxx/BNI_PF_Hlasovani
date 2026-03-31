@@ -124,6 +124,39 @@ export async function getActiveVotingMeetingsForGuest(guestId: string) {
 }
 
 /**
+ * Get the single active voting meeting (status = 'voting'), if any.
+ * Returns { id, date } or null.
+ */
+export async function getActiveVotingMeeting(): Promise<{
+  id: string;
+  date: string;
+} | null> {
+  const results = await getDb()
+    .select({ id: meeting.id, date: meeting.date })
+    .from(meeting)
+    .where(eq(meeting.status, "voting"))
+    .limit(1);
+
+  return results[0] ?? null;
+}
+
+/**
+ * Get all guestIds where the given member has already voted in the given meeting.
+ * Returns a Set<string> of guestIds.
+ */
+export async function getUserVotesForMeeting(
+  memberId: string,
+  meetingId: string
+): Promise<Set<string>> {
+  const rows = await getDb()
+    .select({ guestId: vote.guestId })
+    .from(vote)
+    .where(and(eq(vote.memberId, memberId), eq(vote.meetingId, meetingId)));
+
+  return new Set(rows.map((r) => r.guestId));
+}
+
+/**
  * Get all meetings in 'voting' status whose voting window has expired.
  * Used by the cron job.
  */

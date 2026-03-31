@@ -142,11 +142,9 @@ export default async function MeetingDetailPage({
                           <p className="font-medium text-text-main">
                             {g.guestName}
                           </p>
-                          {g.categoryName && (
-                            <Badge variant="category" className="mt-1">
-                              {g.categoryName}
-                            </Badge>
-                          )}
+                          <Badge variant="category" className="mt-1">
+                            {g.categoryName ?? "[bez kategorie]"}
+                          </Badge>
                         </div>
                         <Button variant="link" size="sm">
                           Detail &rarr;

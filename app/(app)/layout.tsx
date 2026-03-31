@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth/session";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
+import { MobileNav } from "@/components/layout/MobileNav";
 
 export default async function AppLayout({
   children,
@@ -41,6 +42,17 @@ export default async function AppLayout({
               </div>
               <NavLink href="/admin/members">Clenove</NavLink>
               <NavLink href="/admin/categories">Kategorie</NavLink>
+            </>
+          )}
+
+          {isManagement && (
+            <>
+              <div className="pt-4 pb-2">
+                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                  Ucet
+                </span>
+              </div>
+              <NavLink href="/settings">Nastaveni</NavLink>
             </>
           )}
         </nav>
@@ -95,88 +107,5 @@ function NavLink({
     >
       {children}
     </Link>
-  );
-}
-
-function MobileNav({
-  isAdmin,
-  isManagement,
-  name,
-}: {
-  isAdmin: boolean;
-  isManagement: boolean;
-  name: string;
-}) {
-  return (
-    <details className="relative">
-      <summary className="cursor-pointer p-2 rounded-lg hover:bg-background list-none">
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
-      </summary>
-      <div className="absolute right-0 top-full mt-2 w-56 bg-surface border border-border rounded-card shadow-lg z-50 p-2">
-        <Link
-          href="/dashboard"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-        >
-          Dashboard
-        </Link>
-        <Link
-          href="/guests"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-        >
-          Hoste
-        </Link>
-        <Link
-          href="/meetings"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-        >
-          Schuzky
-        </Link>
-        <Link
-          href="/archive"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-        >
-          Archiv
-        </Link>
-        {isAdmin && (
-          <>
-            <hr className="my-2 border-border" />
-            <Link
-              href="/admin/members"
-              className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-            >
-              Clenove
-            </Link>
-            <Link
-              href="/admin/categories"
-              className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-            >
-              Kategorie
-            </Link>
-          </>
-        )}
-        <hr className="my-2 border-border" />
-        <div className="px-3 py-1 text-xs text-text-muted">{name}</div>
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="w-full text-left px-3 py-2 rounded-lg text-sm text-danger hover:bg-danger-light"
-          >
-            Odhlasit se
-          </button>
-        </form>
-      </div>
-    </details>
   );
 }

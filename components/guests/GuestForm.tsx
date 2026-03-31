@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { Select } from "@/components/ui/Select";
+import { CreatableSelect } from "@/components/ui/CreatableSelect";
 import { useToast } from "@/components/ui/Toast";
 import { createGuestAction, updateGuestAction } from "@/actions/guests";
+import { createCategoryAction } from "@/actions/categories";
 
 interface GuestFormProps {
   categories: Array<{ id: string; name: string }>;
@@ -17,9 +18,13 @@ interface GuestFormProps {
     description?: string | null;
     categoryId?: string | null;
   };
+  activeMeeting?: {
+    id: string;
+    date: string;
+  };
 }
 
-export function GuestForm({ categories, guest }: GuestFormProps) {
+export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const isEdit = Boolean(guest);
@@ -27,15 +32,24 @@ export function GuestForm({ categories, guest }: GuestFormProps) {
   const [name, setName] = useState(guest?.name ?? "");
   const [description, setDescription] = useState(guest?.description ?? "");
   const [categoryId, setCategoryId] = useState(guest?.categoryId ?? "");
+  const [categoryOptions, setCategoryOptions] = useState(
+    categories.map((c) => ({ value: c.id, label: c.name }))
+  );
+  const [addToMeeting, setAddToMeeting] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [nameError, setNameError] = useState("");
   const [categoryError, setCategoryError] = useState("");
 
-  const categoryOptions = categories.map((c) => ({
-    value: c.id,
-    label: c.name,
-  }));
+  async function handleCreateCategory(name: string): Promise<string> {
+    const result = await createCategoryAction(name);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    const newId = result.data!.id;
+    setCategoryOptions((prev) => [...prev, { value: newId, label: name }]);
+    return newId;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -62,7 +76,9 @@ export function GuestForm({ categories, guest }: GuestFormProps) {
       if (isEdit && guest) {
         result = await updateGuestAction(guest.id, name, description);
       } else {
-        result = await createGuestAction(name, categoryId, description);
+        const meetingId =
+          activeMeeting && addToMeeting ? activeMeeting.id : undefined;
+        result = await createGuestAction(name, categoryId, description, meetingId);
       }
 
       if (!result.success) {
@@ -102,13 +118,13 @@ export function GuestForm({ categories, guest }: GuestFormProps) {
         placeholder="Celé jméno"
       />
 
-      <Select
+      <CreatableSelect
         label="Kategorie *"
-        name="categoryId"
-        value={categoryId}
-        onChange={(e) => setCategoryId(e.target.value)}
         options={categoryOptions}
-        placeholder="Vyberte kategorii"
+        value={categoryId}
+        onChange={setCategoryId}
+        onCreateOption={handleCreateCategory}
+        placeholder="Vyberte nebo napište kategorii"
         error={categoryError}
       />
 
@@ -119,6 +135,18 @@ export function GuestForm({ categories, guest }: GuestFormProps) {
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Kratky popis hosta, jeho obor..."
       />
+
+      {!isEdit && activeMeeting && (
+        <label className="flex items-center gap-2 cursor-pointer text-sm text-text-main">
+          <input
+            type="checkbox"
+            checked={addToMeeting}
+            onChange={(e) => setAddToMeeting(e.target.checked)}
+            className="w-4 h-4 accent-primary"
+          />
+          Pridat do schuzky {activeMeeting.date}
+        </label>
+      )}
 
       <div className="flex gap-3">
         <Button type="submit" variant="primary" loading={loading}>

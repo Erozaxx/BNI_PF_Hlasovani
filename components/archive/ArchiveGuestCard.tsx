@@ -15,9 +15,9 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
         {/* Header: name + category */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-text-main text-lg">{guest.name}</h3>
-          {guest.categoryName && (
-            <Badge variant="category">{guest.categoryName}</Badge>
-          )}
+          <Badge variant="category">
+            {guest.categoryName ?? "[bez kategorie]"}
+          </Badge>
         </div>
 
         {/* Description */}

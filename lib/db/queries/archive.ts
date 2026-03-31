@@ -24,7 +24,6 @@ export async function getArchivedMeetings() {
       status: meeting.status,
     })
     .from(meeting)
-    .where(eq(meeting.status, "closed"))
     .orderBy(desc(meeting.date));
 }
 
