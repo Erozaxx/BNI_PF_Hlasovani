@@ -1,18 +1,24 @@
-import { neon, neonConfig, Pool } from "@neondatabase/serverless";
+import { neon, Pool } from "@neondatabase/serverless";
 
-// Enable connection caching for serverless environments
-neonConfig.fetchConnectionCache = true;
+let _sql: ReturnType<typeof neon> | null = null;
+let _pool: Pool | null = null;
 
-/**
- * SQL tagged template for simple queries.
- * Usage: const rows = await sql`SELECT * FROM member WHERE id = ${id}`;
- */
-export const sql = neon(process.env.DATABASE_URL!);
+export function getSql(): ReturnType<typeof neon> {
+  if (!_sql) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is not set");
+    }
+    _sql = neon(process.env.DATABASE_URL);
+  }
+  return _sql;
+}
 
-/**
- * Connection pool for transactions and complex queries.
- * Usage: const client = await pool.connect(); try { ... } finally { client.release(); }
- */
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+export function getPool(): Pool {
+  if (!_pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is not set");
+    }
+    _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  }
+  return _pool;
+}

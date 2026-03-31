@@ -1,22 +1,22 @@
 import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all meetings ordered by date desc.
  */
 export async function getMeetings() {
-  return db.select().from(meeting).orderBy(desc(meeting.date));
+  return getDb().select().from(meeting).orderBy(desc(meeting.date));
 }
 
 /**
  * Get a single meeting by ID.
  */
 export async function getMeetingById(id: string) {
-  const results = await db
+  const results = await getDb()
     .select()
     .from(meeting)
     .where(eq(meeting.id, id))
@@ -32,7 +32,7 @@ export async function getMeetingWithGuests(id: string) {
   const meetingData = await getMeetingById(id);
   if (!meetingData) return null;
 
-  const guests = await db
+  const guests = await getDb()
     .select({
       guestId: guest.id,
       guestName: guest.name,
@@ -54,7 +54,7 @@ export async function getMeetingWithGuests(id: string) {
  * Create a new meeting.
  */
 export async function createMeeting(dateStr: string) {
-  const results = await db
+  const results = await getDb()
     .insert(meeting)
     .values({
       date: dateStr,
@@ -69,7 +69,7 @@ export async function createMeeting(dateStr: string) {
  * Add a guest to a meeting.
  */
 export async function addGuestToMeeting(meetingId: string, guestId: string) {
-  const results = await db
+  const results = await getDb()
     .insert(meetingGuest)
     .values({ meetingId, guestId })
     .returning();
@@ -84,7 +84,7 @@ export async function removeGuestFromMeeting(
   meetingId: string,
   guestId: string
 ) {
-  await db
+  await getDb()
     .delete(meetingGuest)
     .where(
       and(
@@ -105,7 +105,7 @@ export async function updateMeetingStatus(
     votingClosesAt?: Date | null;
   }
 ) {
-  const results = await db
+  const results = await getDb()
     .update(meeting)
     .set({
       status: data.status,

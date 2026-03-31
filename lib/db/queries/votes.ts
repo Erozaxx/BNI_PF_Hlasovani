@@ -1,9 +1,9 @@
 import { eq, and, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { vote, meeting, member, meetingGuest } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Check whether a member has already voted for a guest in a meeting.
@@ -13,7 +13,7 @@ export async function hasVoted(
   guestId: string,
   meetingId: string
 ): Promise<boolean> {
-  const results = await db
+  const results = await getDb()
     .select({ id: vote.id })
     .from(vote)
     .where(
@@ -36,7 +36,7 @@ export async function getVoteForGuestInMeeting(
   guestId: string,
   meetingId: string
 ) {
-  const results = await db
+  const results = await getDb()
     .select({
       id: vote.id,
       value: vote.value,
@@ -66,7 +66,7 @@ export async function castVote(data: {
   value: "up" | "neutral" | "down";
   reason?: string;
 }) {
-  const results = await db
+  const results = await getDb()
     .insert(vote)
     .values({
       memberId: data.memberId,
@@ -85,7 +85,7 @@ export async function castVote(data: {
  * Used for displaying results after voting is closed or for admin/mod preview.
  */
 export async function getVotingResults(guestId: string, meetingId: string) {
-  return db
+  return getDb()
     .select({
       id: vote.id,
       memberId: vote.memberId,
@@ -107,7 +107,7 @@ export async function getVotingResults(guestId: string, meetingId: string) {
  * Returns meetingId + meetingDate for each.
  */
 export async function getActiveVotingMeetingsForGuest(guestId: string) {
-  return db
+  return getDb()
     .select({
       meetingId: meeting.id,
       meetingDate: meeting.date,
@@ -129,7 +129,7 @@ export async function getActiveVotingMeetingsForGuest(guestId: string) {
  */
 export async function getExpiredVotingMeetings() {
   const now = new Date();
-  return db
+  return getDb()
     .select({ id: meeting.id, date: meeting.date })
     .from(meeting)
     .where(

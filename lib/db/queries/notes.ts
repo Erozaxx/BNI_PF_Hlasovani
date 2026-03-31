@@ -1,16 +1,16 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { note } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all notes for a guest. Returns ONLY id, text, createdAt.
  * NEVER returns member_id — notes are anonymous by design.
  */
 export async function getNotesForGuest(guestId: string) {
-  return db
+  return getDb()
     .select({
       id: note.id,
       text: note.text,
@@ -30,7 +30,7 @@ export async function createNote(
   guestId: string,
   text: string
 ) {
-  const results = await db
+  const results = await getDb()
     .insert(note)
     .values({
       memberId,

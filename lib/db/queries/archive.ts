@@ -1,6 +1,6 @@
 import { eq, desc, and, gte, lte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import {
   meeting,
   meetingGuest,
@@ -10,14 +10,14 @@ import {
   vote,
 } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all closed meetings, ordered by date desc.
  * Used for the meeting multiselect filter.
  */
 export async function getArchivedMeetings() {
-  return db
+  return getDb()
     .select({
       id: meeting.id,
       date: meeting.date,
@@ -41,7 +41,7 @@ export async function getGuestsForMeetings(
   // Get guests linked to the selected meetings
   const conditions = [inArray(meetingGuest.meetingId, meetingIds)];
 
-  const guestsInMeetings = await db
+  const guestsInMeetings = await getDb()
     .select({
       guestId: guest.id,
       guestName: guest.name,
@@ -79,7 +79,7 @@ export async function getGuestsForDateRange(
   categoryId?: string
 ) {
   // First get closed meetings in date range
-  const closedMeetings = await db
+  const closedMeetings = await getDb()
     .select({
       id: meeting.id,
       date: meeting.date,
@@ -120,7 +120,7 @@ async function enrichGuests(
   if (guestIds.length === 0) return [];
 
   // Fetch notes for all guests
-  const allNotes = await db
+  const allNotes = await getDb()
     .select({
       id: note.id,
       guestId: note.guestId,
@@ -132,7 +132,7 @@ async function enrichGuests(
     .orderBy(desc(note.createdAt));
 
   // Fetch votes for all guests
-  const allVotes = await db
+  const allVotes = await getDb()
     .select({
       guestId: vote.guestId,
       meetingId: vote.meetingId,
