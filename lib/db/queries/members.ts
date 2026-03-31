@@ -75,8 +75,7 @@ export async function getMemberByTokenHash(tokenHash: string) {
   const m = results[0] ?? null;
   if (!m) return null;
 
-  // Check expiry and usage
-  if (m.tokenUsed) return null;
+  // Check expiry only — token is valid for its full 7-day lifetime
   if (!m.tokenExpiresAt || m.tokenExpiresAt < new Date()) return null;
 
   return m;

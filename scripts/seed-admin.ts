@@ -12,7 +12,8 @@ import { createHash, randomUUID } from "crypto";
  */
 
 // Load .env.local for local development
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 
 const BCRYPT_COST = 12;
 
