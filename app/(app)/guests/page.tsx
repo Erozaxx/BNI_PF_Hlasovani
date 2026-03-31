@@ -12,8 +12,8 @@ import {
 } from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
 import { GuestCardInteractive } from "@/components/guests/GuestCardInteractive";
+import { CategoryFilter } from "@/components/guests/CategoryFilter";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -61,20 +61,7 @@ export default async function GuestsPage({
       </div>
 
       {/* Category filter */}
-      <div className="flex flex-wrap gap-2">
-        <Link href="/guests">
-          <Badge variant={!categoryFilter ? "danger" : "neutral"}>Vse</Badge>
-        </Link>
-        {categories.map((cat) => (
-          <Link key={cat.id} href={`/guests?category=${cat.id}`}>
-            <Badge
-              variant={categoryFilter === cat.id ? "category" : "neutral"}
-            >
-              {cat.name}
-            </Badge>
-          </Link>
-        ))}
-      </div>
+      <CategoryFilter categories={categories} currentCategoryId={categoryFilter} />
 
       {/* Guest list */}
       {guests.length > 0 ? (
