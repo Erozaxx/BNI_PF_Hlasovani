@@ -49,3 +49,16 @@ export async function renameCategory(id: string, name: string) {
 
   return results[0] ?? null;
 }
+
+/**
+ * Delete a category by ID.
+ * Guests referencing this category will have categoryId set to NULL (FK onDelete: set null).
+ */
+export async function deleteCategory(id: string): Promise<boolean> {
+  const results = await getDb()
+    .delete(category)
+    .where(eq(category.id, id))
+    .returning({ id: category.id });
+
+  return results.length > 0;
+}

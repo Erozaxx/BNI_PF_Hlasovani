@@ -97,11 +97,9 @@ export default async function DashboardPage() {
               <Link key={g.id} href={`/guests/${g.id}`}>
                 <Card variant="interactive">
                   <h3 className="font-medium text-text-main">{g.name}</h3>
-                  {g.categoryName && (
-                    <Badge variant="category" className="mt-2">
-                      {g.categoryName}
-                    </Badge>
-                  )}
+                  <Badge variant="category" className="mt-2">
+                    {g.categoryName ?? "[bez kategorie]"}
+                  </Badge>
                   {g.description && (
                     <p className="text-sm text-text-muted mt-2 line-clamp-2">
                       {g.description}

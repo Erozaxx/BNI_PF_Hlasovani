@@ -17,11 +17,9 @@ export function GuestCard({
   return (
     <Card variant={interactive ? "interactive" : "default"}>
       <h3 className="font-medium text-text-main">{name}</h3>
-      {categoryName && (
-        <Badge variant="category" className="mt-2">
-          {categoryName}
-        </Badge>
-      )}
+      <Badge variant="category" className="mt-2">
+        {categoryName ?? "[bez kategorie]"}
+      </Badge>
       {description && (
         <p className="text-sm text-text-muted mt-2 line-clamp-3">
           {description}

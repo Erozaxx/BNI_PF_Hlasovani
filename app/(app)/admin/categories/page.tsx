@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateCategoryForm } from "./CreateCategoryForm";
 import { RenameCategoryForm } from "./RenameCategoryForm";
+import { DeleteCategoryButton } from "./DeleteCategoryButton";
 
 export default async function AdminCategoriesPage() {
   const categories = await getCategories();
@@ -29,7 +30,10 @@ export default async function AdminCategoriesPage() {
               <Card key={cat.id}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <Badge variant="category">{cat.name}</Badge>
-                  <RenameCategoryForm categoryId={cat.id} currentName={cat.name} />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <RenameCategoryForm categoryId={cat.id} currentName={cat.name} />
+                    <DeleteCategoryButton categoryId={cat.id} categoryName={cat.name} />
+                  </div>
                 </div>
               </Card>
             ))}

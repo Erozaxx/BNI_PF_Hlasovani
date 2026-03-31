@@ -8,6 +8,7 @@ import {
   updateTokenUsed,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
+import { sendMagicLinkEmail } from "@/lib/email/resend";
 import type { ActionResult } from "@/lib/types";
 
 /**
@@ -90,5 +91,50 @@ export async function revokeTokenAction(
   } catch (error) {
     console.error("revokeTokenAction error:", error);
     return { success: false, error: "Nepodarilo se revokovat odkaz." };
+  }
+}
+
+/**
+ * Regenerate a magic token and send it to the member's email. Requires admin role.
+ * Returns the plain token so the UI can display the link immediately.
+ */
+export async function sendMagicLinkEmailAction(
+  memberId: string
+): Promise<ActionResult<{ magicLink: string }>> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    const memberData = await getMemberById(memberId);
+    if (!memberData) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    if (!memberData.email) {
+      return { success: false, error: "Clen nema zadany email." };
+    }
+
+    const rawToken = await generateMagicToken(memberId);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`;
+
+    const emailResult = await sendMagicLinkEmail(
+      memberData.email,
+      magicLink,
+      memberData.name
+    );
+
+    if (!emailResult.success) {
+      return {
+        success: false,
+        error: emailResult.error ?? "Nepodarilo se odeslat email.",
+      };
+    }
+
+    revalidatePath("/admin/members");
+    return { success: true, data: { magicLink } };
+  } catch (error) {
+    console.error("sendMagicLinkEmailAction error:", error);
+    return { success: false, error: "Nepodarilo se odeslat odkaz emailem." };
   }
 }

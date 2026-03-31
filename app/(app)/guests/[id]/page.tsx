@@ -59,11 +59,9 @@ export default async function GuestDetailPage({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-main">{guest.name}</h1>
-          {guest.categoryName && (
-            <Badge variant="category" className="mt-2">
-              {guest.categoryName}
-            </Badge>
-          )}
+          <Badge variant="category" className="mt-2">
+            {guest.categoryName ?? "[bez kategorie]"}
+          </Badge>
         </div>
       </div>
 
