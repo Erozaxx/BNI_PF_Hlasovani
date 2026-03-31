@@ -9,15 +9,20 @@ import {
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
+import { hash } from "bcryptjs";
 import type { ActionResult } from "@/lib/types";
 
 /**
  * Create a new member. Requires admin role.
+ *
+ * - Regular members (no managementRole): auto-generate magic token for voting access
+ * - Admin/moderator: require password, hash it (bcrypt cost 12); no magic token generated
  */
 export async function createMemberAction(
   name: string,
   email?: string,
-  managementRole?: string | null
+  managementRole?: string | null,
+  password?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireAdmin();
   if (!auth.success) return auth;
@@ -26,16 +31,31 @@ export async function createMemberAction(
     return { success: false, error: "Jmeno clena je povinne." };
   }
 
+  const isManagement = !!managementRole;
+
+  if (isManagement) {
+    if (!password || password.length < 8) {
+      return { success: false, error: "Pro admin/moderator roli je nutne zadat heslo (min. 8 znaku)." };
+    }
+  }
+
   try {
+    let passwordHash: string | null = null;
+    if (isManagement && password) {
+      passwordHash = await hash(password, 12);
+    }
+
     const newMember = await dbCreateMember({
       name: name.trim(),
       email: email?.trim() || undefined,
       managementRole: managementRole || null,
+      passwordHash,
     });
 
-    // Auto-generate magic token so member can log in immediately
-    // (also satisfies DB constraint member_management_requires_credentials)
-    await generateMagicToken(newMember.id);
+    if (!isManagement) {
+      // Regular members use magic link for voting access
+      await generateMagicToken(newMember.id);
+    }
 
     revalidatePath("/admin/members");
     return { success: true, data: { id: newMember.id } };

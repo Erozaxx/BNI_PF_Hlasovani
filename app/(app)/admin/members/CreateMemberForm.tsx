@@ -14,6 +14,7 @@ export function CreateMemberForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -29,6 +30,14 @@ export function CreateMemberForm() {
       setError("Jmeno je povinne.");
       return;
     }
+    if (role && password.length > 0 && password.length < 8) {
+      setError("Heslo musi mit alespon 8 znaku.");
+      return;
+    }
+    if (role && !password) {
+      setError("Pro admin/moderator roli je nutne zadat heslo.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -37,7 +46,8 @@ export function CreateMemberForm() {
       const result = await createMemberAction(
         name,
         email || undefined,
-        role || null
+        role || null,
+        role ? password : undefined
       );
       if (!result.success) {
         setError(result.error);
@@ -46,6 +56,7 @@ export function CreateMemberForm() {
         setName("");
         setEmail("");
         setRole("");
+        setPassword("");
         showToast("success", "Clen byl pridan.");
         router.refresh();
       }
@@ -83,9 +94,21 @@ export function CreateMemberForm() {
         label="Role"
         name="role"
         value={role}
-        onChange={(e) => setRole(e.target.value)}
+        onChange={(e) => { setRole(e.target.value); setPassword(""); }}
         options={roleOptions}
       />
+      {role && (
+        <Input
+          label="Heslo (pro prihlaseni do administrace) *"
+          name="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          minLength={8}
+          placeholder="Min. 8 znaku"
+        />
+      )}
       <Button type="submit" variant="primary" size="sm" loading={loading}>
         Pridat clena
       </Button>
