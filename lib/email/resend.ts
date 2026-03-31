@@ -214,7 +214,7 @@ export async function sendReport(
 
   try {
     const { error } = await resend.emails.send({
-      from: "BNI Hlasovani <onboarding@resend.dev>",
+      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: emails,
       subject: `BNI Report - Schuzka ${data.meetingDate}`,
       html,
@@ -253,7 +253,7 @@ export async function sendMagicLinkEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: "BNI Hlasovani <onboarding@resend.dev>",
+      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: [email],
       subject: "BNI Hlasovani - Vas pristupovy odkaz",
       html: `<!DOCTYPE html>
