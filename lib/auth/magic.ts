@@ -55,7 +55,7 @@ export async function verifyMagicToken(rawToken: string): Promise<VerifyResult> 
     // Create session
     await createSession({
       memberId: currentMember.id,
-      managementRole: (currentMember.managementRole as "admin" | "moderator") ?? null,
+      managementRole: null,
       authMethod: "magic_link",
       name: currentMember.name,
     });

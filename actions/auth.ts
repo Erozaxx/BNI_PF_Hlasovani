@@ -66,7 +66,7 @@ export async function changePasswordAction(
   newPassword: string,
   confirmPassword: string
 ): Promise<ActionResult> {
-  if (!currentPassword || !newPassword || !confirmPassword) {
+  if (!newPassword || !confirmPassword) {
     return { success: false, error: "Vsechna pole jsou povinna." };
   }
 
@@ -84,13 +84,19 @@ export async function changePasswordAction(
   }
 
   const member = await getMemberById(session.memberId);
-  if (!member || !member.passwordHash) {
+  if (!member) {
     return { success: false, error: "Uzivatel nenalezen." };
   }
 
-  const currentValid = await compare(currentPassword, member.passwordHash);
-  if (!currentValid) {
-    return { success: false, error: "Aktualni heslo je nespravne." };
+  // If member already has a password, verify current password first
+  if (member.passwordHash) {
+    if (!currentPassword) {
+      return { success: false, error: "Zadejte aktualni heslo." };
+    }
+    const currentValid = await compare(currentPassword, member.passwordHash);
+    if (!currentValid) {
+      return { success: false, error: "Aktualni heslo je nespravne." };
+    }
   }
 
   const newHash = await hash(newPassword, 12);

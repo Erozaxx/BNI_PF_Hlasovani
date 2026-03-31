@@ -51,7 +51,26 @@ export function CreatableSelect({
   }
 
   function scheduleClose() {
-    closeTimerRef.current = setTimeout(() => setOpen(false), 150);
+    closeTimerRef.current = setTimeout(async () => {
+      setOpen(false);
+      // Auto-create if user typed a new value but never clicked "Vytvorit"
+      const trimmed = inputValue.trim();
+      const exactMatch = options.some(
+        (o) => o.label.toLowerCase() === trimmed.toLowerCase()
+      );
+      if (trimmed && !value && !exactMatch) {
+        setCreating(true);
+        try {
+          const newId = await onCreateOption(trimmed);
+          onChange(newId);
+          setInputValue(trimmed);
+        } catch {
+          // Keep input so user can retry
+        } finally {
+          setCreating(false);
+        }
+      }
+    }, 150);
   }
 
   const selectOption = useCallback(

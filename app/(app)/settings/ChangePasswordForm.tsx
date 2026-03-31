@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { changePasswordAction } from "@/actions/auth";
 
-export function ChangePasswordForm() {
+export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
   const { showToast } = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -48,15 +48,17 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
-      <Input
-        name="currentPassword"
-        type="password"
-        label="Aktualni heslo"
-        value={currentPassword}
-        onChange={(e) => setCurrentPassword(e.target.value)}
-        autoComplete="current-password"
-        required
-      />
+      {hasPassword && (
+        <Input
+          name="currentPassword"
+          type="password"
+          label="Aktualni heslo"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          autoComplete="current-password"
+          required
+        />
+      )}
       <Input
         name="newPassword"
         type="password"
