@@ -19,7 +19,9 @@ export async function createGuestAction(
   name: string,
   categoryId: string,
   description?: string,
-  addToMeetingId?: string
+  addToMeetingId?: string,
+  company?: string,
+  email?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -35,6 +37,8 @@ export async function createGuestAction(
   try {
     const guest = await dbCreateGuest({
       name: name.trim(),
+      company: company?.trim() || undefined,
+      email: email?.trim() || undefined,
       description: description?.trim() || undefined,
       categoryId,
       createdBy: auth.session.memberId,
@@ -67,7 +71,9 @@ export async function createGuestAction(
 export async function updateGuestAction(
   id: string,
   name: string,
-  description?: string
+  description?: string,
+  company?: string,
+  email?: string
 ): Promise<ActionResult> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -79,6 +85,8 @@ export async function updateGuestAction(
   try {
     const updated = await dbUpdateGuest(id, {
       name: name.trim(),
+      company: company?.trim(),
+      email: email?.trim(),
       description: description?.trim(),
     });
 
@@ -106,6 +114,7 @@ export async function deleteGuestAction(id: string): Promise<ActionResult> {
     await dbDeleteGuest(id);
     revalidatePath("/guests");
     revalidatePath("/dashboard");
+    revalidatePath("/meetings", "layout");
     return { success: true };
   } catch (error) {
     console.error("deleteGuestAction error:", error);
