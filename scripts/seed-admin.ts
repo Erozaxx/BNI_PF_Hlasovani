@@ -33,7 +33,6 @@ const SEED_USERS: SeedUser[] = [
   {
     name: "Lojza Voboural",
     email: "erozaxx@gmail.com",
-    password: null,
     managementRole: null,
   },
 ];
