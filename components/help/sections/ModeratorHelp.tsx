@@ -52,8 +52,8 @@ export function ModeratorHelp() {
           </li>
           <li>Zadejte datum schůzky (povinné pole).</li>
           <li>
-            Volitelně vyplňte pole <strong>Místo konání</strong> (např. "Café
-            Imperial, Praha").
+            Volitelně vyplňte pole <strong>Místo konání</strong> (např. &ldquo;Café
+            Imperial, Praha&rdquo;).
           </li>
           <li>
             Klikněte na <strong>Uložit</strong>.
@@ -101,7 +101,7 @@ export function ModeratorHelp() {
           </li>
         </ol>
         <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm mb-3">
-          Po kliknutí na "Potvrdit a spustit" již nelze seznam hlasovaných hostů
+          Po kliknutí na &ldquo;Potvrdit a spustit&rdquo; již nelze seznam hlasovaných hostů
           změnit bez uzavření a opětovného spuštění hlasování.
         </div>
         <ul className="text-sm space-y-1">
