@@ -1,0 +1,42 @@
+{
+  "name": "bni-hlasovani",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "seed": "tsx scripts/seed-admin.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0",
+    "bcryptjs": "^2.4.3",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "drizzle-orm": "^0.36.0",
+    "iron-session": "^8.0.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "resend": "^4.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.0",
+    "@types/node": "^20",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
+    "dotenv": "^17.3.1",
+    "drizzle-kit": "^0.28.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

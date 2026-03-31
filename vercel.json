@@ -1,0 +1,9 @@
+{
+  "regions": ["fra1"],
+  "crons": [
+    {
+      "path": "/api/cron/close-voting",
+      "schedule": "0 23 * * 3"
+    }
+  ]
+}
