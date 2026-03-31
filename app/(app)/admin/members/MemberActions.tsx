@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -15,6 +15,8 @@ interface MemberActionsProps {
   hasToken: boolean;
 }
 
+const storageKey = (id: string) => `magic_link_${id}`;
+
 export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -23,6 +25,17 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
   const [magicLink, setMagicLink] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // Restore previously generated link from localStorage
+  useEffect(() => {
+    if (hasToken) {
+      const stored = localStorage.getItem(storageKey(memberId));
+      if (stored) setMagicLink(stored);
+    } else {
+      localStorage.removeItem(storageKey(memberId));
+      setMagicLink("");
+    }
+  }, [memberId, hasToken]);
 
   async function handleGenerateLink() {
     setLoading(true);
@@ -36,6 +49,7 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
         showToast("error", result.error);
       } else if (result.data) {
         setMagicLink(result.data.magicLink);
+        localStorage.setItem(storageKey(memberId), result.data.magicLink);
         showToast("success", "Odkaz byl vygenerovan.");
         router.refresh();
       }
@@ -59,6 +73,7 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
         showToast("error", result.error);
       } else {
         setMagicLink("");
+        localStorage.removeItem(storageKey(memberId));
         showToast("success", "Odkaz byl revokovany.");
         router.refresh();
       }
@@ -91,6 +106,7 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
         showToast("error", result.error);
       } else if (result.data) {
         setMagicLink(result.data.magicLink);
+        localStorage.setItem(storageKey(memberId), result.data.magicLink);
         showToast("success", "Email s odkazem byl odeslan.");
         router.refresh();
       }

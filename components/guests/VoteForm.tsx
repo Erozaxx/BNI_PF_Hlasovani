@@ -93,7 +93,7 @@ export function VoteForm({
         showToast("error", result.error);
       } else {
         showToast("success", "Hlas byl uspesne odeslan.");
-        router.refresh();
+        router.push(`/meetings/${meetingId}`);
       }
     } catch {
       setError("Nepodarilo se odeslat hlas.");
