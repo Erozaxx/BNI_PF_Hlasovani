@@ -79,6 +79,13 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
         >
           Archiv
         </Link>
+        <Link
+          href="/help"
+          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+          onClick={() => setOpen(false)}
+        >
+          Nápověda
+        </Link>
         {isAdmin && (
           <>
             <hr className="my-2 border-border" />

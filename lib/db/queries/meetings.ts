@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, ne, isNull, max, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, ne, isNull, max, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
@@ -6,25 +6,23 @@ import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
 function getDb() { return drizzle(getSql()); }
 
 /**
- * Get the active meeting: voting not open, date >= today, status != 'closed'.
- * Returns the nearest upcoming meeting or null.
+ * Get the active meeting: voting not open, status != 'closed'.
+ * Returns the most recent non-closed draft meeting or null.
  */
 export async function getActiveMeeting(): Promise<{
   id: string;
   date: string;
 } | null> {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const results = await getDb()
     .select({ id: meeting.id, date: meeting.date })
     .from(meeting)
     .where(
       and(
         isNull(meeting.votingOpenAt),
-        gte(meeting.date, today),
         ne(meeting.status, "closed")
       )
     )
-    .orderBy(meeting.date)
+    .orderBy(desc(meeting.date))
     .limit(1);
 
   return results[0] ?? null;
@@ -130,16 +128,20 @@ export async function getGuestIdsForMeeting(meetingId: string): Promise<Set<stri
   const rows = await getDb()
     .select({ guestId: meetingGuest.guestId })
     .from(meetingGuest)
-    .where(eq(meetingGuest.meetingId, meetingId));
+    .where(and(eq(meetingGuest.meetingId, meetingId), eq(meetingGuest.votingEnabled, true)));
   return new Set(rows.map((r) => r.guestId));
 }
 
 /**
- * Get all guest IDs for a meeting.
- * Returns a Set<string> of guestIds. Used for B-001 subset validation in openVotingAction.
+ * Get all guest IDs for a meeting (regardless of votingEnabled).
+ * Used for B-001 subset validation in openVotingAction.
  */
 export async function getMeetingGuestIds(meetingId: string): Promise<Set<string>> {
-  return getGuestIdsForMeeting(meetingId);
+  const rows = await getDb()
+    .select({ guestId: meetingGuest.guestId })
+    .from(meetingGuest)
+    .where(eq(meetingGuest.meetingId, meetingId));
+  return new Set(rows.map((r) => r.guestId));
 }
 
 /**

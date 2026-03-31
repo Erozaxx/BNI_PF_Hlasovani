@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMeetings } from "@/lib/db/queries/meetings";
+import { getMeetings, getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,10 @@ export default async function DashboardPage() {
 
   const activeMeeting = meetings.find((m) => m.status === "voting");
   const recentGuests = guests.slice(0, 4);
+  const recentGuestIds = recentGuests.map((g) => g.id);
+  const lastMeetingDates = recentGuestIds.length > 0
+    ? await getLastMeetingDatesForGuests(recentGuestIds)
+    : new Map<string, string>();
   const isManagement =
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
@@ -100,6 +104,11 @@ export default async function DashboardPage() {
                   <Badge variant="category" className="mt-2">
                     {g.categoryName ?? "[bez kategorie]"}
                   </Badge>
+                  {lastMeetingDates.get(g.id) && (
+                    <p className="text-xs text-text-muted mt-2">
+                      Posl. schůzka: {lastMeetingDates.get(g.id)}
+                    </p>
+                  )}
                   {g.description && (
                     <p className="text-sm text-text-muted mt-2 line-clamp-2">
                       {g.description}
