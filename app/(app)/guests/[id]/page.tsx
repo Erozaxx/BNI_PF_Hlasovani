@@ -6,6 +6,7 @@ import {
   getActiveVotingMeetingsForGuest,
   getVoteForGuestInMeeting,
 } from "@/lib/db/queries/votes";
+import { getLastMeetingDateForGuest } from "@/lib/db/queries/meetings";
 import { getSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -29,7 +30,10 @@ export default async function GuestDetailPage({
   }
 
   const session = await getSession();
-  const categories = await getCategories();
+  const [categories, lastMeetingDate] = await Promise.all([
+    getCategories(),
+    getLastMeetingDateForGuest(id),
+  ]);
   const isManagement =
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
@@ -64,6 +68,11 @@ export default async function GuestDetailPage({
           <Badge variant="category" className="mt-2">
             {guest.categoryName ?? "[bez kategorie]"}
           </Badge>
+          {lastMeetingDate && (
+            <p className="text-sm text-text-muted mt-1">
+              Naposledy na schůzce: {lastMeetingDate}
+            </p>
+          )}
         </div>
         {isAdmin && (
           <DeleteGuestButton guestId={guest.id} guestName={guest.name} />

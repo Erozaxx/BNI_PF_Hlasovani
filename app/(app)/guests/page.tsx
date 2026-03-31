@@ -6,6 +6,10 @@ import {
   getActiveVotingMeeting,
   getUserVotesForMeeting,
 } from "@/lib/db/queries/votes";
+import {
+  getGuestIdsForMeeting,
+  getLastMeetingDatesForGuests,
+} from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
 import { GuestCardInteractive } from "@/components/guests/GuestCardInteractive";
 import { Card } from "@/components/ui/Card";
@@ -25,10 +29,19 @@ export default async function GuestsPage({
   const categories = await getCategories();
 
   const activeMeeting = await getActiveVotingMeeting();
-  const votedGuestIds: Set<string> =
+  const guestIds = guests.map((g) => g.id);
+
+  const [votedGuestIds, activeMeetingGuestIds, lastMeetingDates] = await Promise.all([
     activeMeeting && session.memberId
-      ? await getUserVotesForMeeting(session.memberId, activeMeeting.id)
-      : new Set();
+      ? getUserVotesForMeeting(session.memberId, activeMeeting.id)
+      : Promise.resolve(new Set<string>()),
+    activeMeeting
+      ? getGuestIdsForMeeting(activeMeeting.id)
+      : Promise.resolve(new Set<string>()),
+    guestIds.length > 0
+      ? getLastMeetingDatesForGuests(guestIds)
+      : Promise.resolve(new Map<string, string>()),
+  ]);
 
   const isManagement =
     session.managementRole === "admin" ||
@@ -66,11 +79,13 @@ export default async function GuestsPage({
       {/* Guest list */}
       {guests.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {guests.map((g) =>
-            activeMeeting ? (
+          {guests.map((g) => {
+            const inActiveMeeting = activeMeeting && activeMeetingGuestIds.has(g.id);
+            const lastMeetingDate = lastMeetingDates.get(g.id) ?? null;
+            return inActiveMeeting ? (
               <GuestCardInteractive
                 key={g.id}
-                guest={g}
+                guest={{ ...g, lastMeetingDate }}
                 votingMeetingId={activeMeeting.id}
                 alreadyVoted={votedGuestIds.has(g.id)}
               />
@@ -80,11 +95,12 @@ export default async function GuestsPage({
                   name={g.name}
                   description={g.description}
                   categoryName={g.categoryName}
+                  lastMeetingDate={lastMeetingDate}
                   interactive
                 />
               </Link>
-            )
-          )}
+            );
+          })}
         </div>
       ) : (
         <Card>

@@ -5,6 +5,7 @@ interface GuestCardProps {
   name: string;
   description?: string | null;
   categoryName?: string | null;
+  lastMeetingDate?: string | null;
   interactive?: boolean;
 }
 
@@ -12,6 +13,7 @@ export function GuestCard({
   name,
   description,
   categoryName,
+  lastMeetingDate,
   interactive = false,
 }: GuestCardProps) {
   return (
@@ -23,6 +25,11 @@ export function GuestCard({
       {description && (
         <p className="text-sm text-text-muted mt-2 line-clamp-3">
           {description}
+        </p>
+      )}
+      {lastMeetingDate && (
+        <p className="text-xs text-text-muted mt-2">
+          Naposledy na schůzce: {lastMeetingDate}
         </p>
       )}
     </Card>
