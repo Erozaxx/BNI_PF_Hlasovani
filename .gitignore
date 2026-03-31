@@ -1,0 +1,7 @@
+# --- aiworkflow bootstrap ---
+.aiworkflow/
+.claude/
+.claude-local/
+AGENTS.md
+CLAUDE.md
+CODEX.md
