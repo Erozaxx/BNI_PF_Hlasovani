@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { GuestCard } from "@/components/guests/GuestCard";
 import { castVoteAction } from "@/actions/votes";
 
@@ -82,11 +83,14 @@ export function GuestCardInteractive({
 
   return (
     <div className="flex flex-col gap-2">
-      <GuestCard
-        name={guest.name}
-        description={guest.description}
-        categoryName={guest.categoryName}
-      />
+      <Link href={`/guests/${guest.id}`}>
+        <GuestCard
+          name={guest.name}
+          description={guest.description}
+          categoryName={guest.categoryName}
+          interactive
+        />
+      </Link>
 
       {voted && (
         <p className="text-sm text-success font-medium px-1">Hlasovano ✓</p>
