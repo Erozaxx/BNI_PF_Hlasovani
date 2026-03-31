@@ -91,6 +91,7 @@ export async function castVoteAction(
       reason: voteValue === "down" ? voteReason!.trim() : undefined,
     });
 
+    revalidatePath("/guests");
     revalidatePath(`/guests/${guestId}`);
     revalidatePath(`/meetings/${meetingId}`);
     return { success: true };
