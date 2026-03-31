@@ -9,6 +9,8 @@ import {
   removeGuestFromMeeting as dbRemoveGuestFromMeeting,
   getMeetingById,
   updateMeetingStatus,
+  getMeetingGuestIds,
+  setVotingEnabled,
 } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
 
@@ -16,7 +18,8 @@ import type { ActionResult } from "@/lib/types";
  * Create a new meeting. Requires admin or moderator role.
  */
 export async function createMeetingAction(
-  date: string
+  date: string,
+  location?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -26,7 +29,7 @@ export async function createMeetingAction(
   }
 
   try {
-    const mtg = await dbCreateMeeting(date);
+    const mtg = await dbCreateMeeting(date, location);
     revalidatePath("/meetings");
     return { success: true, data: { id: mtg.id } };
   } catch (error: unknown) {
@@ -121,11 +124,13 @@ export async function removeGuestFromMeetingAction(
 
 /**
  * Open voting for a meeting. Requires admin or moderator role.
- * Sets status to 'voting' and calculates the voting window closing time
+ * Accepts a list of guest IDs to enable for voting (must be a non-empty subset of meeting's guests).
+ * Sets voting_enabled per guest, then sets status to 'voting' with the voting window closing time
  * (next Wednesday 23:59 in Europe/Prague).
  */
 export async function openVotingAction(
-  meetingId: string
+  meetingId: string,
+  votingGuestIds: string[]
 ): Promise<ActionResult> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -142,6 +147,23 @@ export async function openVotingAction(
       };
     }
 
+    // Krok 0: Subset validace (B-001) — každý ID musí patřit k této schůzce
+    const meetingGuestIds = await getMeetingGuestIds(meetingId);
+    for (const id of votingGuestIds) {
+      if (!meetingGuestIds.has(id)) {
+        return { success: false, error: "Neplatny host pro tuto schuzku." };
+      }
+    }
+
+    // Krok 1: Validace min. počtu
+    if (votingGuestIds.length === 0) {
+      return { success: false, error: "Nelze spustit hlasovani bez hostu." };
+    }
+
+    // Krok 2: Nastavit voting_enabled
+    await setVotingEnabled(meetingId, votingGuestIds);
+
+    // Krok 3: Aktualizovat status schůzky
     const now = new Date();
     // Calculate next Wednesday 23:59 CET/CEST
     const daysUntilWednesday = (3 - now.getUTCDay() + 7) % 7 || 7;

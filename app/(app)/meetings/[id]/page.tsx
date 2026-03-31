@@ -13,6 +13,7 @@ import { VoteResults } from "@/components/votes/VoteResults";
 import { ReportButton } from "@/components/meetings/ReportButton";
 import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
+import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingDetailPage({
   params,
@@ -61,15 +62,16 @@ export default async function MeetingDetailPage({
   );
 
   const statusBadge = (status: string) => {
+    const label = statusLabel[status] ?? status;
     switch (status) {
       case "draft":
-        return <Badge variant="neutral">Draft</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
       case "voting":
-        return <Badge variant="danger">Hlasovani aktivni</Badge>;
+        return <Badge variant="danger">{label}</Badge>;
       case "closed":
-        return <Badge variant="success">Uzavreno</Badge>;
+        return <Badge variant="success">{label}</Badge>;
       default:
-        return <Badge variant="neutral">{status}</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
     }
   };
 
@@ -87,6 +89,11 @@ export default async function MeetingDetailPage({
             Schuzka {meeting.date}
           </h1>
           <div className="mt-2">{statusBadge(meeting.status)}</div>
+          {meeting.location && (
+            <p className="text-sm text-text-muted mt-1">
+              Misto: {meeting.location}
+            </p>
+          )}
           {meeting.votingClosesAt && meeting.status === "voting" && (
             <p className="text-sm text-text-muted mt-1">
               Uzavira se:{" "}
@@ -102,7 +109,16 @@ export default async function MeetingDetailPage({
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {isManagement && <MeetingControls meetingId={id} status={meeting.status} />}
+          {isManagement && (
+            <MeetingControls
+              meetingId={id}
+              status={meeting.status}
+              guests={meeting.guests.map((g) => ({
+                guestId: g.guestId,
+                guestName: g.guestName,
+              }))}
+            />
+          )}
           {isManagement && meeting.status === "closed" && (
             <ReportButton meetingId={id} />
           )}
@@ -140,7 +156,7 @@ export default async function MeetingDetailPage({
               const results = resultsByGuest.get(g.guestId);
               return (
                 <div key={g.guestId} className="mb-3">
-                  <Link href={`/guests/${g.guestId}`}>
+                  <Link href={`/guests/${g.guestId}?from=/meetings/${id}`}>
                     <Card variant="interactive">
                       <div className="flex items-center justify-between">
                         <div>

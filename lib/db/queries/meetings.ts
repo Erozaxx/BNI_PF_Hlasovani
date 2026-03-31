@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, ne, isNull, max, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, ne, isNull, max, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
@@ -52,6 +52,7 @@ export async function getMeetingById(id: string) {
 
 /**
  * Get a meeting with its associated guests (and their categories).
+ * Includes votingEnabled flag per guest from meeting_guest.
  */
 export async function getMeetingWithGuests(id: string) {
   const meetingData = await getMeetingById(id);
@@ -65,6 +66,7 @@ export async function getMeetingWithGuests(id: string) {
       categoryId: guest.categoryId,
       categoryName: category.name,
       addedAt: meetingGuest.addedAt,
+      votingEnabled: meetingGuest.votingEnabled,
     })
     .from(meetingGuest)
     .innerJoin(guest, eq(meetingGuest.guestId, guest.id))
@@ -78,12 +80,13 @@ export async function getMeetingWithGuests(id: string) {
 /**
  * Create a new meeting.
  */
-export async function createMeeting(dateStr: string) {
+export async function createMeeting(dateStr: string, location?: string) {
   const results = await getDb()
     .insert(meeting)
     .values({
       date: dateStr,
       status: "draft",
+      location: location ?? null,
     })
     .returning();
 
@@ -129,6 +132,28 @@ export async function getGuestIdsForMeeting(meetingId: string): Promise<Set<stri
     .from(meetingGuest)
     .where(eq(meetingGuest.meetingId, meetingId));
   return new Set(rows.map((r) => r.guestId));
+}
+
+/**
+ * Get all guest IDs for a meeting.
+ * Returns a Set<string> of guestIds. Used for B-001 subset validation in openVotingAction.
+ */
+export async function getMeetingGuestIds(meetingId: string): Promise<Set<string>> {
+  return getGuestIdsForMeeting(meetingId);
+}
+
+/**
+ * Bulk-update voting_enabled on meeting_guest for all guests of a meeting.
+ * Guests in enabledIds get voting_enabled = true; all others get voting_enabled = false.
+ * Single atomic UPDATE: SET voting_enabled = (guest_id = ANY($enabledIds)) WHERE meeting_id = $meetingId.
+ */
+export async function setVotingEnabled(meetingId: string, enabledIds: string[]): Promise<void> {
+  await getDb()
+    .update(meetingGuest)
+    .set({
+      votingEnabled: sql<boolean>`(${meetingGuest.guestId} = ANY(ARRAY[${sql.join(enabledIds.map((id) => sql`${id}::uuid`), sql`, `)}]))`,
+    })
+    .where(eq(meetingGuest.meetingId, meetingId));
 }
 
 /**

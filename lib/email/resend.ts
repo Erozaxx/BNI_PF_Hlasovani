@@ -268,7 +268,7 @@ export async function sendMagicLinkEmail(
   <div style="text-align:center;margin:24px 0;">
     <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Prihlasit se</a>
   </div>
-  <p style="color:#666;font-size:13px;">Odkaz je platny 7 dni a lze pouzit pouze jednou.</p>
+  <p style="color:#666;font-size:13px;">Odkaz je platny 7 dni.</p>
   <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
 </body>
 </html>`,

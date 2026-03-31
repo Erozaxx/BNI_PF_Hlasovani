@@ -104,6 +104,7 @@ export async function getVotingResults(guestId: string, meetingId: string) {
 
 /**
  * Get all active voting meetings that include a specific guest.
+ * Only returns meetings where the guest has voting_enabled = true (D-001).
  * Returns meetingId + meetingDate for each.
  */
 export async function getActiveVotingMeetingsForGuest(guestId: string) {
@@ -117,7 +118,8 @@ export async function getActiveVotingMeetingsForGuest(guestId: string) {
     .where(
       and(
         eq(meetingGuest.guestId, guestId),
-        eq(meeting.status, "voting")
+        eq(meeting.status, "voting"),
+        eq(meetingGuest.votingEnabled, true)
       )
     )
     .orderBy(meeting.date);

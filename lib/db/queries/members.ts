@@ -125,6 +125,13 @@ export async function updatePasswordHash(memberId: string, passwordHash: string)
 }
 
 /**
+ * Delete a member by ID.
+ */
+export async function deleteMember(id: string) {
+  await getDb().delete(member).where(eq(member.id, id));
+}
+
+/**
  * Update magic token for a member (used during token generation/renewal).
  * Moves current token to previous before setting the new one.
  * Uses a single atomic UPDATE to avoid race conditions in serverless.

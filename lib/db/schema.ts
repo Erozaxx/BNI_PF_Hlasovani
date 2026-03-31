@@ -110,6 +110,7 @@ export const meeting = pgTable(
     status: text("status")
       .notNull()
       .default("draft"),
+    location: text("location"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -143,6 +144,7 @@ export const meetingGuest = pgTable(
     addedAt: timestamp("added_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    votingEnabled: boolean("voting_enabled").notNull().default(true),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.meetingId, table.guestId] }),

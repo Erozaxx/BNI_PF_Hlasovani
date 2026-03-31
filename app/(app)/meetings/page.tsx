@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMeetingForm } from "./CreateMeetingForm";
+import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingsPage() {
   const session = await getSession();
@@ -15,15 +16,16 @@ export default async function MeetingsPage() {
     session.managementRole === "moderator";
 
   const statusBadge = (status: string) => {
+    const label = statusLabel[status] ?? status;
     switch (status) {
       case "draft":
-        return <Badge variant="neutral">Draft</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
       case "voting":
-        return <Badge variant="danger">Hlasovani aktivni</Badge>;
+        return <Badge variant="danger">{label}</Badge>;
       case "closed":
-        return <Badge variant="success">Uzavreno</Badge>;
+        return <Badge variant="success">{label}</Badge>;
       default:
-        return <Badge variant="neutral">{status}</Badge>;
+        return <Badge variant="neutral">{label}</Badge>;
     }
   };
 

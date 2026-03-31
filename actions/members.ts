@@ -6,6 +6,7 @@ import {
   createMember as dbCreateMember,
   getMemberById,
   updateTokenUsed,
+  deleteMember as dbDeleteMember,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
@@ -163,5 +164,30 @@ export async function sendMagicLinkEmailAction(
   } catch (error) {
     console.error("sendMagicLinkEmailAction error:", error);
     return { success: false, error: "Nepodarilo se odeslat odkaz emailem." };
+  }
+}
+
+/**
+ * Delete a member. Requires admin role.
+ */
+export async function deleteMemberAction(
+  memberId: string
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    const memberData = await getMemberById(memberId);
+    if (!memberData) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    await dbDeleteMember(memberId);
+
+    revalidatePath("/admin/members");
+    return { success: true };
+  } catch (error) {
+    console.error("deleteMemberAction error:", error);
+    return { success: false, error: "Nepodarilo se smazat clena." };
   }
 }

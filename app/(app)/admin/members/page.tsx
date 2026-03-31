@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
 import { MemberActions } from "./MemberActions";
+import { DeleteMemberButton } from "./DeleteMemberButton";
 
 export default async function AdminMembersPage() {
   const members = await getMembers();
@@ -70,7 +71,10 @@ export default async function AdminMembersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <MemberActions memberId={m.id} hasToken={Boolean(m.magicTokenHash)} />
+                      <div className="flex flex-col gap-2">
+                        <MemberActions memberId={m.id} hasToken={Boolean(m.magicTokenHash)} />
+                        <DeleteMemberButton memberId={m.id} memberName={m.name} />
+                      </div>
                     </td>
                   </tr>
                 ))}
