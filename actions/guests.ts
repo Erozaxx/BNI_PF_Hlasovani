@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requireManagementRole, requireAdmin } from "@/lib/auth/guards";
 import {
   createGuest as dbCreateGuest,
   updateGuest as dbUpdateGuest,
   updateGuestCategory as dbUpdateGuestCategory,
+  deleteGuest as dbDeleteGuest,
 } from "@/lib/db/queries/guests";
 import { addGuestToMeeting } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
@@ -91,6 +92,24 @@ export async function updateGuestAction(
   } catch (error) {
     console.error("updateGuestAction error:", error);
     return { success: false, error: "Nepodarilo se aktualizovat hosta." };
+  }
+}
+
+/**
+ * Delete a guest and all related data (notes, votes, meeting_guests). Requires admin role.
+ */
+export async function deleteGuestAction(id: string): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    await dbDeleteGuest(id);
+    revalidatePath("/guests");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    console.error("deleteGuestAction error:", error);
+    return { success: false, error: "Nepodarilo se smazat hosta." };
   }
 }
 

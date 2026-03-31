@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { GuestCategoryChanger } from "./GuestCategoryChanger";
+import { DeleteGuestButton } from "@/components/guests/DeleteGuestButton";
 import { VoteForm } from "@/components/guests/VoteForm";
 import { NoteList } from "@/components/notes/NoteList";
 import { NoteForm } from "@/components/notes/NoteForm";
@@ -32,6 +33,7 @@ export default async function GuestDetailPage({
   const isManagement =
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
+  const isAdmin = session.managementRole === "admin";
 
   // Get active voting meetings for this guest + user's existing vote
   const votingMeetings = session.memberId
@@ -63,6 +65,9 @@ export default async function GuestDetailPage({
             {guest.categoryName ?? "[bez kategorie]"}
           </Badge>
         </div>
+        {isAdmin && (
+          <DeleteGuestButton guestId={guest.id} guestName={guest.name} />
+        )}
       </div>
 
       {/* Description */}

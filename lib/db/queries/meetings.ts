@@ -120,6 +120,13 @@ export async function removeGuestFromMeeting(
 }
 
 /**
+ * Delete a meeting by ID (cascades meeting_guest and vote rows).
+ */
+export async function deleteMeeting(id: string) {
+  await getDb().delete(meeting).where(eq(meeting.id, id));
+}
+
+/**
  * Update meeting status and voting timestamps.
  */
 export async function updateMeetingStatus(

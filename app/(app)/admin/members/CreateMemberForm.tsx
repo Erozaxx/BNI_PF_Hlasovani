@@ -30,6 +30,10 @@ export function CreateMemberForm() {
       setError("Jmeno je povinne.");
       return;
     }
+    if (role && !email.trim()) {
+      setError("Pro admin/moderator roli je nutny email.");
+      return;
+    }
     if (role && password.length > 0 && password.length < 8) {
       setError("Heslo musi mit alespon 8 znaku.");
       return;
