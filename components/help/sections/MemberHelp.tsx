@@ -190,9 +190,9 @@ export function MemberHelp() {
       <section>
         <h2 className="text-lg font-semibold mb-3">Poznámky</h2>
         <p className="text-sm text-text-muted mb-3">
-          K profilu každého hosta si můžete přidat vlastní poznámku — například
-          připomínku z osobního setkání nebo důvod, proč hosta doporučujete či
-          nedoporučujete. Poznámka je viditelná pouze vám.
+          K profilu každého hosta lze přidat poznámku — například doplňující
+          informaci nebo kontext k hostovi. Poznámka je veřejná a vidí ji
+          všichni přihlášení uživatelé.
         </p>
         <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
           <li>Otevřete detail hosta (viz kapitola Hosté a hlasování).</li>
@@ -210,8 +210,8 @@ export function MemberHelp() {
         </div>
         <ul className="text-sm space-y-1">
           <li>
-            <strong>Vidí mou poznámku i ostatní členové?</strong> — Ne, poznámky
-            jsou soukromé a vidí je pouze jejich autor.
+            <strong>Vidí mou poznámku i ostatní členové?</strong> — Ano, poznámky
+            jsou veřejné a vidí je všichni přihlášení uživatelé.
           </li>
           <li>
             <strong>Mohu poznámku smazat?</strong> — Ano, vymažte text v poli a
