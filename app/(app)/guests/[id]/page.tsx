@@ -19,10 +19,14 @@ import { NoteForm } from "@/components/notes/NoteForm";
 
 export default async function GuestDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const backUrl = resolvedSearchParams.from ?? "/guests";
   const guest = await getGuestWithNotes(id);
 
   if (!guest) {
@@ -55,9 +59,9 @@ export default async function GuestDetailPage({
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <Link href="/guests">
+      <Link href={backUrl}>
         <Button variant="link" size="sm">
-          &larr; Zpet na hosty
+          &larr; Zpet
         </Button>
       </Link>
 

@@ -11,6 +11,7 @@ export function CreateMeetingForm() {
   const router = useRouter();
   const { showToast } = useToast();
   const [date, setDate] = useState("");
+  const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,12 +26,13 @@ export function CreateMeetingForm() {
     setError("");
 
     try {
-      const result = await createMeetingAction(date);
+      const result = await createMeetingAction(date, location || undefined);
       if (!result.success) {
         setError(result.error);
         showToast("error", result.error);
       } else {
         setDate("");
+        setLocation("");
         showToast("success", "Schuzka byla vytvorena.");
         router.refresh();
       }
@@ -43,20 +45,32 @@ export function CreateMeetingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-      <div className="flex-1 min-w-0">
-        <Input
-          type="date"
-          name="date"
-          label="Datum schuzky"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          error={error}
-        />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div className="flex-1 min-w-0">
+          <Input
+            type="date"
+            name="date"
+            label="Datum schuzky"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            error={error}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <Input
+            type="text"
+            name="location"
+            label="Misto konani"
+            placeholder="Nepovinne"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="primary" size="sm" loading={loading}>
+          Vytvorit
+        </Button>
       </div>
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Vytvorit
-      </Button>
     </form>
   );
 }
