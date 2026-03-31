@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, ne, isNull } from "drizzle-orm";
+import { eq, desc, and, gte, ne, isNull, max, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
@@ -117,6 +117,58 @@ export async function removeGuestFromMeeting(
         eq(meetingGuest.guestId, guestId)
       )
     );
+}
+
+/**
+ * Get guest IDs that are assigned to a specific meeting.
+ * Returns a Set<string> of guestIds.
+ */
+export async function getGuestIdsForMeeting(meetingId: string): Promise<Set<string>> {
+  const rows = await getDb()
+    .select({ guestId: meetingGuest.guestId })
+    .from(meetingGuest)
+    .where(eq(meetingGuest.meetingId, meetingId));
+  return new Set(rows.map((r) => r.guestId));
+}
+
+/**
+ * Get the last meeting date (most recent) for each of the given guest IDs.
+ * Returns a Map<guestId, dateString>.
+ */
+export async function getLastMeetingDatesForGuests(
+  guestIds: string[]
+): Promise<Map<string, string>> {
+  if (guestIds.length === 0) return new Map();
+
+  const rows = await getDb()
+    .select({
+      guestId: meetingGuest.guestId,
+      lastDate: max(meeting.date),
+    })
+    .from(meetingGuest)
+    .innerJoin(meeting, eq(meetingGuest.meetingId, meeting.id))
+    .where(inArray(meetingGuest.guestId, guestIds))
+    .groupBy(meetingGuest.guestId);
+
+  return new Map(
+    rows
+      .filter((r) => r.lastDate !== null)
+      .map((r) => [r.guestId, r.lastDate as string])
+  );
+}
+
+/**
+ * Get the last meeting date for a single guest.
+ */
+export async function getLastMeetingDateForGuest(
+  guestId: string
+): Promise<string | null> {
+  const rows = await getDb()
+    .select({ lastDate: max(meeting.date) })
+    .from(meetingGuest)
+    .innerJoin(meeting, eq(meetingGuest.meetingId, meeting.id))
+    .where(eq(meetingGuest.guestId, guestId));
+  return rows[0]?.lastDate ?? null;
 }
 
 /**

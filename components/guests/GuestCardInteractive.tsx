@@ -19,6 +19,7 @@ interface GuestCardInteractiveProps {
     name: string;
     description?: string | null;
     categoryName?: string | null;
+    lastMeetingDate?: string | null;
   };
   votingMeetingId?: string;
   alreadyVoted?: boolean;
@@ -88,6 +89,7 @@ export function GuestCardInteractive({
           name={guest.name}
           description={guest.description}
           categoryName={guest.categoryName}
+          lastMeetingDate={guest.lastMeetingDate}
           interactive
         />
       </Link>
