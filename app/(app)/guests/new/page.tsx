@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getCategories } from "@/lib/db/queries/categories";
+import { getActiveMeeting } from "@/lib/db/queries/meetings";
 import { GuestForm } from "@/components/guests/GuestForm";
 
 export default async function NewGuestPage() {
@@ -14,12 +15,18 @@ export default async function NewGuestPage() {
     redirect("/guests");
   }
 
-  const categories = await getCategories();
+  const [categories, activeMeeting] = await Promise.all([
+    getCategories(),
+    getActiveMeeting(),
+  ]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-text-main">Novy host</h1>
-      <GuestForm categories={categories} />
+      <GuestForm
+        categories={categories}
+        activeMeeting={activeMeeting ?? undefined}
+      />
     </div>
   );
 }

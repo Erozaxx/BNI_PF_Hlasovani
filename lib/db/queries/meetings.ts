@@ -1,9 +1,34 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte, ne, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
 
 function getDb() { return drizzle(getSql()); }
+
+/**
+ * Get the active meeting: voting not open, date >= today, status != 'closed'.
+ * Returns the nearest upcoming meeting or null.
+ */
+export async function getActiveMeeting(): Promise<{
+  id: string;
+  date: string;
+} | null> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const results = await getDb()
+    .select({ id: meeting.id, date: meeting.date })
+    .from(meeting)
+    .where(
+      and(
+        isNull(meeting.votingOpenAt),
+        gte(meeting.date, today),
+        ne(meeting.status, "closed")
+      )
+    )
+    .orderBy(meeting.date)
+    .limit(1);
+
+  return results[0] ?? null;
+}
 
 /**
  * Get all meetings ordered by date desc.
