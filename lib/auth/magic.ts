@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "crypto";
 import {
   getMemberByTokenHash,
   getMemberByPreviousTokenHash,
-  updateTokenUsed,
   updateMagicToken,
 } from "@/lib/db/queries/members";
 import { createSession } from "@/lib/auth/session";
@@ -53,9 +52,6 @@ export async function verifyMagicToken(rawToken: string): Promise<VerifyResult> 
   // Step 1: Try current (valid, non-expired, non-used) token
   const currentMember = await getMemberByTokenHash(tokenHash);
   if (currentMember) {
-    // Mark as used (single-use)
-    await updateTokenUsed(currentMember.id);
-
     // Create session
     await createSession({
       memberId: currentMember.id,
