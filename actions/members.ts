@@ -33,6 +33,10 @@ export async function createMemberAction(
       managementRole: managementRole || null,
     });
 
+    // Auto-generate magic token so member can log in immediately
+    // (also satisfies DB constraint member_management_requires_credentials)
+    await generateMagicToken(newMember.id);
+
     revalidatePath("/admin/members");
     return { success: true, data: { id: newMember.id } };
   } catch (error) {
