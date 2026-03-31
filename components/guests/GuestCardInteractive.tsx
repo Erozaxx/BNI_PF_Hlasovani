@@ -2,8 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { GuestCard } from "@/components/guests/GuestCard";
-import { Button } from "@/components/ui/Button";
 import { castVoteAction } from "@/actions/votes";
+
+type VoteValue = "up" | "neutral" | "down";
+
+const voteOptions: { value: VoteValue; emoji: string; label: string }[] = [
+  { value: "up", emoji: "👍", label: "Pro" },
+  { value: "neutral", emoji: "😐", label: "Nevim" },
+  { value: "down", emoji: "👎", label: "Proti" },
+];
 
 interface GuestCardInteractiveProps {
   guest: {
@@ -22,39 +29,32 @@ export function GuestCardInteractive({
   alreadyVoted = false,
 }: GuestCardInteractiveProps) {
   const [voted, setVoted] = useState(alreadyVoted);
-  const [showNoForm, setShowNoForm] = useState(false);
+  const [selected, setSelected] = useState<VoteValue | null>(null);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const showVoting = !!votingMeetingId && !voted;
 
-  function handleYes() {
-    if (!votingMeetingId) return;
+  function handleSelect(value: VoteValue) {
+    setSelected(value);
     setError(null);
-    startTransition(async () => {
-      const result = await castVoteAction(guest.id, votingMeetingId, "up");
-      if (result.success) {
-        setVoted(true);
-        setShowNoForm(false);
-      } else {
-        setError(result.error);
-      }
-    });
+    if (value !== "down") {
+      setComment("");
+      if (!votingMeetingId) return;
+      startTransition(async () => {
+        const result = await castVoteAction(guest.id, votingMeetingId, value);
+        if (result.success) {
+          setVoted(true);
+        } else {
+          setError(result.error);
+          setSelected(null);
+        }
+      });
+    }
   }
 
-  function handleNoOpen() {
-    setShowNoForm(true);
-    setError(null);
-  }
-
-  function handleNoCancel() {
-    setShowNoForm(false);
-    setComment("");
-    setError(null);
-  }
-
-  function handleNoSubmit() {
+  function handleDownSubmit() {
     if (!votingMeetingId) return;
     setError(null);
     startTransition(async () => {
@@ -66,12 +66,18 @@ export function GuestCardInteractive({
       );
       if (result.success) {
         setVoted(true);
-        setShowNoForm(false);
+        setSelected(null);
         setComment("");
       } else {
         setError(result.error);
       }
     });
+  }
+
+  function handleDownCancel() {
+    setSelected(null);
+    setComment("");
+    setError(null);
   }
 
   return (
@@ -86,32 +92,32 @@ export function GuestCardInteractive({
         <p className="text-sm text-success font-medium px-1">Hlasovano ✓</p>
       )}
 
-      {showVoting && !showNoForm && (
+      {showVoting && selected !== "down" && (
         <div className="flex gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={isPending}
-            loading={isPending}
-            onClick={handleYes}
-          >
-            YES
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            disabled={isPending}
-            onClick={handleNoOpen}
-          >
-            NO
-          </Button>
+          {voteOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleSelect(opt.value)}
+              disabled={isPending}
+              className={`
+                flex flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 transition-colors
+                focus:outline-none focus:shadow-focus text-sm font-medium
+                border-border bg-white hover:border-primary/50
+                disabled:opacity-50 disabled:cursor-not-allowed
+              `.trim()}
+            >
+              <span className="text-xl">{opt.emoji}</span>
+              <span className="text-xs text-text-main">{opt.label}</span>
+            </button>
+          ))}
         </div>
       )}
 
-      {showVoting && showNoForm && (
+      {showVoting && selected === "down" && (
         <div className="flex flex-col gap-2 p-3 bg-background border border-border rounded-lg">
           <label className="text-sm font-medium text-text-main">
-            Duvod pro hlasovani NO (povinne):
+            Duvod pro hlasovani Proti (povinny):
           </label>
           <textarea
             className="w-full text-sm border border-border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
@@ -120,31 +126,31 @@ export function GuestCardInteractive({
             onChange={(e) => setComment(e.target.value)}
             placeholder="Zadejte duvod..."
             disabled={isPending}
+            autoFocus
           />
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex gap-2">
-            <Button
-              variant="danger"
-              size="sm"
+            <button
+              type="button"
+              onClick={handleDownSubmit}
               disabled={isPending || comment.trim().length === 0}
-              loading={isPending}
-              onClick={handleNoSubmit}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg border-2 border-danger bg-danger text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Potvrdit NO
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
+              👎 Potvrdit
+            </button>
+            <button
+              type="button"
+              onClick={handleDownCancel}
               disabled={isPending}
-              onClick={handleNoCancel}
+              className="px-3 py-2 rounded-lg border-2 border-border bg-white text-sm font-medium text-text-main"
             >
               Zrusit
-            </Button>
+            </button>
           </div>
         </div>
       )}
 
-      {!showNoForm && error && (
+      {selected !== "down" && error && (
         <p className="text-sm text-danger px-1">{error}</p>
       )}
     </div>
