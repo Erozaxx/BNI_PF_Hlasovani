@@ -1,22 +1,22 @@
 import { eq, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { category } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all categories ordered by name.
  */
 export async function getCategories() {
-  return db.select().from(category).orderBy(asc(category.name));
+  return getDb().select().from(category).orderBy(asc(category.name));
 }
 
 /**
  * Get a single category by ID.
  */
 export async function getCategoryById(id: string) {
-  const results = await db
+  const results = await getDb()
     .select()
     .from(category)
     .where(eq(category.id, id))
@@ -29,7 +29,7 @@ export async function getCategoryById(id: string) {
  * Create a new category.
  */
 export async function createCategory(name: string) {
-  const results = await db
+  const results = await getDb()
     .insert(category)
     .values({ name })
     .returning();
@@ -41,7 +41,7 @@ export async function createCategory(name: string) {
  * Rename an existing category.
  */
 export async function renameCategory(id: string, name: string) {
-  const results = await db
+  const results = await getDb()
     .update(category)
     .set({ name })
     .where(eq(category.id, id))

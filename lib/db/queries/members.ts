@@ -1,22 +1,22 @@
 import { eq, asc, and, isNotNull, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { member } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all members ordered by name.
  */
 export async function getMembers() {
-  return db.select().from(member).orderBy(asc(member.name));
+  return getDb().select().from(member).orderBy(asc(member.name));
 }
 
 /**
  * Get a single member by ID.
  */
 export async function getMemberById(id: string) {
-  const results = await db
+  const results = await getDb()
     .select()
     .from(member)
     .where(eq(member.id, id))
@@ -34,7 +34,7 @@ export async function createMember(data: {
   managementRole?: string | null;
   passwordHash?: string | null;
 }) {
-  const results = await db
+  const results = await getDb()
     .insert(member)
     .values({
       name: data.name,
@@ -52,7 +52,7 @@ export async function createMember(data: {
  * Used for admin/moderator password login.
  */
 export async function getMemberByEmail(email: string) {
-  const results = await db
+  const results = await getDb()
     .select()
     .from(member)
     .where(eq(member.email, email))
@@ -66,7 +66,7 @@ export async function getMemberByEmail(email: string) {
  * Only returns members with a valid (non-expired, non-used) token.
  */
 export async function getMemberByTokenHash(tokenHash: string) {
-  const results = await db
+  const results = await getDb()
     .select()
     .from(member)
     .where(eq(member.magicTokenHash, tokenHash))
@@ -90,7 +90,7 @@ export async function getMemberByTokenHash(tokenHash: string) {
 export async function getMemberByPreviousTokenHash(tokenHash: string) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 
-  const results = await db
+  const results = await getDb()
     .select()
     .from(member)
     .where(
@@ -109,7 +109,7 @@ export async function getMemberByPreviousTokenHash(tokenHash: string) {
  * Mark a token as used (single-use enforcement).
  */
 export async function updateTokenUsed(memberId: string) {
-  await db
+  await getDb()
     .update(member)
     .set({ tokenUsed: true })
     .where(eq(member.id, memberId));
@@ -125,7 +125,7 @@ export async function updateMagicToken(
   newTokenHash: string,
   expiresAt: Date
 ) {
-  await db
+  await getDb()
     .update(member)
     .set({
       previousTokenHash: sql`${member.magicTokenHash}`,

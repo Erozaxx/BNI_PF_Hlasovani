@@ -1,16 +1,16 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
-import { sql as neonSql } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import { guest, category, note } from "@/lib/db/schema";
 
-const db = drizzle(neonSql);
+function getDb() { return drizzle(getSql()); }
 
 /**
  * Get all guests with their category, ordered by creation date desc.
  * Optionally filter by category ID.
  */
 export async function getGuests(categoryId?: string) {
-  const query = db
+  const query = getDb()
     .select({
       id: guest.id,
       name: guest.name,
@@ -34,7 +34,7 @@ export async function getGuests(categoryId?: string) {
  * Get a single guest by ID with category info.
  */
 export async function getGuestById(id: string) {
-  const results = await db
+  const results = await getDb()
     .select({
       id: guest.id,
       name: guest.name,
@@ -60,7 +60,7 @@ export async function getGuestWithNotes(id: string) {
   const guestData = await getGuestById(id);
   if (!guestData) return null;
 
-  const notes = await db
+  const notes = await getDb()
     .select({
       id: note.id,
       text: note.text,
@@ -82,7 +82,7 @@ export async function createGuest(data: {
   categoryId?: string;
   createdBy?: string;
 }) {
-  const results = await db
+  const results = await getDb()
     .insert(guest)
     .values({
       name: data.name,
@@ -102,7 +102,7 @@ export async function updateGuest(
   id: string,
   data: { name: string; description?: string }
 ) {
-  const results = await db
+  const results = await getDb()
     .update(guest)
     .set({
       name: data.name,
@@ -118,7 +118,7 @@ export async function updateGuest(
  * Update a guest's category.
  */
 export async function updateGuestCategory(id: string, categoryId: string) {
-  const results = await db
+  const results = await getDb()
     .update(guest)
     .set({ categoryId })
     .where(eq(guest.id, id))
