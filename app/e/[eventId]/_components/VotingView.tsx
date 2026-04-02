@@ -22,6 +22,8 @@ interface EventData {
 interface ParticipantData {
   id: string;
   memberId: string | null;
+  memberName: string | null;
+  externalName: string | null;
 }
 
 interface OptionData {
@@ -221,6 +223,12 @@ export function VotingView({
           {event.description && (
             <p className="text-text-muted mt-1">{event.description}</p>
           )}
+          <p className="text-sm text-text-muted mt-1">
+            Hlasujete jako:{" "}
+            <span className="font-medium text-text-main">
+              {participant.memberName ?? participant.externalName ?? "Neznámý"}
+            </span>
+          </p>
         </div>
 
         {/* Status messages */}
