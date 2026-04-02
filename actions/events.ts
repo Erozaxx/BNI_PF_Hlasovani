@@ -41,6 +41,7 @@ export async function createEventAction(
     whoCanVote?: "members_only" | "anyone_with_link";
     customOptionsAllowed?: boolean;
     whoCanAddOptions?: "members_only" | "anyone_with_link";
+    optionType?: "text" | "date" | "datetime";
   },
   description?: string
 ): Promise<ActionResult<{ id: string }>> {
@@ -75,6 +76,7 @@ export async function createEventAction(
         whoCanVote: config.whoCanVote ?? "members_only",
         customOptionsAllowed: config.customOptionsAllowed ?? false,
         whoCanAddOptions: config.whoCanAddOptions ?? "members_only",
+        optionType: config.optionType ?? "text",
         createdBy: auth.session.memberId,
       })
       .returning();

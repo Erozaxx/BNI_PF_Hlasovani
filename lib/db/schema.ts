@@ -201,6 +201,7 @@ export const event = pgTable(
     whoCanVote: text("who_can_vote").notNull().default("members_only"),
     customOptionsAllowed: boolean("custom_options_allowed").notNull().default(false),
     whoCanAddOptions: text("who_can_add_options").notNull().default("members_only"),
+    optionType: text("option_type").notNull().default("text"),
     // FK to event_option — circular reference, enforced at DB level only
     selectedOptionId: uuid("selected_option_id"),
     createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
@@ -226,6 +227,10 @@ export const event = pgTable(
     whoCanAddOptionsCheck: check(
       "event_who_can_add_options_check",
       sql`${table.whoCanAddOptions} IN ('members_only', 'anyone_with_link')`
+    ),
+    optionTypeCheck: check(
+      "event_option_type_check",
+      sql`${table.optionType} IN ('text', 'date', 'datetime')`
     ),
     votingMaxXRequired: check(
       "event_voting_max_x_required",
