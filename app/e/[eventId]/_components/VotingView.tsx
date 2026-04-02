@@ -104,6 +104,8 @@ export function VotingView({
     if (label) setNewOptionLabel(label);
   }
 
+  const maxVotes = Math.max(...options.map((o) => o.voteCount), 0);
+
   const maxX = event.votingMaxX ?? 0;
   const isMaxXReached =
     event.votingType === "max_x" && selectedIds.size >= maxX;
@@ -293,6 +295,12 @@ export function VotingView({
                       <Badge variant="neutral">{option.voteCount} hlasu</Badge>
                     </div>
                   </div>
+                  <div className="mt-2 h-1 bg-border/40 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-success transition-all duration-500"
+                      style={{ width: maxVotes > 0 ? `${Math.round((option.voteCount / maxVotes) * 100)}%` : "0%" }}
+                    />
+                  </div>
                 </button>
               );
             })}
@@ -331,9 +339,17 @@ export function VotingView({
                       }
                       className="w-4 h-4 accent-primary shrink-0"
                     />
-                    <span className="flex-1 font-medium text-text-main">
-                      {option.label}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-text-main">
+                        {option.label}
+                      </span>
+                      <div className="mt-2 h-1 bg-border/40 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-success transition-all duration-500"
+                          style={{ width: maxVotes > 0 ? `${Math.round((option.voteCount / maxVotes) * 100)}%` : "0%" }}
+                        />
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {isMyVote && (
                         <span className="text-primary text-sm font-semibold">
