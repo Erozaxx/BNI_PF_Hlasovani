@@ -1,3 +1,18 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "plugins": ["import"],
+  "rules": {
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "zones": [
+          {
+            "target": "./app/e",
+            "from": "./app/(app)",
+            "message": "SECURITY: /e/ routes must not import from /(app)/ — see S-04 security boundary."
+          }
+        ]
+      }
+    ]
+  }
 }
