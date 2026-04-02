@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   date,
   primaryKey,
   unique,
@@ -180,6 +181,153 @@ export const note = pgTable(
     guestIdx: index("idx_note_guest").on(table.guestId),
     memberIdx: index("idx_note_member").on(table.memberId),
     createdAtIdx: index("idx_note_created_at").on(table.createdAt),
+  })
+);
+
+// ============================================================
+// EVENT
+// Note: selected_option_id FK → event_option is deferred (circular reference).
+//       It is enforced at the DB level by the migration script.
+// ============================================================
+export const event = pgTable(
+  "event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("draft"),
+    votingType: text("voting_type").notNull().default("pick_one"),
+    votingMaxX: integer("voting_max_x"),
+    whoCanVote: text("who_can_vote").notNull().default("members_only"),
+    customOptionsAllowed: boolean("custom_options_allowed").notNull().default(false),
+    whoCanAddOptions: text("who_can_add_options").notNull().default("members_only"),
+    // FK to event_option — circular reference, enforced at DB level only
+    selectedOptionId: uuid("selected_option_id"),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    tokensRevokedAt: timestamp("tokens_revoked_at", { withTimezone: true }),
+  },
+  (table) => ({
+    statusCheck: check(
+      "event_status_check",
+      sql`${table.status} IN ('draft', 'active', 'closed', 'done')`
+    ),
+    votingTypeCheck: check(
+      "event_voting_type_check",
+      sql`${table.votingType} IN ('pick_one', 'multiple', 'max_x')`
+    ),
+    whoCanVoteCheck: check(
+      "event_who_can_vote_check",
+      sql`${table.whoCanVote} IN ('members_only', 'anyone_with_link')`
+    ),
+    whoCanAddOptionsCheck: check(
+      "event_who_can_add_options_check",
+      sql`${table.whoCanAddOptions} IN ('members_only', 'anyone_with_link')`
+    ),
+    votingMaxXRequired: check(
+      "event_voting_max_x_required",
+      sql`${table.votingType} != 'max_x' OR ${table.votingMaxX} IS NOT NULL`
+    ),
+    statusIdx: index("idx_event_status").on(table.status),
+    createdAtIdx: index("idx_event_created_at").on(table.createdAt),
+  })
+);
+
+// ============================================================
+// EVENT_OPTION
+// Note: added_by_participant_id FK → event_participant is deferred (circular).
+//       It is enforced at the DB level by the migration script.
+// ============================================================
+export const eventOption = pgTable(
+  "event_option",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    // FK to event_participant — circular reference, enforced at DB level only
+    addedByParticipantId: uuid("added_by_participant_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    eventIdLabelUnique: unique("event_option_event_id_label_unique").on(
+      table.eventId,
+      table.label
+    ),
+    eventIdIdx: index("idx_event_option_event_id").on(table.eventId),
+  })
+);
+
+// ============================================================
+// EVENT_PARTICIPANT
+// ============================================================
+export const eventParticipant = pgTable(
+  "event_participant",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id").references(() => member.id, { onDelete: "set null" }),
+    externalName: text("external_name"),
+    externalEmail: text("external_email"),
+    // Global UNIQUE enforced at DB level (UNIQUE column)
+    magicTokenHash: text("magic_token_hash").unique(),
+    tokenCreatedAt: timestamp("token_created_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    identityCheck: check(
+      "event_participant_identity_check",
+      sql`${table.memberId} IS NOT NULL OR ${table.externalName} IS NOT NULL`
+    ),
+    eventIdIdx: index("idx_event_participant_event_id").on(table.eventId),
+    magicTokenHashIdx: index("idx_event_participant_magic_token_hash").on(
+      table.magicTokenHash
+    ),
+    memberIdIdx: index("idx_event_participant_member_id").on(table.memberId),
+    // Partial UNIQUE indexes — defined at DB level in migration; represented here as partial indexes
+    eventMemberUniqueIdx: index("idx_event_participant_event_member_unique")
+      .on(table.eventId, table.memberId)
+      .where(sql`${table.memberId} IS NOT NULL`),
+    eventEmailUniqueIdx: index("idx_event_participant_event_email_unique")
+      .on(table.eventId, table.externalEmail)
+      .where(sql`${table.externalEmail} IS NOT NULL`),
+    externalEmailIdx: index("idx_event_participant_external_email")
+      .on(table.externalEmail)
+      .where(sql`${table.externalEmail} IS NOT NULL AND ${table.memberId} IS NULL`),
+  })
+);
+
+// ============================================================
+// EVENT_VOTE
+// ============================================================
+export const eventVote = pgTable(
+  "event_vote",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => eventParticipant.id, { onDelete: "cascade" }),
+    optionId: uuid("option_id")
+      .notNull()
+      .references(() => eventOption.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    participantOptionUnique: unique("event_vote_participant_option_unique").on(
+      table.participantId,
+      table.optionId
+    ),
+    eventOptionIdx: index("idx_event_vote_event_option").on(table.eventId, table.optionId),
+    participantIdIdx: index("idx_event_vote_participant_id").on(table.participantId),
   })
 );
 
