@@ -214,13 +214,16 @@ export function EventOptionsManager({
         <form onSubmit={handleAddOption} className="space-y-3 pt-2 border-t border-border mt-2">
           {/* Date / Datetime picker — shown when event optionType requires it */}
           {eventOptionType !== "text" && (
-            <input
-              type={eventOptionType === "date" ? "date" : "datetime-local"}
-              value={pickerValue}
-              onChange={(e) => handlePickerChange(e.target.value)}
-              disabled={isPending}
-              className="h-10 px-3 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
-            />
+            <label className="flex items-center gap-2 text-sm text-text-muted">
+              <span className="shrink-0">Vybrat z kalendáře:</span>
+              <input
+                type={eventOptionType === "date" ? "date" : "datetime-local"}
+                value={pickerValue}
+                onChange={(e) => handlePickerChange(e.target.value)}
+                disabled={isPending}
+                className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed w-auto"
+              />
+            </label>
           )}
 
           {/* Label text field — always visible, auto-filled from picker */}
