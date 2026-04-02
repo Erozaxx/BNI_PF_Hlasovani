@@ -101,20 +101,39 @@ export function EventForm() {
         />
       )}
 
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-text-main">
-          Kdo muze hlasovat
-        </label>
-        <select
-          value={whoCanVote}
-          onChange={(e) => setWhoCanVote(e.target.value as WhoCanVote)}
-          disabled={isPending}
-          className="h-11 px-3.5 py-2.5 rounded-lg border border-border text-base bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
-        >
-          <option value="members_only">Pouze cleny BNI</option>
-          <option value="anyone_with_link">Kdokoliv s odkazem</option>
-        </select>
-      </div>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-text-main mb-1">
+          Kdo může hlasovat
+        </legend>
+        {(
+          [
+            { value: "members_only", label: "Pouze členové BNI" },
+            { value: "anyone_with_link", label: "Kdokoliv s odkazem" },
+          ] as { value: WhoCanVote; label: string }[]
+        ).map(({ value, label }) => (
+          <label
+            key={value}
+            className="flex items-center gap-2 cursor-pointer select-none"
+          >
+            <input
+              type="radio"
+              name="whoCanVote"
+              value={value}
+              checked={whoCanVote === value}
+              onChange={() => {
+                setWhoCanVote(value);
+                // when switching back to members_only, reset whoCanAddOptions too
+                if (value === "members_only") {
+                  setWhoCanAddOptions("members_only");
+                }
+              }}
+              disabled={isPending}
+              className="h-4 w-4 text-primary focus:outline-none"
+            />
+            <span className="text-sm text-text-main">{label}</span>
+          </label>
+        ))}
+      </fieldset>
 
       <div className="flex items-center gap-3">
         <input
@@ -129,27 +148,38 @@ export function EventForm() {
           htmlFor="customOptionsAllowed"
           className="text-sm font-medium text-text-main cursor-pointer"
         >
-          Ucastnici mohou pridat vlastni moznosti
+          Účastníci mohou přidávat možnosti
         </label>
       </div>
 
-      {customOptionsAllowed && (
-        <div className="flex flex-col gap-1 pl-7">
-          <label className="text-sm font-medium text-text-main">
-            Kdo muze pridat moznosti
-          </label>
-          <select
-            value={whoCanAddOptions}
-            onChange={(e) =>
-              setWhoCanAddOptions(e.target.value as WhoCanAddOptions)
-            }
-            disabled={isPending}
-            className="h-11 px-3.5 py-2.5 rounded-lg border border-border text-base bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
-          >
-            <option value="members_only">Pouze cleny BNI</option>
-            <option value="anyone_with_link">Kdokoliv s odkazem</option>
-          </select>
-        </div>
+      {customOptionsAllowed && whoCanVote === "anyone_with_link" && (
+        <fieldset className="flex flex-col gap-2 pl-7">
+          <legend className="text-sm font-medium text-text-main mb-1">
+            Kdo může přidávat možnosti
+          </legend>
+          {(
+            [
+              { value: "members_only", label: "Pouze členové BNI" },
+              { value: "anyone_with_link", label: "Kdokoliv s odkazem" },
+            ] as { value: WhoCanAddOptions; label: string }[]
+          ).map(({ value, label }) => (
+            <label
+              key={value}
+              className="flex items-center gap-2 cursor-pointer select-none"
+            >
+              <input
+                type="radio"
+                name="whoCanAddOptions"
+                value={value}
+                checked={whoCanAddOptions === value}
+                onChange={() => setWhoCanAddOptions(value)}
+                disabled={isPending}
+                className="h-4 w-4 text-primary focus:outline-none"
+              />
+              <span className="text-sm text-text-main">{label}</span>
+            </label>
+          ))}
+        </fieldset>
       )}
 
       {error && (
