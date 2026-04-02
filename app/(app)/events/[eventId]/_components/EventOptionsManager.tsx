@@ -34,9 +34,36 @@ export function EventOptionsManager({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [newLabel, setNewLabel] = useState("");
+  const [optionType, setOptionType] = useState<"text" | "date" | "datetime">("text");
+  const [pickerValue, setPickerValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [settingSelectedId, setSettingSelectedId] = useState<string | null>(null);
+
+  function formatDateLabel(value: string, type: "date" | "datetime"): string {
+    if (!value) return "";
+    if (type === "date") {
+      const [y, m, d] = value.split("-");
+      return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
+    }
+    // datetime-local: "YYYY-MM-DDTHH:MM"
+    const [datePart, timePart] = value.split("T");
+    const [y, m, d] = datePart.split("-");
+    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${timePart}`;
+  }
+
+  function handlePickerChange(value: string) {
+    setPickerValue(value);
+    if (value) {
+      setNewLabel(formatDateLabel(value, optionType as "date" | "datetime"));
+    }
+  }
+
+  function handleOptionTypeChange(type: "text" | "date" | "datetime") {
+    setOptionType(type);
+    setPickerValue("");
+    setNewLabel("");
+  }
 
   function handleAddOption(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +77,7 @@ export function EventOptionsManager({
         setError(result.error);
       } else {
         setNewLabel("");
+        setPickerValue("");
         setSuccessMsg("Moznost pridana.");
         router.refresh();
       }
@@ -171,25 +199,69 @@ export function EventOptionsManager({
 
       {/* Add option form — only in draft/active */}
       {canEdit && (
-        <form onSubmit={handleAddOption} className="flex gap-2">
-          <div className="flex-1">
-            <Input
-              name="label"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Napr. 15. dubna 2026"
-              disabled={isPending}
-            />
+        <form onSubmit={handleAddOption} className="space-y-3 pt-2 border-t border-border mt-2">
+          {/* Option type radio */}
+          <div className="flex gap-4">
+            {(
+              [
+                { value: "text", label: "Text" },
+                { value: "date", label: "Datum" },
+                { value: "datetime", label: "Datum a čas" },
+              ] as { value: "text" | "date" | "datetime"; label: string }[]
+            ).map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="optionType"
+                  value={value}
+                  checked={optionType === value}
+                  onChange={() => handleOptionTypeChange(value)}
+                  disabled={isPending}
+                  className="h-4 w-4 text-primary"
+                />
+                <span className="text-sm text-text-main">{label}</span>
+              </label>
+            ))}
           </div>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            loading={isPending}
-            disabled={!newLabel.trim()}
-          >
-            Pridat
-          </Button>
+
+          {/* Date / Datetime picker */}
+          {optionType !== "text" && (
+            <input
+              type={optionType === "date" ? "date" : "datetime-local"}
+              value={pickerValue}
+              onChange={(e) => handlePickerChange(e.target.value)}
+              disabled={isPending}
+              className="h-10 px-3 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
+            />
+          )}
+
+          {/* Label text field — always visible, auto-filled from picker */}
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                name="label"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder={
+                  optionType === "date"
+                    ? "Napr. 15. 4. 2026"
+                    : optionType === "datetime"
+                    ? "Napr. 15. 4. 2026 14:00"
+                    : "Napr. Varianta A"
+                }
+                disabled={isPending}
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={isPending}
+              disabled={!newLabel.trim()}
+            >
+              Přidat
+            </Button>
+          </div>
         </form>
       )}
 
