@@ -44,29 +44,36 @@ export async function bulkCreateParticipantsFromMembers(
   });
 
   // Bulk INSERT — ON CONFLICT (event_id, member_id) DO NOTHING
-  // Drizzle doesn't support onConflictDoNothing with partial unique indexes
-  // directly, so we use raw SQL via sql template for the conflict clause.
-  // We insert in one batch for efficiency.
-  await db
+  // Use RETURNING to get only actually inserted rows — emails must only be
+  // sent for inserted rows. Sending an email with a newly-generated token
+  // for a skipped (already-existing) row would produce a link that doesn't
+  // match the token stored in the DB.
+  const inserted = await db
     .insert(eventParticipant)
     .values(rows.map((r) => r.values))
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ memberId: eventParticipant.memberId });
 
-  // Send magic link emails to members with email addresses
+  const insertedMemberIds = new Set(
+    inserted.map((r) => r.memberId).filter(Boolean)
+  );
+
+  // Send magic link emails only for participants that were just inserted
   for (const row of rows) {
-    if (row.member.email) {
-      const emailResult = await sendEventMagicLink(
-        row.member.email,
-        row.member.name,
-        eventTitle,
-        row.rawToken,
-        eventId
+    if (!insertedMemberIds.has(row.member.id)) continue;
+    if (!row.member.email) continue;
+
+    const emailResult = await sendEventMagicLink(
+      row.member.email,
+      row.member.name,
+      eventTitle,
+      row.rawToken,
+      eventId
+    );
+    if (!emailResult.success) {
+      console.warn(
+        `[bulkCreateParticipants] Failed to send email to member ${row.member.id} (${row.member.email}): ${emailResult.error}`
       );
-      if (!emailResult.success) {
-        console.warn(
-          `[bulkCreateParticipants] Failed to send email to member ${row.member.id} (${row.member.email}): ${emailResult.error}`
-        );
-      }
     }
   }
 }
