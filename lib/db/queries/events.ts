@@ -1,4 +1,4 @@
-import { eq, and, desc, count, isNull, lt, sql } from "drizzle-orm";
+import { eq, and, desc, count, isNull, lt, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import {
@@ -51,6 +51,7 @@ export async function getEvents(
       closedAt: event.closedAt,
       doneAt: event.doneAt,
       tokensRevokedAt: event.tokensRevokedAt,
+      expiresAt: event.expiresAt,
       participantCount: sql<number>`COALESCE(${participantCounts.participantCount}, 0)`,
       selectedOptionLabel: eventOption.label,
     })
@@ -206,6 +207,7 @@ export async function getEventByParticipantToken(tokenHash: string) {
         closedAt: event.closedAt,
         doneAt: event.doneAt,
         tokensRevokedAt: event.tokensRevokedAt,
+        expiresAt: event.expiresAt,
       },
       participant: {
         id: eventParticipant.id,
@@ -230,9 +232,11 @@ export async function getEventByParticipantToken(tokenHash: string) {
 
 /**
  * Find all events eligible for auto-done transition:
- * status = 'closed' AND closed_at <= now() - interval '1 day'.
+ * status = 'closed' AND expires_at <= now().
+ * Falls back to closed_at + 1 day for events without expires_at (legacy).
  */
 export async function getEventsEligibleForDone() {
+  const now = new Date();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   return getDb()
@@ -241,7 +245,11 @@ export async function getEventsEligibleForDone() {
     .where(
       and(
         eq(event.status, "closed"),
-        lt(event.closedAt, oneDayAgo)
+        sql`(
+          (${event.expiresAt} IS NOT NULL AND ${event.expiresAt} <= ${now})
+          OR
+          (${event.expiresAt} IS NULL AND ${event.closedAt} <= ${oneDayAgo})
+        )`
       )
     );
 }

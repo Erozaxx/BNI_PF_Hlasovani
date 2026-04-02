@@ -11,7 +11,7 @@ import {
   eventParticipant,
   member,
 } from "@/lib/db/schema";
-import { getEventById } from "@/lib/db/queries/events";
+import { getEventById, markEventDone } from "@/lib/db/queries/events";
 import { getParticipantById } from "@/lib/db/queries/participants";
 import { bulkCreateParticipantsFromMembers } from "@/lib/events/bulk-participants";
 import {
@@ -42,6 +42,7 @@ export async function createEventAction(
     customOptionsAllowed?: boolean;
     whoCanAddOptions?: "members_only" | "anyone_with_link";
     optionType?: "text" | "date" | "datetime";
+    expiresAt?: Date;
   },
   description?: string
 ): Promise<ActionResult<{ id: string }>> {
@@ -77,6 +78,7 @@ export async function createEventAction(
         customOptionsAllowed: config.customOptionsAllowed ?? false,
         whoCanAddOptions: config.whoCanAddOptions ?? "members_only",
         optionType: config.optionType ?? "text",
+        expiresAt: config.expiresAt ?? (() => { const d = new Date(); d.setMonth(d.getMonth() + 3); return d; })(),
         createdBy: auth.session.memberId,
       })
       .returning();
@@ -258,9 +260,28 @@ export async function setSelectedOptionAction(
       };
     }
 
-    await getDb()
+    const db = getDb();
+
+    // If event uses date/datetime options, parse winning label → update expiresAt
+    let expiresAtUpdate: Date | undefined;
+    if (existing.optionType === "date" || existing.optionType === "datetime") {
+      const optRow = await db
+        .select({ label: eventOption.label })
+        .from(eventOption)
+        .where(and(eq(eventOption.id, optionId), eq(eventOption.eventId, id)))
+        .limit(1);
+      if (optRow[0]) {
+        const parsed = parseCzechDateLabel(optRow[0].label, existing.optionType);
+        if (parsed) expiresAtUpdate = parsed;
+      }
+    }
+
+    await db
       .update(event)
-      .set({ selectedOptionId: optionId })
+      .set({
+        selectedOptionId: optionId,
+        ...(expiresAtUpdate ? { expiresAt: expiresAtUpdate } : {}),
+      })
       .where(eq(event.id, id));
 
     revalidatePath("/events");
@@ -269,6 +290,48 @@ export async function setSelectedOptionAction(
   } catch (error) {
     console.error("setSelectedOptionAction error:", error);
     return { success: false, error: "Nepodarilo se nastavit vysledek." };
+  }
+}
+
+/** Parse Czech date label "D. M. YYYY" or "D. M. YYYY HH:MM" → Date (local). */
+function parseCzechDateLabel(label: string, optionType: string): Date | null {
+  const dateRe = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
+  const datetimeRe = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s+(\d{2}):(\d{2})$/;
+  if (optionType === "datetime") {
+    const m = label.trim().match(datetimeRe);
+    if (!m) return null;
+    return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]), parseInt(m[4]), parseInt(m[5]));
+  }
+  if (optionType === "date") {
+    const m = label.trim().match(dateRe);
+    if (!m) return null;
+    return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  }
+  return null;
+}
+
+/**
+ * Manually mark a closed event as done (token revocation + done state).
+ * Requires admin or moderator role.
+ */
+export async function markEventDoneAction(eventId: string): Promise<ActionResult> {
+  const auth = await requireManagementRole(["admin", "moderator"]);
+  if (!auth.success) return auth;
+
+  try {
+    const existing = await getEventById(eventId);
+    if (!existing) return { success: false, error: "Akce nebyla nalezena." };
+    if (existing.status !== "closed") {
+      return { success: false, error: "Pouze uzavrenou akci lze oznacit jako konanou." };
+    }
+
+    await markEventDone(eventId);
+    revalidatePath("/events");
+    revalidatePath(`/events/${eventId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("markEventDoneAction error:", error);
+    return { success: false, error: "Nepodarilo se oznacit akci jako konanou." };
   }
 }
 
@@ -641,7 +704,13 @@ export async function castVoteAction(
       };
     }
 
-    const result = await castVote(participantId, eventId, optionId, votingType, options);
+    // For max_x: always use votingMaxX from DB — do not rely on client-provided value
+    const resolvedOptions =
+      votingType === "max_x"
+        ? { ...options, maxX: eventData.votingMaxX ?? options?.maxX }
+        : options;
+
+    const result = await castVote(participantId, eventId, optionId, votingType, resolvedOptions);
 
     if (!result.success) {
       return { success: false, error: result.error ?? "Hlasovani se nepodarilo." };

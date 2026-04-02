@@ -35,7 +35,9 @@ export function EventOptionsManager({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [newLabel, setNewLabel] = useState("");
-  const [pickerValue, setPickerValue] = useState("");
+  const [pickerDate, setPickerDate] = useState("");
+  const [pickerHour, setPickerHour] = useState("");
+  const [pickerMinute, setPickerMinute] = useState("");
   const eventOptionType = (event.optionType ?? "text") as "text" | "date" | "datetime";
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -58,23 +60,30 @@ export function EventOptionsManager({
 
   const labelError = getLabelError(newLabel);
 
-  function formatDateLabel(value: string, type: "date" | "datetime"): string {
-    if (!value) return "";
-    if (type === "date") {
-      const [y, m, d] = value.split("-");
-      return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
-    }
-    // datetime-local: "YYYY-MM-DDTHH:MM"
-    const [datePart, timePart] = value.split("T");
-    const [y, m, d] = datePart.split("-");
-    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${timePart}`;
+  function buildLabel(date: string, hour: string, minute: string): string {
+    if (!date) return "";
+    const [y, m, d] = date.split("-");
+    if (eventOptionType === "date") return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
+    if (!hour || !minute) return "";
+    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${hour}:${minute}`;
   }
 
-  function handlePickerChange(value: string) {
-    setPickerValue(value);
-    if (value) {
-      setNewLabel(formatDateLabel(value, eventOptionType as "date" | "datetime"));
-    }
+  function handleDateChange(value: string) {
+    setPickerDate(value);
+    const label = buildLabel(value, pickerHour, pickerMinute);
+    if (label) setNewLabel(label);
+  }
+
+  function handleHourChange(value: string) {
+    setPickerHour(value);
+    const label = buildLabel(pickerDate, value, pickerMinute);
+    if (label) setNewLabel(label);
+  }
+
+  function handleMinuteChange(value: string) {
+    setPickerMinute(value);
+    const label = buildLabel(pickerDate, pickerHour, value);
+    if (label) setNewLabel(label);
   }
 
   function handleAddOption(e: React.FormEvent) {
@@ -89,7 +98,7 @@ export function EventOptionsManager({
         setError(result.error);
       } else {
         setNewLabel("");
-        setPickerValue("");
+        // Picker date/time intentionally kept — next option defaults to same value
         setSuccessMsg("Moznost pridana.");
         router.refresh();
       }
@@ -214,16 +223,43 @@ export function EventOptionsManager({
         <form onSubmit={handleAddOption} className="space-y-3 pt-2 border-t border-border mt-2">
           {/* Date / Datetime picker — shown when event optionType requires it */}
           {eventOptionType !== "text" && (
-            <label className="flex items-center gap-2 text-sm text-text-muted">
+            <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
               <span className="shrink-0">Vybrat z kalendáře:</span>
               <input
-                type={eventOptionType === "date" ? "date" : "datetime-local"}
-                value={pickerValue}
-                onChange={(e) => handlePickerChange(e.target.value)}
+                type="date"
+                value={pickerDate}
+                onChange={(e) => handleDateChange(e.target.value)}
                 disabled={isPending}
                 className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed w-auto"
               />
-            </label>
+              {eventOptionType === "datetime" && (
+                <div className="flex items-center gap-1">
+                  <select
+                    value={pickerHour}
+                    onChange={(e) => handleHourChange(e.target.value)}
+                    disabled={isPending}
+                    className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+                  >
+                    <option value="">HH</option>
+                    {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <span className="font-medium">:</span>
+                  <select
+                    value={pickerMinute}
+                    onChange={(e) => handleMinuteChange(e.target.value)}
+                    disabled={isPending}
+                    className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+                  >
+                    <option value="">MM</option>
+                    {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Label text field — always visible, auto-filled from picker */}

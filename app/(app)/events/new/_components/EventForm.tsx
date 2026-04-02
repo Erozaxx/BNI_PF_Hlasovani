@@ -27,11 +27,31 @@ export function EventForm() {
     useState<WhoCanAddOptions>("members_only");
   const [error, setError] = useState<string | null>(null);
 
+  // Expiry date — default: today + 3 months
+  const defaultExpiry = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return d;
+  })();
+  const [expiryDate, setExpiryDate] = useState(
+    defaultExpiry.toISOString().slice(0, 10)
+  );
+  const [expiryHour, setExpiryHour] = useState(
+    String(defaultExpiry.getHours()).padStart(2, "0")
+  );
+  const [expiryMinute, setExpiryMinute] = useState(
+    String(Math.floor(defaultExpiry.getMinutes() / 5) * 5).padStart(2, "0")
+  );
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     startTransition(async () => {
+      const expiresAt = expiryDate && expiryHour && expiryMinute
+        ? new Date(`${expiryDate}T${expiryHour}:${expiryMinute}`)
+        : undefined;
+
       const result = await createEventAction(
         title,
         {
@@ -41,6 +61,7 @@ export function EventForm() {
           whoCanVote,
           customOptionsAllowed,
           whoCanAddOptions,
+          expiresAt,
         },
         description || undefined
       );
@@ -210,6 +231,47 @@ export function EventForm() {
           ))}
         </fieldset>
       )}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-text-main">
+          Platnost akce (konec platnosti odkazu)
+        </label>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            disabled={isPending}
+            className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+          />
+          <div className="flex items-center gap-1">
+            <select
+              value={expiryHour}
+              onChange={(e) => setExpiryHour(e.target.value)}
+              disabled={isPending}
+              className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+            >
+              {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+            <span className="font-medium">:</span>
+            <select
+              value={expiryMinute}
+              onChange={(e) => setExpiryMinute(e.target.value)}
+              disabled={isPending}
+              className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+            >
+              {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p className="text-xs text-text-muted">
+          Po tomto datu budou přístupové odkazy zneplatněny. U akcí s datumovými možnostmi se automaticky nastaví na datum vítězné možnosti.
+        </p>
+      </div>
 
       {error && (
         <p className="text-sm text-danger" role="alert">
