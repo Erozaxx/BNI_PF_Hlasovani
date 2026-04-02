@@ -10,6 +10,7 @@ import { createEventAction } from "@/actions/events";
 type VotingType = "pick_one" | "multiple" | "max_x";
 type WhoCanVote = "members_only" | "anyone_with_link";
 type WhoCanAddOptions = "members_only" | "anyone_with_link";
+type OptionType = "text" | "date" | "datetime";
 
 export function EventForm() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export function EventForm() {
   const [description, setDescription] = useState("");
   const [votingType, setVotingType] = useState<VotingType>("pick_one");
   const [votingMaxX, setVotingMaxX] = useState<number>(2);
+  const [optionType, setOptionType] = useState<OptionType>("text");
   const [whoCanVote, setWhoCanVote] = useState<WhoCanVote>("members_only");
   const [customOptionsAllowed, setCustomOptionsAllowed] = useState(false);
   const [whoCanAddOptions, setWhoCanAddOptions] =
@@ -35,6 +37,7 @@ export function EventForm() {
         {
           votingType,
           votingMaxX: votingType === "max_x" ? votingMaxX : undefined,
+          optionType,
           whoCanVote,
           customOptionsAllowed,
           whoCanAddOptions,
@@ -100,6 +103,32 @@ export function EventForm() {
           disabled={isPending}
         />
       )}
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-text-main mb-1">
+          Typ možností
+        </legend>
+        {(
+          [
+            { value: "text", label: "Text" },
+            { value: "date", label: "Datum" },
+            { value: "datetime", label: "Datum a čas" },
+          ] as { value: OptionType; label: string }[]
+        ).map(({ value, label }) => (
+          <label key={value} className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="radio"
+              name="optionType"
+              value={value}
+              checked={optionType === value}
+              onChange={() => setOptionType(value)}
+              disabled={isPending}
+              className="h-4 w-4 text-primary"
+            />
+            <span className="text-sm text-text-main">{label}</span>
+          </label>
+        ))}
+      </fieldset>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium text-text-main mb-1">

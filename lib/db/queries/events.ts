@@ -43,6 +43,7 @@ export async function getEvents(
       whoCanVote: event.whoCanVote,
       customOptionsAllowed: event.customOptionsAllowed,
       whoCanAddOptions: event.whoCanAddOptions,
+      optionType: event.optionType,
       selectedOptionId: event.selectedOptionId,
       createdBy: event.createdBy,
       createdAt: event.createdAt,

@@ -18,6 +18,7 @@ interface EventData {
   id: string;
   status: string;
   selectedOptionId: string | null;
+  optionType: string;
 }
 
 interface EventOptionsManagerProps {
@@ -34,8 +35,8 @@ export function EventOptionsManager({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [newLabel, setNewLabel] = useState("");
-  const [optionType, setOptionType] = useState<"text" | "date" | "datetime">("text");
   const [pickerValue, setPickerValue] = useState("");
+  const eventOptionType = (event.optionType ?? "text") as "text" | "date" | "datetime";
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [settingSelectedId, setSettingSelectedId] = useState<string | null>(null);
@@ -55,14 +56,8 @@ export function EventOptionsManager({
   function handlePickerChange(value: string) {
     setPickerValue(value);
     if (value) {
-      setNewLabel(formatDateLabel(value, optionType as "date" | "datetime"));
+      setNewLabel(formatDateLabel(value, eventOptionType as "date" | "datetime"));
     }
-  }
-
-  function handleOptionTypeChange(type: "text" | "date" | "datetime") {
-    setOptionType(type);
-    setPickerValue("");
-    setNewLabel("");
   }
 
   function handleAddOption(e: React.FormEvent) {
@@ -200,34 +195,10 @@ export function EventOptionsManager({
       {/* Add option form — only in draft/active */}
       {canEdit && (
         <form onSubmit={handleAddOption} className="space-y-3 pt-2 border-t border-border mt-2">
-          {/* Option type radio */}
-          <div className="flex gap-4">
-            {(
-              [
-                { value: "text", label: "Text" },
-                { value: "date", label: "Datum" },
-                { value: "datetime", label: "Datum a čas" },
-              ] as { value: "text" | "date" | "datetime"; label: string }[]
-            ).map(({ value, label }) => (
-              <label key={value} className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="radio"
-                  name="optionType"
-                  value={value}
-                  checked={optionType === value}
-                  onChange={() => handleOptionTypeChange(value)}
-                  disabled={isPending}
-                  className="h-4 w-4 text-primary"
-                />
-                <span className="text-sm text-text-main">{label}</span>
-              </label>
-            ))}
-          </div>
-
-          {/* Date / Datetime picker */}
-          {optionType !== "text" && (
+          {/* Date / Datetime picker — shown when event optionType requires it */}
+          {eventOptionType !== "text" && (
             <input
-              type={optionType === "date" ? "date" : "datetime-local"}
+              type={eventOptionType === "date" ? "date" : "datetime-local"}
               value={pickerValue}
               onChange={(e) => handlePickerChange(e.target.value)}
               disabled={isPending}
@@ -243,9 +214,9 @@ export function EventOptionsManager({
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder={
-                  optionType === "date"
+                  eventOptionType === "date"
                     ? "Napr. 15. 4. 2026"
-                    : optionType === "datetime"
+                    : eventOptionType === "datetime"
                     ? "Napr. 15. 4. 2026 14:00"
                     : "Napr. Varianta A"
                 }
