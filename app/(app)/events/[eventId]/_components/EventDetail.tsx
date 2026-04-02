@@ -12,6 +12,7 @@ import {
   closeEventAction,
   deleteEventAction,
   updateEventAction,
+  markEventDoneAction,
 } from "@/actions/events";
 
 type EventStatus = "draft" | "active" | "closed" | "done";
@@ -29,6 +30,7 @@ interface EventData {
   createdAt: Date;
   activatedAt: Date | null;
   closedAt: Date | null;
+  expiresAt: Date | null;
 }
 
 interface EventDetailProps {
@@ -110,6 +112,20 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
         setError(result.error);
       } else {
         setSuccessMsg("Akce byla uzavrena.");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleMarkDone() {
+    if (!confirm(`Označit akci „${event.title}" jako konanou? Přístupové odkazy budou zneplatněny.`)) return;
+    clearMessages();
+    startTransition(async () => {
+      const result = await markEventDoneAction(event.id);
+      if (!result.success) {
+        setError(result.error);
+      } else {
+        setSuccessMsg("Akce označena jako konaná.");
         router.refresh();
       }
     });
@@ -200,6 +216,17 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
                 loading={isPending}
               >
                 Spustit akci
+              </Button>
+            )}
+
+            {event.status === "closed" && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleMarkDone}
+                loading={isPending}
+              >
+                Označit jako konanou
               </Button>
             )}
 
@@ -314,6 +341,12 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
             <div>
               <span className="font-medium text-text-main">Uzavrena:</span>{" "}
               {new Date(event.closedAt).toLocaleDateString("cs-CZ")}
+            </div>
+          )}
+          {event.expiresAt && (
+            <div>
+              <span className="font-medium text-text-main">Platnost do:</span>{" "}
+              {new Date(event.expiresAt).toLocaleString("cs-CZ", { dateStyle: "short", timeStyle: "short" })}
             </div>
           )}
         </div>

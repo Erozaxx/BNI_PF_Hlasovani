@@ -210,6 +210,7 @@ export const event = pgTable(
     closedAt: timestamp("closed_at", { withTimezone: true }),
     doneAt: timestamp("done_at", { withTimezone: true }),
     tokensRevokedAt: timestamp("tokens_revoked_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
   },
   (table) => ({
     statusCheck: check(
