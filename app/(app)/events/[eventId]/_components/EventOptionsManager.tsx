@@ -95,6 +95,13 @@ export function EventOptionsManager({
         Moznosti hlasovani ({options.length})
       </h2>
 
+      {/* Call-to-action: mark winner after closing */}
+      {event.status === "closed" && !event.selectedOptionId && (
+        <div className="mb-4 p-3 rounded-lg border border-warning bg-warning-light text-sm text-text-main">
+          Akce je uzavřena. Klikněte na <strong>Označit vítěze</strong> u vybrané možnosti níže.
+        </div>
+      )}
+
       {/* Options list */}
       {options.length > 0 ? (
         <div className="space-y-2 mb-4">
