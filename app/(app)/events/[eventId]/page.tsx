@@ -5,6 +5,7 @@ import {
   getEventById,
   getEventOptions,
   getEventParticipants,
+  getEventVotesWithNames,
 } from "@/lib/db/queries/events";
 import { Button } from "@/components/ui/Button";
 import { EventDetail } from "./_components/EventDetail";
@@ -30,11 +31,20 @@ export default async function EventDetailPage({
     redirect("/dashboard");
   }
 
-  const [ev, options, participants] = await Promise.all([
+  const [ev, options, participants, votes] = await Promise.all([
     getEventById(eventId),
     getEventOptions(eventId),
     getEventParticipants(eventId),
+    getEventVotesWithNames(eventId),
   ]);
+
+  // Build map: optionId -> participant names who voted for it
+  const votersByOption = new Map<string, string[]>();
+  for (const v of votes) {
+    const name = v.memberName ?? v.externalName ?? "Neznámý";
+    if (!votersByOption.has(v.optionId)) votersByOption.set(v.optionId, []);
+    votersByOption.get(v.optionId)!.push(name);
+  }
 
   if (!ev) {
     notFound();
@@ -70,7 +80,12 @@ export default async function EventDetailPage({
       />
 
       {showReport && (
-        <EventReport event={ev} options={options} participants={participants} />
+        <EventReport
+          event={ev}
+          options={options}
+          participants={participants}
+          votersByOption={Object.fromEntries(votersByOption)}
+        />
       )}
     </div>
   );

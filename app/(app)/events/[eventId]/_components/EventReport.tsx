@@ -30,15 +30,12 @@ interface EventReportProps {
   event: EventData;
   options: EventOption[];
   participants: Participant[];
+  votersByOption: Record<string, string[]>;
 }
 
-export function EventReport({ event, options, participants }: EventReportProps) {
+export function EventReport({ event, options, participants, votersByOption }: EventReportProps) {
   // Sort options descending by vote count
   const sortedOptions = [...options].sort((a, b) => b.voteCount - a.voteCount);
-
-  function getParticipantName(p: Participant) {
-    return p.memberName ?? p.externalName ?? "Nezname";
-  }
 
   function handleExportCsv() {
     window.open(`/api/events/${event.id}/export/csv`, "_blank");
@@ -91,20 +88,16 @@ export function EventReport({ event, options, participants }: EventReportProps) 
                 </span>
               </div>
 
-              {/* Participants list */}
-              <div className="text-xs text-text-muted space-y-0.5">
-                {participants.map((p) => {
-                  // Note: to show who voted for this option we'd need per-participant vote data.
-                  // The current query returns voteCount per participant (total across all options).
-                  // We display all participants and note that full breakdown requires CSV.
-                  const name = getParticipantName(p);
-                  return (
-                    <span key={p.id} className="inline-block mr-2">
-                      {name}
-                    </span>
-                  );
-                })}
-              </div>
+              {/* Voters for this option */}
+              {(votersByOption[opt.id]?.length ?? 0) > 0 ? (
+                <div className="text-xs text-text-muted flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                  {votersByOption[opt.id].map((name, i) => (
+                    <span key={i}>{name}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-text-muted mt-1">Nikdo nehlasoval</p>
+              )}
             </div>
           );
         })}
