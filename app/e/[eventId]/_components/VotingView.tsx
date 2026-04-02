@@ -16,6 +16,7 @@ interface EventData {
   votingMaxX: number | null;
   customOptionsAllowed: boolean;
   whoCanAddOptions: string;
+  optionType: string;
 }
 
 interface ParticipantData {
@@ -54,8 +55,40 @@ export function VotingView({
 
   // For add-option form
   const [newOptionLabel, setNewOptionLabel] = useState("");
+  const [pickerValue, setPickerValue] = useState("");
   const [addOptionError, setAddOptionError] = useState<string | null>(null);
   const [addOptionPending, startAddOptionTransition] = useTransition();
+
+  const eventOptionType = (event.optionType ?? "text") as "text" | "date" | "datetime";
+  const DATE_RE = /^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}$/;
+  const DATETIME_RE = /^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}\s+\d{2}:\d{2}$/;
+
+  function getLabelError(label: string): string | null {
+    if (!label.trim()) return null;
+    if (eventOptionType === "date" && !DATE_RE.test(label.trim()))
+      return "Zadejte datum ve formátu D. M. YYYY (např. 15. 4. 2026)";
+    if (eventOptionType === "datetime" && !DATETIME_RE.test(label.trim()))
+      return "Zadejte datum a čas ve formátu D. M. YYYY HH:MM (např. 15. 4. 2026 14:00)";
+    return null;
+  }
+
+  const labelError = getLabelError(newOptionLabel);
+
+  function formatDateLabel(value: string): string {
+    if (!value) return "";
+    if (eventOptionType === "date") {
+      const [y, m, d] = value.split("-");
+      return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
+    }
+    const [datePart, timePart] = value.split("T");
+    const [y, m, d] = datePart.split("-");
+    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${timePart}`;
+  }
+
+  function handlePickerChange(value: string) {
+    setPickerValue(value);
+    if (value) setNewOptionLabel(formatDateLabel(value));
+  }
 
   const maxX = event.votingMaxX ?? 0;
   const isMaxXReached =
@@ -150,7 +183,7 @@ export function VotingView({
   }
 
   function handleAddOption() {
-    if (!newOptionLabel.trim()) return;
+    if (!newOptionLabel.trim() || labelError) return;
     setAddOptionError(null);
     startAddOptionTransition(async () => {
       const result = await addOptionByParticipantAction(
@@ -313,26 +346,49 @@ export function VotingView({
         {canAddOptions && (
           <Card variant="default">
             <h2 className="font-semibold text-text-main mb-3">
-              Pridat novou moznost
+              Přidat novou možnost
             </h2>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newOptionLabel}
-                onChange={(e) => setNewOptionLabel(e.target.value)}
-                placeholder="Nazev moznosti..."
-                disabled={addOptionPending}
-                className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleAddOption}
-                loading={addOptionPending}
-                disabled={addOptionPending || !newOptionLabel.trim()}
-              >
-                Pridat
-              </Button>
+            <div className="space-y-2">
+              {/* Date / Datetime picker */}
+              {eventOptionType !== "text" && (
+                <input
+                  type={eventOptionType === "date" ? "date" : "datetime-local"}
+                  value={pickerValue}
+                  onChange={(e) => handlePickerChange(e.target.value)}
+                  disabled={addOptionPending}
+                  className="h-10 px-3 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed w-full"
+                />
+              )}
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={newOptionLabel}
+                    onChange={(e) => setNewOptionLabel(e.target.value)}
+                    placeholder={
+                      eventOptionType === "date"
+                        ? "Napr. 15. 4. 2026"
+                        : eventOptionType === "datetime"
+                        ? "Napr. 15. 4. 2026 14:00"
+                        : "Název možnosti..."
+                    }
+                    disabled={addOptionPending}
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:bg-background disabled:cursor-not-allowed"
+                  />
+                  {labelError && (
+                    <p className="text-danger text-xs mt-1">{labelError}</p>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAddOption}
+                  loading={addOptionPending}
+                  disabled={addOptionPending || !newOptionLabel.trim() || !!labelError}
+                >
+                  Přidat
+                </Button>
+              </div>
             </div>
             {addOptionError && (
               <p className="text-danger text-sm mt-2">{addOptionError}</p>
