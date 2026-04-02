@@ -11,7 +11,7 @@ import {
   eventParticipant,
   member,
 } from "@/lib/db/schema";
-import { getEventById, markEventDone } from "@/lib/db/queries/events";
+import { getEventById, markEventDone, getEventParticipants } from "@/lib/db/queries/events";
 import { getParticipantById } from "@/lib/db/queries/participants";
 import { bulkCreateParticipantsFromMembers } from "@/lib/events/bulk-participants";
 import {
@@ -630,6 +630,61 @@ export async function resendMagicLinkAction(
   } catch (error) {
     console.error("resendMagicLinkAction error:", error);
     return { success: false, error: "Nepodarilo se odeslat pozvankovy email." };
+  }
+}
+
+/**
+ * Resend magic link to all participants with an email address.
+ * Generates a new token for each, updates DB, sends email.
+ * Returns count of emails sent.
+ */
+export async function resendAllMagicLinksAction(
+  eventId: string
+): Promise<ActionResult<{ sent: number; skipped: number }>> {
+  const auth = await requireManagementRole(["admin", "moderator"]);
+  if (!auth.success) return auth;
+
+  try {
+    const eventData = await getEventById(eventId);
+    if (!eventData) return { success: false, error: "Akce nebyla nalezena." };
+    if (eventData.status !== "active") {
+      return { success: false, error: "Hromadne odeslani je mozne pouze u aktivni akce." };
+    }
+
+    const participants = await getEventParticipants(eventId);
+    const db = getDb();
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const p of participants) {
+      const email = p.memberEmail ?? p.externalEmail ?? null;
+      const name = p.memberName ?? p.externalName ?? "Ucastnik";
+
+      if (!email) { skipped++; continue; }
+
+      const rawToken = generateEventToken();
+      const tokenHash = hashEventToken(rawToken);
+
+      await db
+        .update(eventParticipant)
+        .set({ magicTokenHash: tokenHash, tokenCreatedAt: new Date() })
+        .where(eq(eventParticipant.id, p.id));
+
+      const emailResult = await sendEventMagicLink(email, name, eventData.title, rawToken, eventId);
+      if (emailResult.success) {
+        sent++;
+      } else {
+        console.warn(`resendAllMagicLinksAction: email failed for ${p.id} (${email}): ${emailResult.error}`);
+        skipped++;
+      }
+    }
+
+    revalidatePath(`/events/${eventId}`);
+    return { success: true, data: { sent, skipped } };
+  } catch (error) {
+    console.error("resendAllMagicLinksAction error:", error);
+    return { success: false, error: "Nepodarilo se odeslat hromadne pozvanky." };
   }
 }
 
