@@ -351,13 +351,16 @@ export function VotingView({
             <div className="space-y-2">
               {/* Date / Datetime picker */}
               {eventOptionType !== "text" && (
-                <input
-                  type={eventOptionType === "date" ? "date" : "datetime-local"}
-                  value={pickerValue}
-                  onChange={(e) => handlePickerChange(e.target.value)}
-                  disabled={addOptionPending}
-                  className="h-10 px-3 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed w-full"
-                />
+                <label className="flex items-center gap-2 text-sm text-text-muted">
+                  <span className="shrink-0">Vybrat z kalendáře:</span>
+                  <input
+                    type={eventOptionType === "date" ? "date" : "datetime-local"}
+                    value={pickerValue}
+                    onChange={(e) => handlePickerChange(e.target.value)}
+                    disabled={addOptionPending}
+                    className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed w-auto"
+                  />
+                </label>
               )}
               <div className="flex gap-2 items-start">
                 <div className="flex-1">
