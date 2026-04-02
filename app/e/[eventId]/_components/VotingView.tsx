@@ -57,7 +57,9 @@ export function VotingView({
 
   // For add-option form
   const [newOptionLabel, setNewOptionLabel] = useState("");
-  const [pickerValue, setPickerValue] = useState("");
+  const [pickerDate, setPickerDate] = useState("");
+  const [pickerHour, setPickerHour] = useState("");
+  const [pickerMinute, setPickerMinute] = useState("");
   const [addOptionError, setAddOptionError] = useState<string | null>(null);
   const [addOptionPending, startAddOptionTransition] = useTransition();
 
@@ -76,20 +78,30 @@ export function VotingView({
 
   const labelError = getLabelError(newOptionLabel);
 
-  function formatDateLabel(value: string): string {
-    if (!value) return "";
-    if (eventOptionType === "date") {
-      const [y, m, d] = value.split("-");
-      return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
-    }
-    const [datePart, timePart] = value.split("T");
-    const [y, m, d] = datePart.split("-");
-    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${timePart}`;
+  function buildPickerLabel(date: string, hour: string, minute: string): string {
+    if (!date) return "";
+    const [y, m, d] = date.split("-");
+    if (eventOptionType === "date") return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
+    if (!hour || !minute) return "";
+    return `${parseInt(d)}. ${parseInt(m)}. ${y} ${hour}:${minute}`;
   }
 
-  function handlePickerChange(value: string) {
-    setPickerValue(value);
-    if (value) setNewOptionLabel(formatDateLabel(value));
+  function handlePickerDateChange(value: string) {
+    setPickerDate(value);
+    const label = buildPickerLabel(value, pickerHour, pickerMinute);
+    if (label) setNewOptionLabel(label);
+  }
+
+  function handlePickerHourChange(value: string) {
+    setPickerHour(value);
+    const label = buildPickerLabel(pickerDate, value, pickerMinute);
+    if (label) setNewOptionLabel(label);
+  }
+
+  function handlePickerMinuteChange(value: string) {
+    setPickerMinute(value);
+    const label = buildPickerLabel(pickerDate, pickerHour, value);
+    if (label) setNewOptionLabel(label);
   }
 
   const maxX = event.votingMaxX ?? 0;
@@ -195,6 +207,9 @@ export function VotingView({
       );
       if (result.success) {
         setNewOptionLabel("");
+        setPickerDate("");
+        setPickerHour("");
+        setPickerMinute("");
         router.refresh();
       } else {
         setAddOptionError(result.error ?? "Nepodarilo se pridat moznost.");
@@ -359,16 +374,43 @@ export function VotingView({
             <div className="space-y-2">
               {/* Date / Datetime picker */}
               {eventOptionType !== "text" && (
-                <label className="flex items-center gap-2 text-sm text-text-muted">
+                <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
                   <span className="shrink-0">Vybrat z kalendáře:</span>
                   <input
-                    type={eventOptionType === "date" ? "date" : "datetime-local"}
-                    value={pickerValue}
-                    onChange={(e) => handlePickerChange(e.target.value)}
+                    type="date"
+                    value={pickerDate}
+                    onChange={(e) => handlePickerDateChange(e.target.value)}
                     disabled={addOptionPending}
                     className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed w-auto"
                   />
-                </label>
+                  {eventOptionType === "datetime" && (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={pickerHour}
+                        onChange={(e) => handlePickerHourChange(e.target.value)}
+                        disabled={addOptionPending}
+                        className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+                      >
+                        <option value="">HH</option>
+                        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <span className="font-medium">:</span>
+                      <select
+                        value={pickerMinute}
+                        onChange={(e) => handlePickerMinuteChange(e.target.value)}
+                        disabled={addOptionPending}
+                        className="h-9 px-2 rounded-lg border border-border text-sm bg-white text-text-main focus:outline-none focus:border-primary disabled:bg-background disabled:cursor-not-allowed"
+                      >
+                        <option value="">MM</option>
+                        {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               )}
               <div className="flex gap-2 items-start">
                 <div className="flex-1">
