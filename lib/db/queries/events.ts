@@ -1,6 +1,7 @@
 import { eq, and, desc, count, isNull, lt, lte, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-http";
-import { getSql } from "@/lib/db/client";
+import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePool } from "drizzle-orm/neon-serverless";
+import { getSql, getPool } from "@/lib/db/client";
 import {
   event,
   eventOption,
@@ -10,7 +11,12 @@ import {
 } from "@/lib/db/schema";
 
 function getDb() {
-  return drizzle(getSql());
+  return drizzleHttp(getSql());
+}
+
+/** Use for functions that require transactions. */
+function getDbPool() {
+  return drizzlePool(getPool());
 }
 
 /**
@@ -260,7 +266,7 @@ export async function getEventsEligibleForDone() {
  * - Set tokens_revoked_at, done_at, status = 'done' on the event
  */
 export async function markEventDone(eventId: string): Promise<void> {
-  const db = getDb();
+  const db = getDbPool();
   const now = new Date();
 
   await db.transaction(async (tx) => {
