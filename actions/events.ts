@@ -641,7 +641,13 @@ export async function castVoteAction(
       };
     }
 
-    const result = await castVote(participantId, eventId, optionId, votingType, options);
+    // For max_x: always use votingMaxX from DB — do not rely on client-provided value
+    const resolvedOptions =
+      votingType === "max_x"
+        ? { ...options, maxX: eventData.votingMaxX ?? options?.maxX }
+        : options;
+
+    const result = await castVote(participantId, eventId, optionId, votingType, resolvedOptions);
 
     if (!result.success) {
       return { success: false, error: result.error ?? "Hlasovani se nepodarilo." };
