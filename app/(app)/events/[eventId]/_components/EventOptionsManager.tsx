@@ -41,6 +41,23 @@ export function EventOptionsManager({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [settingSelectedId, setSettingSelectedId] = useState<string | null>(null);
 
+  // Format validation for label field
+  const DATE_RE = /^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}$/;
+  const DATETIME_RE = /^\d{1,2}\.\s*\d{1,2}\.\s*\d{4}\s+\d{2}:\d{2}$/;
+
+  function getLabelError(label: string): string | null {
+    if (!label.trim()) return null;
+    if (eventOptionType === "date" && !DATE_RE.test(label.trim())) {
+      return "Zadejte datum ve formátu D. M. YYYY (např. 15. 4. 2026)";
+    }
+    if (eventOptionType === "datetime" && !DATETIME_RE.test(label.trim())) {
+      return "Zadejte datum a čas ve formátu D. M. YYYY HH:MM (např. 15. 4. 2026 14:00)";
+    }
+    return null;
+  }
+
+  const labelError = getLabelError(newLabel);
+
   function formatDateLabel(value: string, type: "date" | "datetime"): string {
     if (!value) return "";
     if (type === "date") {
@@ -207,7 +224,7 @@ export function EventOptionsManager({
           )}
 
           {/* Label text field — always visible, auto-filled from picker */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-start">
             <div className="flex-1">
               <Input
                 name="label"
@@ -222,13 +239,16 @@ export function EventOptionsManager({
                 }
                 disabled={isPending}
               />
+              {labelError && (
+                <p className="text-xs text-danger mt-1">{labelError}</p>
+              )}
             </div>
             <Button
               type="submit"
               variant="primary"
               size="sm"
               loading={isPending}
-              disabled={!newLabel.trim()}
+              disabled={!newLabel.trim() || !!labelError}
             >
               Přidat
             </Button>

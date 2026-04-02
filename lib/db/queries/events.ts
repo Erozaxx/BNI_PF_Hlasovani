@@ -182,6 +182,7 @@ export async function getEventByParticipantToken(tokenHash: string) {
         whoCanVote: event.whoCanVote,
         customOptionsAllowed: event.customOptionsAllowed,
         whoCanAddOptions: event.whoCanAddOptions,
+        optionType: event.optionType,
         selectedOptionId: event.selectedOptionId,
         createdAt: event.createdAt,
         activatedAt: event.activatedAt,

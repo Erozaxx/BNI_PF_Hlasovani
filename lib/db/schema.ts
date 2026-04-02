@@ -228,10 +228,6 @@ export const event = pgTable(
       "event_who_can_add_options_check",
       sql`${table.whoCanAddOptions} IN ('members_only', 'anyone_with_link')`
     ),
-    optionTypeCheck: check(
-      "event_option_type_check",
-      sql`${table.optionType} IN ('text', 'date', 'datetime')`
-    ),
     votingMaxXRequired: check(
       "event_voting_max_x_required",
       sql`${table.votingType} != 'max_x' OR ${table.votingMaxX} IS NOT NULL`
