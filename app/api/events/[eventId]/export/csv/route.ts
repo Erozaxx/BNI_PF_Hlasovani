@@ -75,7 +75,9 @@ export async function GET(
     return [name, email, membership, ...optionCols].map(csvEscape).join(",");
   });
 
-  const csv = [headerRow, ...dataRows].join("\r\n");
+  // UTF-8 BOM ensures Excel opens the file with correct encoding
+  const BOM = "\uFEFF";
+  const csv = BOM + [headerRow, ...dataRows].join("\r\n");
 
   return new NextResponse(csv, {
     status: 200,

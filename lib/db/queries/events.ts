@@ -166,6 +166,23 @@ export async function getEventVotesByParticipant(participantId: string) {
 }
 
 /**
+ * Get all votes for an event, with participant name for display in reports.
+ */
+export async function getEventVotesWithNames(eventId: string) {
+  return getDb()
+    .select({
+      optionId: eventVote.optionId,
+      participantId: eventVote.participantId,
+      memberName: member.name,
+      externalName: eventParticipant.externalName,
+    })
+    .from(eventVote)
+    .innerJoin(eventParticipant, eq(eventVote.participantId, eventParticipant.id))
+    .leftJoin(member, eq(eventParticipant.memberId, member.id))
+    .where(eq(eventVote.eventId, eventId));
+}
+
+/**
  * Verify a magic link token — find event + participant by token hash.
  * Returns { event, participant } or null if not found.
  */
