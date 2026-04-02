@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
   resendMagicLinkAction,
+  resendAllMagicLinksAction,
   resetParticipantTokenAction,
   removeParticipantAction,
 } from "@/actions/events";
@@ -108,6 +109,19 @@ export function ParticipantsManager({
     });
   }
 
+  function handleResendAll() {
+    if (!confirm(`Odeslat pozvánky všem účastníkům s emailem? Každý dostane nový odkaz.`)) return;
+    clearMessages();
+    startTransition(async () => {
+      const result = await resendAllMagicLinksAction(event.id);
+      if (!result.success) {
+        setError(result.error);
+      } else {
+        setSuccessMsg(`Odesláno: ${result.data!.sent} emailů${result.data!.skipped > 0 ? `, přeskočeno: ${result.data!.skipped} (bez emailu)` : ""}.`);
+      }
+    });
+  }
+
   function handleRemove(participantId: string, name: string) {
     if (!confirm(`Odebrat ucastnika „${name}"?`)) return;
     clearMessages();
@@ -127,9 +141,22 @@ export function ParticipantsManager({
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold text-text-main mb-4">
-        Ucastnici ({participants.length})
-      </h2>
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h2 className="text-lg font-semibold text-text-main">
+          Ucastnici ({participants.length})
+        </h2>
+        {event.status === "active" && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleResendAll}
+            loading={isPending && pendingId === null}
+            disabled={isPending}
+          >
+            Odeslat všem
+          </Button>
+        )}
+      </div>
 
       {participants.length > 0 ? (
         <div className="space-y-2">
