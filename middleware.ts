@@ -41,6 +41,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow event voting paths (external participants without iron-session)
+  if (pathname.startsWith("/e/")) {
+    return NextResponse.next();
+  }
+
   // Get session from cookie
   const response = NextResponse.next();
   const session = await getIronSession<SessionData>(request, response, sessionOptions);

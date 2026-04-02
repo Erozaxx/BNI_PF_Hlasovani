@@ -11,8 +11,17 @@ export function generateEventToken(): string {
 }
 
 /**
- * Hash an event token using SHA-256.
- * Stored in event_participant.magic_token_hash.
+ * Hash an event token using SHA-256 for deterministic DB lookup.
+ *
+ * Design decision (S-05, iter-007):
+ * SHA-256 is used intentionally — NOT bcrypt. Reasoning:
+ *   - Token has 256-bit entropy (randomBytes(32)), making preimage attacks infeasible.
+ *   - SHA-256 is deterministic → enables indexed DB lookup (WHERE magic_token_hash = ?).
+ *   - bcrypt is inappropriate for lookup keys: its random salt makes it non-deterministic,
+ *     requiring either plaintext storage or full-table scan with bcrypt.compare().
+ *   - HMAC-SHA256 would add marginal security for this threat model (BNI internal group,
+ *     ~50–200 participants) without practical benefit.
+ * See: security_fixes_spec_iter-007.md, S-05.
  */
 export function hashEventToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");

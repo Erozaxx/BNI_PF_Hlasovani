@@ -50,7 +50,7 @@ const VOTING_TYPE_LABELS: Record<string, string> = {
 };
 
 const WHO_CAN_LABELS: Record<string, string> = {
-  members_only: "Pouze cleny BNI",
+  members_only: "Pouze členové BNI",
   anyone_with_link: "Kdokoliv s odkazem",
 };
 

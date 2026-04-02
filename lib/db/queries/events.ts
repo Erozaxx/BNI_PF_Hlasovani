@@ -213,6 +213,7 @@ export async function getEventByParticipantToken(tokenHash: string) {
         memberId: eventParticipant.memberId,
         externalName: eventParticipant.externalName,
         externalEmail: eventParticipant.externalEmail,
+        memberName: member.name,
         magicTokenHash: eventParticipant.magicTokenHash,
         tokenCreatedAt: eventParticipant.tokenCreatedAt,
         createdAt: eventParticipant.createdAt,
@@ -220,6 +221,7 @@ export async function getEventByParticipantToken(tokenHash: string) {
     })
     .from(eventParticipant)
     .innerJoin(event, eq(eventParticipant.eventId, event.id))
+    .leftJoin(member, eq(eventParticipant.memberId, member.id))
     .where(eq(eventParticipant.magicTokenHash, tokenHash))
     .limit(1);
 
