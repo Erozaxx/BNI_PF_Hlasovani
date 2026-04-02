@@ -1,10 +1,10 @@
 import { eq, and, count } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-http";
-import { getSql } from "@/lib/db/client";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { getPool } from "@/lib/db/client";
 import { eventVote } from "@/lib/db/schema";
 
 function getDb() {
-  return drizzle(getSql());
+  return drizzle(getPool());
 }
 
 /**
