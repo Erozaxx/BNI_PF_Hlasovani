@@ -33,6 +33,8 @@ export async function createMember(data: {
   email?: string;
   managementRole?: string | null;
   passwordHash?: string | null;
+  company?: string | null;
+  obor?: string | null;
 }) {
   const results = await getDb()
     .insert(member)
@@ -41,10 +43,26 @@ export async function createMember(data: {
       email: data.email || null,
       managementRole: data.managementRole || null,
       passwordHash: data.passwordHash || null,
+      company: data.company || null,
+      obor: data.obor || null,
     })
     .returning();
 
   return results[0];
+}
+
+/**
+ * Update company and obor for a member.
+ */
+export async function updateMemberCompany(
+  memberId: string,
+  company: string | null,
+  obor: string | null
+) {
+  await getDb()
+    .update(member)
+    .set({ company, obor })
+    .where(eq(member.id, memberId));
 }
 
 /**

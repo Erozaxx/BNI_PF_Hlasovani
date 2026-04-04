@@ -13,6 +13,8 @@ import { VoteResults } from "@/components/votes/VoteResults";
 import { ReportButton } from "@/components/meetings/ReportButton";
 import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
+import { ImportGuestsButton } from "./ImportGuestsButton";
+import { ExportListButton } from "./ExportListButton";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingDetailPage({
@@ -122,26 +124,47 @@ export default async function MeetingDetailPage({
           {isManagement && meeting.status === "closed" && (
             <ReportButton meetingId={id} />
           )}
+          {isManagement && (
+            <ExportListButton meetingId={id} />
+          )}
           {isAdmin && (
             <DeleteMeetingButton meetingId={id} meetingDate={meeting.date} />
           )}
         </div>
       </div>
 
-      {/* Add guest to meeting (draft only, management) */}
-      {isManagement && meeting.status === "draft" && availableGuests.length > 0 && (
+      {/* Add guest / import guests (draft only, management) */}
+      {isManagement && meeting.status === "draft" && (
         <Card>
-          <h2 className="text-sm font-semibold text-text-muted mb-3">
-            Pridat hosta
-          </h2>
-          <AddGuestToMeetingForm
-            meetingId={id}
-            availableGuests={availableGuests.map((g) => ({
-              id: g.id,
-              name: g.name,
-              categoryName: g.categoryName,
-            }))}
-          />
+          {availableGuests.length > 0 && (
+            <>
+              <h2 className="text-sm font-semibold text-text-muted mb-3">
+                Pridat hosta
+              </h2>
+              <AddGuestToMeetingForm
+                meetingId={id}
+                availableGuests={availableGuests.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  categoryName: g.categoryName,
+                }))}
+              />
+              <div className="mt-4 border-t border-border pt-4">
+                <h2 className="text-sm font-semibold text-text-muted mb-3">
+                  Hromadny import hostu
+                </h2>
+                <ImportGuestsButton meetingId={id} />
+              </div>
+            </>
+          )}
+          {availableGuests.length === 0 && (
+            <>
+              <h2 className="text-sm font-semibold text-text-muted mb-3">
+                Hromadny import hostu
+              </h2>
+              <ImportGuestsButton meetingId={id} />
+            </>
+          )}
         </Card>
       )}
 
