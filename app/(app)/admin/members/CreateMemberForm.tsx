@@ -13,6 +13,8 @@ export function CreateMemberForm() {
   const { showToast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [obor, setObor] = useState("");
   const [role, setRole] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,9 @@ export function CreateMemberForm() {
         name,
         email || undefined,
         role || null,
-        role ? password : undefined
+        role ? password : undefined,
+        company || undefined,
+        obor || undefined
       );
       if (!result.success) {
         setError(result.error);
@@ -59,6 +63,8 @@ export function CreateMemberForm() {
       } else {
         setName("");
         setEmail("");
+        setCompany("");
+        setObor("");
         setRole("");
         setPassword("");
         showToast("success", "Clen byl pridan.");
@@ -93,6 +99,20 @@ export function CreateMemberForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="email@example.com"
+      />
+      <Input
+        label="Firma"
+        name="company"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        placeholder="Nazev firmy"
+      />
+      <Input
+        label="Obor"
+        name="obor"
+        value={obor}
+        onChange={(e) => setObor(e.target.value)}
+        placeholder="Obor cinnosti"
       />
       <Select
         label="Role"

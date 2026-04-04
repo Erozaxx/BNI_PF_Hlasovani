@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
 import { MemberActions } from "./MemberActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
+import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
 
 export default async function AdminMembersPage() {
   const members = await getMembers();
@@ -31,6 +32,8 @@ export default async function AdminMembersPage() {
                 <tr className="border-b-2 border-primary text-left">
                   <th className="px-4 py-3 font-semibold">Jmeno</th>
                   <th className="px-4 py-3 font-semibold">Email</th>
+                  <th className="px-4 py-3 font-semibold">Firma</th>
+                  <th className="px-4 py-3 font-semibold">Obor</th>
                   <th className="px-4 py-3 font-semibold">Role</th>
                   <th className="px-4 py-3 font-semibold">Token</th>
                   <th className="px-4 py-3 font-semibold">Akce</th>
@@ -47,6 +50,17 @@ export default async function AdminMembersPage() {
                     <td className="px-4 py-3 font-medium">{m.name}</td>
                     <td className="px-4 py-3 text-text-muted">
                       {m.email || "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-text-muted">{m.company || "—"}</div>
+                      <EditMemberCompanyForm
+                        memberId={m.id}
+                        initialCompany={m.company ?? null}
+                        initialObor={m.obor ?? null}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-text-muted">
+                      {m.obor || "—"}
                     </td>
                     <td className="px-4 py-3">
                       {m.managementRole ? (

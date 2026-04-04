@@ -7,6 +7,7 @@ import {
   getMemberById,
   updateTokenUsed,
   deleteMember as dbDeleteMember,
+  updateMemberCompany as dbUpdateMemberCompany,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
@@ -23,7 +24,9 @@ export async function createMemberAction(
   name: string,
   email?: string,
   managementRole?: string | null,
-  password?: string
+  password?: string,
+  company?: string,
+  obor?: string
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireAdmin();
   if (!auth.success) return auth;
@@ -54,6 +57,8 @@ export async function createMemberAction(
       email: email?.trim() || undefined,
       managementRole: managementRole || null,
       passwordHash,
+      company: company?.trim() || null,
+      obor: obor?.trim() || null,
     });
 
     if (!isManagement) {
@@ -164,6 +169,37 @@ export async function sendMagicLinkEmailAction(
   } catch (error) {
     console.error("sendMagicLinkEmailAction error:", error);
     return { success: false, error: "Nepodarilo se odeslat odkaz emailem." };
+  }
+}
+
+/**
+ * Update company and obor for a member. Requires admin role.
+ */
+export async function updateMemberCompanyAction(
+  memberId: string,
+  company: string,
+  obor: string
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    const memberData = await getMemberById(memberId);
+    if (!memberData) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    await dbUpdateMemberCompany(
+      memberId,
+      company.trim() || null,
+      obor.trim() || null
+    );
+
+    revalidatePath("/admin/members");
+    return { success: true };
+  } catch (error) {
+    console.error("updateMemberCompanyAction error:", error);
+    return { success: false, error: "Nepodarilo se aktualizovat firmu/obor." };
   }
 }
 

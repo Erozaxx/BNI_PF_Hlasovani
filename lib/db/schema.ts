@@ -38,6 +38,8 @@ export const member = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    company: text("company"),
+    obor: text("obor"),
     email: text("email"),
     passwordHash: text("password_hash"),
     managementRole: text("management_role"),
@@ -83,6 +85,7 @@ export const guest = pgTable(
     name: text("name").notNull(),
     company: text("company"),
     email: text("email"),
+    phone: text("phone"),
     description: text("description"),
     categoryId: uuid("category_id").references(() => category.id, {
       onDelete: "set null",
