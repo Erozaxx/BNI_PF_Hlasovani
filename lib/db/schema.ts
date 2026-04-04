@@ -124,7 +124,7 @@ export const meeting = pgTable(
   (table) => ({
     statusCheck: check(
       "meeting_status_check",
-      sql`${table.status} IN ('draft', 'voting', 'closed')`
+      sql`${table.status} IN ('draft', 'active', 'voting', 'closed')`
     ),
     votingWindowValid: check(
       "meeting_voting_window_valid",
@@ -171,6 +171,9 @@ export const note = pgTable(
     guestId: uuid("guest_id")
       .notNull()
       .references(() => guest.id, { onDelete: "cascade" }),
+    meetingId: uuid("meeting_id").references(() => meeting.id, {
+      onDelete: "set null",
+    }),
     text: text("text").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -183,6 +186,7 @@ export const note = pgTable(
     ),
     guestIdx: index("idx_note_guest").on(table.guestId),
     memberIdx: index("idx_note_member").on(table.memberId),
+    meetingIdx: index("idx_note_meeting").on(table.meetingId),
     createdAtIdx: index("idx_note_created_at").on(table.createdAt),
   })
 );
@@ -376,5 +380,42 @@ export const vote = pgTable(
     ),
     memberIdx: index("idx_vote_member").on(table.memberId),
     meetingIdx: index("idx_vote_meeting").on(table.meetingId),
+  })
+);
+
+// ============================================================
+// MEETING_MEMBER_LINK
+// Per-meeting per-member magic link for voting access.
+// UNIQUE(meeting_id, member_id) enables UPDATE-only token regeneration.
+// morning_email_sent_at tracks idempotent morning email delivery.
+// ============================================================
+export const meetingMemberLink = pgTable(
+  "meeting_member_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meeting.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    morningEmailSentAt: timestamp("morning_email_sent_at", {
+      withTimezone: true,
+    }),
+  },
+  (table) => ({
+    meetingMemberUnique: unique("mml_meeting_member_unique").on(
+      table.meetingId,
+      table.memberId
+    ),
+    tokenHashIdx: index("idx_mml_token_hash").on(table.tokenHash),
+    meetingIdIdx: index("idx_mml_meeting_id").on(table.meetingId),
+    memberIdIdx: index("idx_mml_member_id").on(table.memberId),
   })
 );

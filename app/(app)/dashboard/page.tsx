@@ -12,7 +12,6 @@ export default async function DashboardPage() {
   const meetings = await getMeetings();
   const guests = await getGuests();
 
-  const activeMeeting = meetings.find((m) => m.status === "voting");
   const recentGuests = guests.slice(0, 4);
   const recentGuestIds = recentGuests.map((g) => g.id);
   const lastMeetingDates = recentGuestIds.length > 0
@@ -22,49 +21,34 @@ export default async function DashboardPage() {
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
 
+  const upcomingMeeting = meetings.find(
+    (m) => m.status === "draft" || m.status === "active" || m.status === "voting"
+  );
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-text-main">Dashboard</h1>
 
-      {/* Active voting banner */}
-      {activeMeeting ? (
-        <Card variant="highlighted">
+      {/* Meeting status */}
+      {upcomingMeeting ? (
+        <Card>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="danger">Hlasovani aktivni</Badge>
-              </div>
               <p className="text-text-main font-medium">
-                Schuzka: {activeMeeting.date}
+                Schuzka: {upcomingMeeting.date}
               </p>
-              {activeMeeting.votingClosesAt && (
-                <p className="text-sm text-text-muted">
-                  Uzavira se:{" "}
-                  {new Date(activeMeeting.votingClosesAt).toLocaleDateString(
-                    "cs-CZ",
-                    {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }
-                  )}
-                </p>
-              )}
+              <Badge variant="category" className="mt-1">
+                {upcomingMeeting.status}
+              </Badge>
             </div>
-            <Link href={`/meetings/${activeMeeting.id}`}>
-              <Button variant="primary" size="sm">
+            <Link href={`/meetings/${upcomingMeeting.id}`}>
+              <Button variant="secondary" size="sm">
                 Zobrazit
               </Button>
             </Link>
           </div>
         </Card>
-      ) : (
-        <Card>
-          <p className="text-text-muted">Zadne aktivni hlasovani.</p>
-        </Card>
-      )}
+      ) : null}
 
       {/* Quick actions for management */}
       {isManagement && (
