@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { drizzle } from "drizzle-orm/neon-http";
-import { inArray } from "drizzle-orm";
+import { inArray, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth/session";
 import { getSql } from "@/lib/db/client";
-import { guest, meetingGuest } from "@/lib/db/schema";
+import { category, guest, meetingGuest } from "@/lib/db/schema";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -120,11 +120,10 @@ export async function POST(
     email: headerRow.indexOf("Email"),
     phone: headerRow.indexOf("Phone Number"),
     company: headerRow.indexOf("Company Name"),
-    // "Poznamka" takes priority over "Company profile"
-    description:
-      headerRow.indexOf("Poznamka") !== -1
-        ? headerRow.indexOf("Poznamka")
-        : headerRow.indexOf("Company profile"),
+    // "Company profile" → category (find-or-create)
+    categoryProfile: headerRow.indexOf("Company profile"),
+    // "Poznamka" → description (optional)
+    description: headerRow.indexOf("Poznamka"),
   };
 
   if (colIdx.name === -1) {
@@ -147,6 +146,7 @@ export async function POST(
     phone: string | null;
     company: string | null;
     description: string | null;
+    categoryName: string | null;
   }
 
   const parsedRows: ParsedRow[] = [];
@@ -170,6 +170,10 @@ export async function POST(
       company: colIdx.company !== -1 ? trimOrNull(arr[colIdx.company]) : null,
       description:
         colIdx.description !== -1 ? trimOrNull(arr[colIdx.description]) : null,
+      categoryName:
+        colIdx.categoryProfile !== -1
+          ? trimOrNull(arr[colIdx.categoryProfile])
+          : null,
     });
   }
 
@@ -188,6 +192,45 @@ export async function POST(
 
     for (const g of existingGuests) {
       if (g.email) emailMap.set(g.email, g.id);
+    }
+  }
+
+  // 11b. Find-or-create categories for all unique "Company profile" values
+  const categoryNames = [
+    ...new Set(parsedRows.map((r) => r.categoryName).filter(Boolean) as string[]),
+  ];
+  const categoryMap = new Map<string, string>(); // name → category.id
+
+  if (categoryNames.length > 0) {
+    const db2 = getDb();
+    // Fetch existing categories matching these names
+    const existing = await db2
+      .select({ id: category.id, name: category.name })
+      .from(category)
+      .where(inArray(category.name, categoryNames));
+
+    for (const c of existing) categoryMap.set(c.name, c.id);
+
+    // Create missing categories one by one (name has unique constraint)
+    for (const name of categoryNames) {
+      if (!categoryMap.has(name)) {
+        const inserted = await db2
+          .insert(category)
+          .values({ name })
+          .onConflictDoNothing()
+          .returning({ id: category.id, name: category.name });
+        if (inserted.length > 0) {
+          categoryMap.set(inserted[0].name, inserted[0].id);
+        } else {
+          // Race condition: another request inserted it — fetch it
+          const fetched = await db2
+            .select({ id: category.id })
+            .from(category)
+            .where(eq(category.name, name))
+            .limit(1);
+          if (fetched.length > 0) categoryMap.set(name, fetched[0].id);
+        }
+      }
     }
   }
 
@@ -217,6 +260,7 @@ export async function POST(
           phone: row.phone,
           company: row.company,
           description: row.description,
+          categoryId: row.categoryName ? (categoryMap.get(row.categoryName) ?? null) : null,
         })
         .returning({ id: guest.id });
 
