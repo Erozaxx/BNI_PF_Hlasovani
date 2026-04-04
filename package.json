@@ -18,6 +18,7 @@
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "^0.36.0",
     "iron-session": "^8.0.0",
+    "jszip": "^3.10.1",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",

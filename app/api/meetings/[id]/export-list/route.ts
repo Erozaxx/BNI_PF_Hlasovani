@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import JSZip from "jszip";
 import path from "path";
 import fs from "fs";
 import { getSession } from "@/lib/auth/session";
@@ -19,43 +19,49 @@ function formatDateCzech(dateStr: string): string {
   return `${parseInt(day, 10)}.${parseInt(month, 10)}.${year}`;
 }
 
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 // Style indices from Vystup_schuzka_template.xlsx (xl/styles.xml)
 const S = {
   colA: 9,
-  // Row 4 "Členové:" separator
-  sepClen_B: 10, sepClen_C: 10, sepClen_D: 11, sepClen_E: 12,
   // Member rows: first / middle
   memFirst_B: 13, memFirst_C: 14, memFirst_D: 15, memFirst_E: 16,
-  memMid_B: 17,  memMid_C: 18,  memMid_D: 19,  memMid_E: 16,
-  // Row "Hosté:" separator
+  memMid_B: 17,   memMid_C: 18,   memMid_D: 19,   memMid_E: 16,
+  // "Hosté:" separator
   sepHoste_B: 30, sepHoste_C: 31, sepHoste_D: 31, sepHoste_E: 16,
   // Guest rows: first / middle / last
   gstFirst_B: 32, gstFirst_C: 33, gstFirst_D: 34, gstFirst_E: 35,
-  gstMid_B: 23,  gstMid_C: 25,  gstMid_D: 26,  gstMid_E: 16,
-  gstLast_B: 42, gstLast_C: 43, gstLast_D: 44, gstLast_E: 38,
-};
+  gstMid_B: 23,   gstMid_C: 25,   gstMid_D: 26,   gstMid_E: 16,
+  gstLast_B: 42,  gstLast_C: 43,  gstLast_D: 44,  gstLast_E: 38,
+} as const;
 
-function cell(value: string, styleIdx: number): XLSX.CellObject {
-  return { v: value, t: "s", s: styleIdx };
+function inlineCell(col: string, row: number, styleIdx: number, value: string): string {
+  if (value === "") {
+    return `<c r="${col}${row}" s="${styleIdx}"/>`;
+  }
+  return `<c r="${col}${row}" s="${styleIdx}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
 }
 
-function emptyCell(styleIdx: number): XLSX.CellObject {
-  return { v: "", t: "s", s: styleIdx };
-}
-
-function setRow(
-  ws: XLSX.WorkSheet,
-  rowIdx: number,
+function buildRow(
+  rowNum: number,
   bVal: string, bS: number,
   cVal: string, cS: number,
   dVal: string, dS: number,
   eS: number
-) {
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 0 })] = emptyCell(S.colA);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 1 })] = cell(bVal, bS);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 2 })] = cell(cVal, cS);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 3 })] = cell(dVal, dS);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 4 })] = emptyCell(eS);
+): string {
+  const a = `<c r="A${rowNum}" s="${S.colA}"/>`;
+  const b = inlineCell("B", rowNum, bS, bVal);
+  const c = inlineCell("C", rowNum, cS, cVal);
+  const d = inlineCell("D", rowNum, dS, dVal);
+  const e = `<c r="E${rowNum}" s="${eS}"/>`;
+  return `<row r="${rowNum}">${a}${b}${c}${d}${e}</row>`;
 }
 
 export async function GET(
@@ -96,67 +102,113 @@ export async function GET(
 
   // Load template
   const templatePath = path.join(process.cwd(), "lib/templates/Vystup_schuzka_template.xlsx");
-  const templateBuffer = fs.readFileSync(templatePath);
-  const wb = XLSX.read(templateBuffer, { type: "buffer", cellStyles: true });
-
-  // Sheet name has trailing space in template
-  const sheetName = wb.SheetNames.find((n) => n.trim() === "Seznam hostů") ?? wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-
-  // Update C1 title with meeting date (keep style, update value)
-  if (ws["C1"]) {
-    ws["C1"].v = `BNI Fountains, seznam hostů a členů ${formattedDate}`;
-    ws["C1"].t = "s";
-    delete (ws["C1"] as Record<string, unknown>).w; // clear cached formatted value
-    delete (ws["C1"] as Record<string, unknown>).r; // clear rich text
+  let templateBuffer: Buffer;
+  try {
+    templateBuffer = fs.readFileSync(templatePath);
+  } catch {
+    return NextResponse.json({ error: "Template not found" }, { status: 500 });
   }
 
-  // Clear all cells from row 5 onwards (0-indexed row 4+)
-  const existingRange = XLSX.utils.decode_range(ws["!ref"] ?? "A1:E35");
-  for (let r = 4; r <= existingRange.e.r; r++) {
-    for (let c = 0; c <= 4; c++) {
-      delete ws[XLSX.utils.encode_cell({ r, c })];
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(templateBuffer);
+  } catch {
+    return NextResponse.json({ error: "Failed to load template" }, { status: 500 });
+  }
+
+  // Read sheet1.xml
+  const sheet1File = zip.file("xl/worksheets/sheet1.xml");
+  if (!sheet1File) {
+    return NextResponse.json({ error: "Template sheet not found" }, { status: 500 });
+  }
+  const originalXml = await sheet1File.async("text");
+
+  // Split XML into 3 parts:
+  // beforeData = everything up to (not including) <row r="5" or first <row with r >= 5
+  // afterData  = from </sheetData> to end
+  const rowSplitMatch = originalXml.match(/<row\s+r="([0-9]+)"/);
+  let splitIdx = -1;
+  if (rowSplitMatch) {
+    // Find the index of the first row with r >= 5
+    const rowRegex = /<row\s+r="([0-9]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = rowRegex.exec(originalXml)) !== null) {
+      const rNum = parseInt(m[1], 10);
+      if (rNum >= 5) {
+        splitIdx = m.index;
+        break;
+      }
     }
   }
-  // Truncate row metadata to first 4 rows
-  if (ws["!rows"]) {
-    ws["!rows"] = (ws["!rows"] as XLSX.RowInfo[]).slice(0, 4);
+
+  const sheetDataEndIdx = originalXml.indexOf("</sheetData>");
+  if (sheetDataEndIdx === -1) {
+    return NextResponse.json({ error: "Invalid template XML" }, { status: 500 });
   }
 
-  let rowIdx = 4; // 0-indexed → sheet row 5
+  let beforeData: string;
+  if (splitIdx !== -1) {
+    beforeData = originalXml.slice(0, splitIdx);
+  } else {
+    // No rows with r >= 5, split just before </sheetData>
+    beforeData = originalXml.slice(0, sheetDataEndIdx);
+  }
+  const afterData = originalXml.slice(sheetDataEndIdx);
+
+  // Update C1 with meeting date (replace value in title cell)
+  const titleValue = escapeXml(`BNI Fountains, seznam hostů a členů ${formattedDate}`);
+  beforeData = beforeData.replace(
+    /(<c\s+r="C1"[^>]*>(?:<v>[^<]*<\/v>|<is><t>[^<]*<\/t><\/is>)?<\/c>|<c\s+r="C1"[^>]*\/>)/,
+    (match) => {
+      // Replace or inject inlineStr value
+      if (match.includes('t="inlineStr"')) {
+        return match.replace(/<is><t>[^<]*<\/t><\/is>/, `<is><t>${titleValue}</t></is>`);
+      } else if (match.includes('<v>')) {
+        return match.replace(/<v>[^<]*<\/v>/, `<is><t>${titleValue}</t></is>`).replace(/t="[^"]*"/, 't="inlineStr"');
+      }
+      // Fallback: rebuild cell preserving style attribute
+      const sAttr = match.match(/s="([0-9]+)"/);
+      const sVal = sAttr ? ` s="${sAttr[1]}"` : "";
+      return `<c r="C1"${sVal} t="inlineStr"><is><t>${titleValue}</t></is></c>`;
+    }
+  );
+
+  // Build dynamic rows starting at row 5
+  const rows: string[] = [];
+  let rowNum = 5;
 
   // Member rows
   for (let i = 0; i < members.length; i++) {
     const m = members[i];
     const first = i === 0;
-    setRow(
-      ws, rowIdx,
-      m.name,        first ? S.memFirst_B : S.memMid_B,
+    rows.push(buildRow(
+      rowNum,
+      m.name,         first ? S.memFirst_B : S.memMid_B,
       m.company ?? "", first ? S.memFirst_C : S.memMid_C,
-      m.obor ?? "",  first ? S.memFirst_D : S.memMid_D,
+      m.obor ?? "",   first ? S.memFirst_D : S.memMid_D,
       first ? S.memFirst_E : S.memMid_E,
-    );
-    rowIdx++;
+    ));
+    rowNum++;
   }
 
   // "Hosté:" separator row
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 0 })] = emptyCell(S.colA);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 1 })] = cell("Hosté:", S.sepHoste_B);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 2 })] = emptyCell(S.sepHoste_C);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 3 })] = emptyCell(S.sepHoste_D);
-  ws[XLSX.utils.encode_cell({ r: rowIdx, c: 4 })] = emptyCell(S.sepHoste_E);
-  rowIdx++;
+  rows.push(
+    `<row r="${rowNum}">` +
+    `<c r="A${rowNum}" s="${S.colA}"/>` +
+    `<c r="B${rowNum}" s="${S.sepHoste_B}" t="inlineStr"><is><t>Hosté:</t></is></c>` +
+    `<c r="C${rowNum}" s="${S.sepHoste_C}"/>` +
+    `<c r="D${rowNum}" s="${S.sepHoste_D}"/>` +
+    `<c r="E${rowNum}" s="${S.sepHoste_E}"/>` +
+    `</row>`
+  );
+  rowNum++;
 
   // Guest rows
   const guestCount = meetingGuests.length;
   if (guestCount === 0) {
     // Empty placeholder row with closing border
-    ws[XLSX.utils.encode_cell({ r: rowIdx, c: 0 })] = emptyCell(S.colA);
-    ws[XLSX.utils.encode_cell({ r: rowIdx, c: 1 })] = emptyCell(S.gstLast_B);
-    ws[XLSX.utils.encode_cell({ r: rowIdx, c: 2 })] = emptyCell(S.gstLast_C);
-    ws[XLSX.utils.encode_cell({ r: rowIdx, c: 3 })] = emptyCell(S.gstLast_D);
-    ws[XLSX.utils.encode_cell({ r: rowIdx, c: 4 })] = emptyCell(S.gstLast_E);
-    rowIdx++;
+    rows.push(buildRow(rowNum, "", S.gstLast_B, "", S.gstLast_C, "", S.gstLast_D, S.gstLast_E));
+    rowNum++;
   } else {
     for (let i = 0; i < guestCount; i++) {
       const g = meetingGuests[i];
@@ -173,15 +225,21 @@ export async function GET(
         bS = S.gstMid_B; cS = S.gstMid_C; dS = S.gstMid_D; eS = S.gstMid_E;
       }
 
-      setRow(ws, rowIdx, g.name, bS, g.company ?? "", cS, obor, dS, eS);
-      rowIdx++;
+      rows.push(buildRow(rowNum, g.name, bS, g.company ?? "", cS, obor, dS, eS));
+      rowNum++;
     }
   }
 
-  // Update sheet range
-  ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rowIdx - 1, c: 4 } });
+  const lastRow = rowNum - 1;
+  const newRows = rows.join("");
 
-  // Dynamic column widths based on content
+  // Update <dimension> ref
+  let updatedBefore = beforeData.replace(
+    /<dimension\s+ref="[^"]*"\s*\/>/,
+    `<dimension ref="A1:E${lastRow}"/>`
+  );
+
+  // Update <cols> with dynamic widths
   const allNames = [
     ...members.map((m) => m.name),
     ...meetingGuests.map((g) => g.name),
@@ -197,20 +255,33 @@ export async function GET(
     ...meetingGuests.map((g) => g.categoryName ?? g.description ?? ""),
     "Obor",
   ];
+
   const maxLen = (arr: string[]) => Math.max(...arr.map((s) => s.length), 1);
+  const maxB = Math.max(10, maxLen(allNames) * 1.2);
+  const maxC = Math.max(10, maxLen(allCompanies) * 1.2);
+  const maxD = Math.max(10, maxLen(allObors) * 1.2);
+  const maxE = 20;
 
-  ws["!cols"] = [
-    { wch: 2 },                              // A: narrow left margin column
-    { wch: Math.ceil(maxLen(allNames) * 1.1) },   // B: names
-    { wch: Math.ceil(maxLen(allCompanies) * 1.1) }, // C: companies
-    { wch: Math.ceil(maxLen(allObors) * 1.1) },   // D: obor/category
-    { wch: 20 },                             // E: poznámka (fixed)
-  ];
+  const newCols =
+    `<cols>` +
+    `<col min="1" max="1" width="2" customWidth="1"/>` +
+    `<col min="2" max="2" width="${maxB.toFixed(2)}" bestFit="1" customWidth="1"/>` +
+    `<col min="3" max="3" width="${maxC.toFixed(2)}" bestFit="1" customWidth="1"/>` +
+    `<col min="4" max="4" width="${maxD.toFixed(2)}" bestFit="1" customWidth="1"/>` +
+    `<col min="5" max="5" width="${maxE}" bestFit="1" customWidth="1"/>` +
+    `</cols>`;
 
-  const buf: Buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx", cellStyles: true });
+  updatedBefore = updatedBefore.replace(/<cols>[\s\S]*?<\/cols>/, newCols);
+
+  const newXml = updatedBefore + newRows + afterData;
+
+  zip.file("xl/worksheets/sheet1.xml", newXml);
+
+  const outBuf = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+
   const filename = `seznam-hostu-${meetingData.date}.xlsx`;
 
-  return new NextResponse(new Uint8Array(buf), {
+  return new NextResponse(new Uint8Array(outBuf), {
     status: 200,
     headers: {
       "Content-Type":
