@@ -46,6 +46,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow per-meeting magic link paths (members access via token, no iron-session)
+  if (pathname.startsWith("/m/") || pathname.startsWith("/api/m/")) {
+    return NextResponse.next();
+  }
+
   // Get session from cookie
   const response = NextResponse.next();
   const session = await getIronSession<SessionData>(request, response, sessionOptions);
