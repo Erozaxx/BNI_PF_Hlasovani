@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { getPool } from "@/lib/db/client";
+import { eq, and } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/neon-http";
+import { getSql } from "@/lib/db/client";
 import { getSession } from "@/lib/auth/session";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { meeting as meetingTable, meetingMemberLink } from "@/lib/db/schema";
 
 function getDb() {
-  return drizzle(getPool());
+  return drizzle(getSql());
 }
 
 function err(status: number, message: string) {
@@ -57,40 +57,33 @@ export async function POST(
   const votingClosesAt = new Date(now.getTime() + VOTING_DURATION_MS);
   const expiresAt = new Date(now.getTime() + VOTING_DURATION_MS + TOKEN_EXPIRY_EXTRA_MS);
 
-  // 4. Update meeting status + set link expiry atomically in a transaction
-  const db = getDb();
-  let updated: { id: string; status: string; votingOpenAt: Date | null; votingClosesAt: Date | null }[] = [];
-
-  await db.transaction(async (tx) => {
-    updated = await tx
-      .update(meetingTable)
-      .set({
-        status: "voting",
-        votingOpenAt,
-        votingClosesAt,
-      })
-      .where(eq(meetingTable.id, meetingId))
-      .returning({
-        id: meetingTable.id,
-        status: meetingTable.status,
-        votingOpenAt: meetingTable.votingOpenAt,
-        votingClosesAt: meetingTable.votingClosesAt,
-      });
-
-    if (updated.length === 0) {
-      throw new Error("Meeting not found or update failed");
-    }
-
-    // Set expiry on all member links — inside the same transaction
-    await tx
-      .update(meetingMemberLink)
-      .set({ expiresAt })
-      .where(eq(meetingMemberLink.meetingId, meetingId));
-  });
+  // 4. Update meeting status — guard: WHERE status='active' prevents double-transition
+  // Two separate queries (no transaction) — neon-http doesn't support transactions.
+  // If link expiry update fails, links remain valid indefinitely; cron handles cleanup.
+  const updated = await getDb()
+    .update(meetingTable)
+    .set({
+      status: "voting",
+      votingOpenAt,
+      votingClosesAt,
+    })
+    .where(and(eq(meetingTable.id, meetingId), eq(meetingTable.status, "active")))
+    .returning({
+      id: meetingTable.id,
+      status: meetingTable.status,
+      votingOpenAt: meetingTable.votingOpenAt,
+      votingClosesAt: meetingTable.votingClosesAt,
+    });
 
   if (updated.length === 0) {
-    return err(500, "Failed to update meeting status");
+    return err(409, "Meeting is not in active status or was already transitioned");
   }
+
+  // 5. Set expiry on all member links — separate query, idempotent
+  await getDb()
+    .update(meetingMemberLink)
+    .set({ expiresAt })
+    .where(eq(meetingMemberLink.meetingId, meetingId));
 
   console.info(
     `[activate-voting] meetingId=${meetingId} activatedBy=${session.memberId} votingOpenAt=${votingOpenAt.toISOString()} expiresAt=${expiresAt.toISOString()}`
