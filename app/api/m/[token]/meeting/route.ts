@@ -121,14 +121,16 @@ export async function GET(
     .from(vote)
     .where(and(eq(vote.memberId, memberId), eq(vote.meetingId, meetingId)));
 
-  // 6b. Load all votes for this meeting (for aggregate summary — visible in voting + closed)
+  // 6b. Load all votes for this meeting (for aggregate summary + named detail — visible in voting + closed)
   const allVoteRows = await getDb()
     .select({
       guestId: vote.guestId,
       value: vote.value,
       reason: vote.reason,
+      memberName: member.name,
     })
     .from(vote)
+    .innerJoin(member, eq(vote.memberId, member.id))
     .where(eq(vote.meetingId, meetingId));
 
   // Build lookup maps
@@ -164,6 +166,22 @@ export async function GET(
     }
   }
 
+  // Build named vote detail per guest: [{ memberName, value, reason }]
+  const voteDetailByGuest = new Map<
+    string,
+    Array<{ memberName: string; value: string; reason: string | null }>
+  >();
+  for (const v of allVoteRows) {
+    if (!voteDetailByGuest.has(v.guestId)) {
+      voteDetailByGuest.set(v.guestId, []);
+    }
+    voteDetailByGuest.get(v.guestId)!.push({
+      memberName: v.memberName,
+      value: v.value,
+      reason: v.reason,
+    });
+  }
+
   // 7. Assemble guests
   const guests = guestRows.map((g) => ({
     id: g.guestId,
@@ -180,6 +198,7 @@ export async function GET(
     })),
     myVote: voteByGuest.get(g.guestId) ?? null,
     voteSummary: summaryByGuest.get(g.guestId) ?? { up: 0, neutral: 0, down: 0, downReasons: [] },
+    voteDetail: voteDetailByGuest.get(g.guestId) ?? [],
   }));
 
   return NextResponse.json({

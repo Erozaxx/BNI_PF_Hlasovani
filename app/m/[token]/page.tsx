@@ -1,6 +1,7 @@
 import { MeetingExpired } from "./_components/MeetingExpired";
 import { GuestCardMeeting } from "./_components/GuestCardMeeting";
 import { Badge } from "@/components/ui/Badge";
+import type { VoteDetailItem } from "./_components/MeetingResultsView";
 
 interface NoteShape {
   id: string;
@@ -31,6 +32,7 @@ interface GuestShape {
   notes: NoteShape[];
   myVote: MyVoteShape | null;
   voteSummary: VoteSummaryShape;
+  voteDetail: VoteDetailItem[];
 }
 
 interface MeetingData {
@@ -163,6 +165,7 @@ export default async function MemberMeetingPage({
                   notes={g.notes}
                   myVote={g.myVote}
                   voteSummary={g.voteSummary}
+                  voteDetail={g.voteDetail}
                   phase={phase}
                 />
               ))}

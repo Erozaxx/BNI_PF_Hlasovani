@@ -11,20 +11,36 @@ export interface VoteSummary {
   downReasons?: string[];
 }
 
+export interface VoteDetailItem {
+  memberName: string;
+  value: string; // "up" | "neutral" | "down"
+  reason: string | null;
+}
+
 export interface MeetingResultsProps {
   summary: VoteSummary;
   guestName: string;
+  voteDetail: VoteDetailItem[];
 }
+
+const voteEmoji: Record<string, string> = {
+  up: "👍",
+  neutral: "🤷",
+  down: "👎",
+};
 
 /**
  * Read-only vote result for a single guest in the voting/closed phase.
- * Shows aggregated counts — no individual member names (member page is public).
- * DownReasons are hidden by default and revealed via a collapsible toggle.
+ * Shows aggregated counts (always visible) + collapsible named vote detail.
  */
-export function MeetingResultsView({ summary, guestName }: MeetingResultsProps) {
+export function MeetingResultsView({
+  summary,
+  guestName,
+  voteDetail,
+}: MeetingResultsProps) {
   const [expanded, setExpanded] = useState(false);
   const total = summary.up + summary.neutral + summary.down;
-  const hasDetails = summary.downReasons != null && summary.downReasons.length > 0;
+  const hasVotes = voteDetail.length > 0;
 
   return (
     <Card className="mt-2 ml-4 bg-background">
@@ -35,6 +51,7 @@ export function MeetingResultsView({ summary, guestName }: MeetingResultsProps) 
         <p className="text-sm text-text-muted">Zadne hlasy nebyly odevzdany.</p>
       ) : (
         <>
+          {/* Aggregate counts — always visible */}
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-1.5">
               <Badge variant="success">{summary.up}</Badge>
@@ -51,7 +68,8 @@ export function MeetingResultsView({ summary, guestName }: MeetingResultsProps) 
             <span className="text-text-muted">celkem {total}</span>
           </div>
 
-          {hasDetails && (
+          {/* Expand/collapse trigger — only if there are votes */}
+          {hasVotes && (
             <button
               type="button"
               onClick={() => setExpanded(!expanded)}
@@ -59,23 +77,23 @@ export function MeetingResultsView({ summary, guestName }: MeetingResultsProps) 
               className="mt-2 text-sm text-navy hover:underline focus:outline-none"
             >
               {expanded
-                ? "Skryt detaily \u25b2"
-                : `Zobrazit detaily (${summary.downReasons!.length} duvodu) \u25bc`}
+                ? "Skryt kdo jak hlasoval \u25b2"
+                : `Zobrazit kdo jak hlasoval (${voteDetail.length}) \u25bc`}
             </button>
           )}
 
-          {expanded && hasDetails && (
-            <div className="mt-3">
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
-                Duvody pro hlasovani proti
-              </p>
-              <ul className="list-disc list-inside space-y-1">
-                {summary.downReasons!.map((reason, i) => (
-                  <li key={i} className="text-sm text-text-muted">
-                    {reason}
-                  </li>
-                ))}
-              </ul>
+          {/* Collapsible named vote detail */}
+          {expanded && hasVotes && (
+            <div className="mt-3 space-y-1">
+              {voteDetail.map((v, i) => (
+                <div key={`${v.memberName}-${i}`} className="flex items-start gap-2 text-sm">
+                  <span className="shrink-0">{voteEmoji[v.value] ?? "?"}</span>
+                  <span className="font-medium text-text-main">{v.memberName}</span>
+                  {v.value === "down" && v.reason && (
+                    <span className="text-text-muted">— {v.reason}</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </>
