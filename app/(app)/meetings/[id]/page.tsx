@@ -15,6 +15,7 @@ import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
 import { ImportGuestsButton } from "./ImportGuestsButton";
 import { ExportListButton } from "./ExportListButton";
+import { MeetingActivationControls } from "./MeetingActivationControls";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingDetailPage({
@@ -166,6 +167,17 @@ export default async function MeetingDetailPage({
             </>
           )}
         </Card>
+      )}
+
+      {/* Activation controls + MemberLinksManager (management only) */}
+      {isManagement && (
+        <section>
+          <MeetingActivationControls
+            meetingId={id}
+            meetingDate={meeting.date}
+            status={meeting.status}
+          />
+        </section>
       )}
 
       {/* Guests list */}

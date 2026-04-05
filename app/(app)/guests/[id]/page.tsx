@@ -2,10 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuestWithNotes } from "@/lib/db/queries/guests";
 import { getCategories } from "@/lib/db/queries/categories";
-import {
-  getActiveVotingMeetingsForGuest,
-  getVoteForGuestInMeeting,
-} from "@/lib/db/queries/votes";
 import { getLastMeetingDateForGuest } from "@/lib/db/queries/meetings";
 import { getSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -13,7 +9,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { GuestCategoryChanger } from "./GuestCategoryChanger";
 import { DeleteGuestButton } from "@/components/guests/DeleteGuestButton";
-import { VoteForm } from "@/components/guests/VoteForm";
 import { NoteList } from "@/components/notes/NoteList";
 import { NoteForm } from "@/components/notes/NoteForm";
 
@@ -42,20 +37,6 @@ export default async function GuestDetailPage({
     session.managementRole === "admin" ||
     session.managementRole === "moderator";
   const isAdmin = session.managementRole === "admin";
-
-  // Get active voting meetings for this guest + user's existing vote
-  const votingMeetings = session.memberId
-    ? await getActiveVotingMeetingsForGuest(id)
-    : [];
-
-  const votingData = await Promise.all(
-    votingMeetings.map(async (vm) => {
-      const existingVote = session.memberId
-        ? await getVoteForGuestInMeeting(session.memberId, id, vm.meetingId)
-        : null;
-      return { ...vm, existingVote };
-    })
-  );
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -114,22 +95,6 @@ export default async function GuestDetailPage({
           />
         </Card>
       )}
-
-      {/* Voting */}
-      {votingData.length > 0 &&
-        votingData.map((vm) => (
-          <Card key={vm.meetingId}>
-            <h2 className="text-lg font-semibold text-text-main mb-2">
-              Hlasovani &mdash; schuzka {vm.meetingDate}
-            </h2>
-            <VoteForm
-              guestId={id}
-              meetingId={vm.meetingId}
-              existingVote={vm.existingVote}
-              votingOpen={true}
-            />
-          </Card>
-        ))}
 
       {/* Notes */}
       <Card>

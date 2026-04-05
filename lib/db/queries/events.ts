@@ -1,7 +1,6 @@
 import { eq, and, desc, count, isNull, lt, lte, sql } from "drizzle-orm";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
-import { drizzle as drizzlePool } from "drizzle-orm/neon-serverless";
-import { getSql, getPool } from "@/lib/db/client";
+import { getSql } from "@/lib/db/client";
 import {
   event,
   eventOption,
@@ -12,11 +11,6 @@ import {
 
 function getDb() {
   return drizzleHttp(getSql());
-}
-
-/** Use for functions that require transactions. */
-function getDbPool() {
-  return drizzlePool(getPool());
 }
 
 /**
@@ -266,24 +260,23 @@ export async function getEventsEligibleForDone() {
  * - Set tokens_revoked_at, done_at, status = 'done' on the event
  */
 export async function markEventDone(eventId: string): Promise<void> {
-  const db = getDbPool();
+  // Two sequential queries — neon-http driver doesn't support transactions.
+  // Token revocation first: idempotent (NULL = already revoked).
+  // If the second query fails, tokens are revoked but event is still 'closed'.
+  // The cron will re-attempt on the next run.
   const now = new Date();
 
-  await db.transaction(async (tx) => {
-    // Revoke all participant tokens
-    await tx
-      .update(eventParticipant)
-      .set({ magicTokenHash: null })
-      .where(eq(eventParticipant.eventId, eventId));
+  await getDb()
+    .update(eventParticipant)
+    .set({ magicTokenHash: null })
+    .where(eq(eventParticipant.eventId, eventId));
 
-    // Mark event as done
-    await tx
-      .update(event)
-      .set({
-        status: "done",
-        doneAt: now,
-        tokensRevokedAt: now,
-      })
-      .where(eq(event.id, eventId));
-  });
+  await getDb()
+    .update(event)
+    .set({
+      status: "done",
+      doneAt: now,
+      tokensRevokedAt: now,
+    })
+    .where(eq(event.id, eventId));
 }

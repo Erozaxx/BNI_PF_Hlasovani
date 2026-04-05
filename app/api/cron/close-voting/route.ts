@@ -4,15 +4,33 @@ import { updateMeetingStatus } from "@/lib/db/queries/meetings";
 import { sendReport } from "@/lib/email/resend";
 import { getMembers } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
-import { sendMagicLinkEmail } from "@/lib/email/resend";
+import { sendMagicLinkEmail, sendMeetingMagicLinkEmail } from "@/lib/email/resend";
+import {
+  getActiveMeetingsForDate,
+  getPendingMorningEmailLinks,
+  markMorningEmailSent,
+} from "@/lib/db/queries/meeting-member-links";
+import { regenerateMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
+
+/**
+ * Get today's date string in CET/CEST (Europe/Prague) timezone.
+ * Returns "YYYY-MM-DD" using the Swedish locale format (ISO-like).
+ */
+function todayInCET(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
+}
 
 /**
  * Internal handler for /api/cron/close-voting
  *
- * 1. Closes all meetings whose voting window has expired (voting_closes_at < NOW()).
- * 2. Sends a report email for each closed meeting.
- * 3. Renews expiring magic tokens (< 1 day) — integrated here because Vercel Hobby
- *    allows only 1 cron job.
+ * Vercel Hobby: 1 cron job, runs once daily at 04:00 UTC (≈ 5:00 CET / 6:00 CEST).
+ *
+ * Phase A: Morning email — send meeting magic link emails to all members of active
+ *          meetings scheduled today where morningEmailSentAt IS NULL (idempotent).
+ *          Voting activation (12:00 CET) is manual-only — admin uses the UI button.
+ * Phase C: Close expired voting — meetings in 'voting' status past their votingClosesAt.
+ *          Sends report email for each closed meeting.
+ * Phase E: Renew expiring member tokens — existing logic.
  *
  * Protected by CRON_SECRET — Vercel sends this header automatically for cron jobs.
  */
@@ -33,12 +51,19 @@ async function handler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const today = todayInCET();
+
+  console.log(`close-voting cron: today=${today}`);
+
   try {
-    // ── Phase 1: Close expired voting meetings ──
+    // ── Phase A: Morning emails ──
+    const morningEmailResult = await sendMorningEmails(today);
+
+    // ── Phase C: Close expired voting meetings ──
     const expiredMeetings = await getExpiredVotingMeetings();
 
     const closedIds: string[] = [];
-    const errors: string[] = [];
+    const closeErrors: string[] = [];
 
     for (const mtg of expiredMeetings) {
       try {
@@ -47,7 +72,7 @@ async function handler(request: NextRequest) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error(`Failed to close meeting ${mtg.id}:`, msg);
-        errors.push(`close ${mtg.id}: ${msg}`);
+        closeErrors.push(`close ${mtg.id}: ${msg}`);
       }
     }
 
@@ -57,7 +82,7 @@ async function handler(request: NextRequest) {
       );
     }
 
-    // ── Phase 2: Send report for each newly closed meeting ──
+    // ── Phase C: Send report for each newly closed meeting ──
     const reportResults: { meetingId: string; sent: number; error?: string }[] = [];
 
     for (const meetingId of closedIds) {
@@ -78,15 +103,18 @@ async function handler(request: NextRequest) {
       }
     }
 
-    // ── Phase 3: Renew expiring tokens ──
+    // Token expiry for meeting_member_link is enforced at verification time — no active cleanup needed.
+
+    // ── Phase E: Renew expiring tokens ──
     const tokenRenewalResult = await renewExpiringTokens();
 
     return NextResponse.json({
+      morningEmails: morningEmailResult,
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
       reports: reportResults.length > 0 ? reportResults : undefined,
       tokenRenewal: tokenRenewalResult,
-      errors: errors.length > 0 ? errors : undefined,
+      errors: closeErrors.length > 0 ? closeErrors : undefined,
     });
   } catch (error) {
     console.error("close-voting cron error:", error);
@@ -95,6 +123,86 @@ async function handler(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Phase A: Send morning magic link emails for active meetings scheduled today.
+ * Idempotent via morningEmailSentAt IS NULL check — safe to run once daily.
+ * Uses Promise.allSettled to send all emails concurrently (non-blocking per member).
+ */
+async function sendMorningEmails(
+  today: string
+): Promise<{ skipped?: string; meetingsProcessed?: number; sent: number; errors?: string[] }> {
+  const activeMeetings = await getActiveMeetingsForDate(today);
+  if (activeMeetings.length === 0) {
+    return { skipped: "no active meetings today", sent: 0 };
+  }
+
+  let totalSent = 0;
+  const allErrors: string[] = [];
+
+  for (const mtg of activeMeetings) {
+    const pendingLinks = await getPendingMorningEmailLinks(mtg.id);
+
+    if (pendingLinks.length === 0) {
+      console.log(`morning email: meeting ${mtg.id} — no pending links`);
+      continue;
+    }
+
+    // Send all emails for this meeting concurrently with Promise.allSettled
+    const sendResults = await Promise.allSettled(
+      pendingLinks.map(async (link) => {
+        if (!link.memberEmail) {
+          throw new Error(`member ${link.memberId} has no email`);
+        }
+
+        // Regenerate token to get a fresh raw token for URL construction.
+        // Raw tokens are not stored in DB (only hashes), so we must regenerate.
+        const rawToken = await regenerateMeetingToken(link.meetingId, link.memberId);
+        if (!rawToken) {
+          throw new Error(`regenerate token failed for member ${link.memberId}`);
+        }
+
+        const magicUrl = buildMeetingMagicUrl(rawToken);
+
+        const emailResult = await sendMeetingMagicLinkEmail(
+          link.memberEmail,
+          magicUrl,
+          link.memberName ?? undefined,
+          mtg.date
+        );
+
+        if (!emailResult.success) {
+          throw new Error(`email send failed: ${emailResult.error}`);
+        }
+
+        // Mark as sent immediately after success (idempotency per Addendum A2)
+        await markMorningEmailSent(link.linkId, new Date());
+
+        return link.memberId;
+      })
+    );
+
+    for (const result of sendResults) {
+      if (result.status === "fulfilled") {
+        totalSent++;
+      } else {
+        const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        console.error(`morning email error for meeting ${mtg.id}:`, msg);
+        allErrors.push(`meeting ${mtg.id}: ${msg}`);
+      }
+    }
+  }
+
+  if (totalSent > 0) {
+    console.log(`morning email: sent ${totalSent} emails`);
+  }
+
+  return {
+    meetingsProcessed: activeMeetings.length,
+    sent: totalSent,
+    errors: allErrors.length > 0 ? allErrors : undefined,
+  };
 }
 
 /**

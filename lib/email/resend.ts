@@ -238,6 +238,60 @@ export async function sendReport(
 }
 
 /**
+ * Send a meeting-scoped magic link email to a member via Resend.
+ * Used for per-meeting per-member voting access links.
+ */
+export async function sendMeetingMagicLinkEmail(
+  email: string,
+  magicLink: string,
+  memberName?: string,
+  meetingDate?: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY not configured, logging meeting magic link to console");
+    console.log(`[MEETING MAGIC LINK] ${email}: ${magicLink}`);
+    return { success: true };
+  }
+
+  const dateLabel = meetingDate ? ` (${meetingDate})` : "";
+
+  try {
+    const { error } = await resend.emails.send({
+      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      to: [email],
+      subject: `BNI Hlasovani - Odkaz pro hlasovani${dateLabel}`,
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
+  <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+  </div>
+  <p>Dobry den${memberName ? ` ${escapeHtml(memberName)}` : ""},</p>
+  <p>Byl pro vas pripraven odkaz pro hlasovani na schuzi${dateLabel ? ` <strong>${escapeHtml(dateLabel.replace(/[()]/g, "").trim())}</strong>` : ""}. Kliknutim nize pristupite na stranku hlasovani:</p>
+  <div style="text-align:center;margin:24px 0;">
+    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Prejit na hlasovani</a>
+  </div>
+  <p style="color:#666;font-size:13px;">Odkaz je osobni a platny po dobu hlasovani.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+</body>
+</html>`,
+    });
+
+    if (error) {
+      console.error("sendMeetingMagicLinkEmail error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error("sendMeetingMagicLinkEmail error:", msg);
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Send a magic link email to a member via Resend.
  */
 export async function sendMagicLinkEmail(

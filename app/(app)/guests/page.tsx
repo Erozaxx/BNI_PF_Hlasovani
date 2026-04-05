@@ -2,16 +2,8 @@ import Link from "next/link";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getCategoriesWithGuests } from "@/lib/db/queries/categories";
 import { getSession } from "@/lib/auth/session";
-import {
-  getActiveVotingMeeting,
-  getUserVotesForMeeting,
-} from "@/lib/db/queries/votes";
-import {
-  getGuestIdsForMeeting,
-  getLastMeetingDatesForGuests,
-} from "@/lib/db/queries/meetings";
+import { getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
-import { GuestCardInteractive } from "@/components/guests/GuestCardInteractive";
 import { CategoryFilter } from "@/components/guests/CategoryFilter";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -28,20 +20,10 @@ export default async function GuestsPage({
   const guests = await getGuests(categoryFilter);
   const categories = await getCategoriesWithGuests();
 
-  const activeMeeting = await getActiveVotingMeeting();
   const guestIds = guests.map((g) => g.id);
-
-  const [votedGuestIds, activeMeetingGuestIds, lastMeetingDates] = await Promise.all([
-    activeMeeting && session.memberId
-      ? getUserVotesForMeeting(session.memberId, activeMeeting.id)
-      : Promise.resolve(new Set<string>()),
-    activeMeeting
-      ? getGuestIdsForMeeting(activeMeeting.id)
-      : Promise.resolve(new Set<string>()),
-    guestIds.length > 0
-      ? getLastMeetingDatesForGuests(guestIds)
-      : Promise.resolve(new Map<string, string>()),
-  ]);
+  const lastMeetingDates = guestIds.length > 0
+    ? await getLastMeetingDatesForGuests(guestIds)
+    : new Map<string, string>();
 
   const isManagement =
     session.managementRole === "admin" ||
@@ -67,16 +49,8 @@ export default async function GuestsPage({
       {guests.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {guests.map((g) => {
-            const inActiveMeeting = activeMeeting && activeMeetingGuestIds.has(g.id);
             const lastMeetingDate = lastMeetingDates.get(g.id) ?? null;
-            return inActiveMeeting ? (
-              <GuestCardInteractive
-                key={g.id}
-                guest={{ ...g, lastMeetingDate }}
-                votingMeetingId={activeMeeting.id}
-                alreadyVoted={votedGuestIds.has(g.id)}
-              />
-            ) : (
+            return (
               <Link key={g.id} href={`/guests/${g.id}`}>
                 <GuestCard
                   name={g.name}
