@@ -5,6 +5,7 @@ export interface VoteSummary {
   up: number;
   neutral: number;
   down: number;
+  downReasons?: string[];
 }
 
 export interface MeetingResultsProps {
@@ -41,6 +42,20 @@ export function MeetingResultsView({ summary, guestName }: MeetingResultsProps) 
             <span className="text-text-muted">proti</span>
           </div>
           <span className="text-text-muted">celkem {total}</span>
+        </div>
+      )}
+      {summary.downReasons && summary.downReasons.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-1">
+            Duvody pro hlasovani proti
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            {summary.downReasons.map((reason, i) => (
+              <li key={i} className="text-sm text-text-secondary">
+                {reason}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </Card>

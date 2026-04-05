@@ -13,6 +13,13 @@ interface MyVoteShape {
   reason: string | null;
 }
 
+interface VoteSummaryShape {
+  up: number;
+  neutral: number;
+  down: number;
+  downReasons: string[];
+}
+
 interface GuestShape {
   id: string;
   name: string;
@@ -23,6 +30,7 @@ interface GuestShape {
   votingEnabled: boolean;
   notes: NoteShape[];
   myVote: MyVoteShape | null;
+  voteSummary: VoteSummaryShape;
 }
 
 interface MeetingData {
@@ -154,6 +162,7 @@ export default async function MemberMeetingPage({
                   votingEnabled={g.votingEnabled}
                   notes={g.notes}
                   myVote={g.myVote}
+                  voteSummary={g.voteSummary}
                   phase={phase}
                 />
               ))}

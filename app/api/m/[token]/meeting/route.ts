@@ -108,7 +108,7 @@ export async function GET(
     .where(eq(note.meetingId, meetingId))
     .orderBy(note.createdAt);
 
-  // 6. Load votes for this member in this meeting
+  // 6. Load this member's votes for this meeting
   const voteRows = await getDb()
     .select({
       guestId: vote.guestId,
@@ -117,6 +117,16 @@ export async function GET(
     })
     .from(vote)
     .where(and(eq(vote.memberId, memberId), eq(vote.meetingId, meetingId)));
+
+  // 6b. Load all votes for this meeting (for aggregate summary — visible in voting + closed)
+  const allVoteRows = await getDb()
+    .select({
+      guestId: vote.guestId,
+      value: vote.value,
+      reason: vote.reason,
+    })
+    .from(vote)
+    .where(eq(vote.meetingId, meetingId));
 
   // Build lookup maps
   const notesByGuest = new Map<string, Array<{ id: string; text: string; createdAt: Date }>>();
@@ -136,6 +146,21 @@ export async function GET(
     voteByGuest.set(v.guestId, { value: v.value, reason: v.reason ?? null });
   }
 
+  // Aggregate all votes per guest: { up, neutral, down, downReasons }
+  const summaryByGuest = new Map<string, { up: number; neutral: number; down: number; downReasons: string[] }>();
+  for (const v of allVoteRows) {
+    if (!summaryByGuest.has(v.guestId)) {
+      summaryByGuest.set(v.guestId, { up: 0, neutral: 0, down: 0, downReasons: [] });
+    }
+    const s = summaryByGuest.get(v.guestId)!;
+    if (v.value === "up") s.up++;
+    else if (v.value === "neutral") s.neutral++;
+    else if (v.value === "down") {
+      s.down++;
+      if (v.reason) s.downReasons.push(v.reason);
+    }
+  }
+
   // 7. Assemble guests
   const guests = guestRows.map((g) => ({
     id: g.guestId,
@@ -151,6 +176,7 @@ export async function GET(
       createdAt: n.createdAt,
     })),
     myVote: voteByGuest.get(g.guestId) ?? null,
+    voteSummary: summaryByGuest.get(g.guestId) ?? { up: 0, neutral: 0, down: 0, downReasons: [] },
   }));
 
   return NextResponse.json({
