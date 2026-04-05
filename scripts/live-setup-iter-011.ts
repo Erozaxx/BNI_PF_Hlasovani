@@ -95,7 +95,7 @@ async function main() {
   let meetingDate: string;
 
   // Check if there's already a draft test meeting
-  const draftMeeting = existingMeetings.find((m: { status: string }) => m.status === 'draft');
+  const draftMeeting = existingMeetings.find((m: Record<string, unknown>) => m.status === 'draft');
   if (draftMeeting) {
     meetingId = draftMeeting.id;
     meetingDate = draftMeeting.date;
@@ -217,7 +217,7 @@ async function main() {
   return {
     meetingId,
     meetingDate,
-    guests: guestsToAdd.map((g: { name: string; id: string }) => g.name),
+    guests: guestsToAdd.map((g: Record<string, unknown>) => g.name as string),
     magicLinks,
   };
 }
