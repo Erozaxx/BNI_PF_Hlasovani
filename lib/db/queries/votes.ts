@@ -1,4 +1,4 @@
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { vote, meeting, member, meetingGuest } from "@/lib/db/schema";
@@ -34,7 +34,7 @@ export async function getVoteForGuestInMeeting(
 }
 
 /**
- * Cast a vote. Throws on duplicate (DB unique constraint).
+ * Cast or update a vote (UPSERT). Supports re-voting via onConflictDoUpdate.
  */
 export async function castVote(data: {
   memberId: string;
@@ -51,6 +51,13 @@ export async function castVote(data: {
       meetingId: data.meetingId,
       value: data.value,
       reason: data.reason || null,
+    })
+    .onConflictDoUpdate({
+      target: [vote.memberId, vote.guestId, vote.meetingId],
+      set: {
+        value: sql`excluded.value`,
+        reason: sql`excluded.reason`,
+      },
     })
     .returning();
 
