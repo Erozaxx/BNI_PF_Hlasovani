@@ -3,6 +3,9 @@ import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
+
+// Opt out of Next.js Data Cache — DB state changes must be reflected immediately
+export const dynamic = "force-dynamic";
 import {
   meeting,
   meetingGuest,

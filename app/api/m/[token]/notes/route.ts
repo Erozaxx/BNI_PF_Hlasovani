@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
+
+export const dynamic = "force-dynamic";
 import { meetingGuest, note } from "@/lib/db/schema";
 
 function getDb() {
