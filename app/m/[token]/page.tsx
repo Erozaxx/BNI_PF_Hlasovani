@@ -74,7 +74,7 @@ async function fetchMeetingData(
 
 const phaseLabel: Record<string, string> = {
   active: "Aktivni",
-  voting: "Hlasovani probiha",
+  voting: "Hlasování probíhá",
   closed: "Uzavreno",
 };
 

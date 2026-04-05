@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
@@ -120,35 +120,29 @@ export async function POST(
     return err(403, "Voting is not enabled for this guest");
   }
 
-  // 5. Insert vote (unique constraint prevents duplicates)
-  try {
-    const inserted = await getDb()
-      .insert(vote)
-      .values({
-        memberId,
-        guestId,
-        meetingId,
-        value: voteValue,
-        reason: voteReason ?? null,
-      })
-      .returning({
-        id: vote.id,
-        value: vote.value,
-        reason: vote.reason,
-        createdAt: vote.createdAt,
-      });
+  // 5. UPSERT vote — inserts on first vote, updates on re-vote
+  const upserted = await getDb()
+    .insert(vote)
+    .values({
+      memberId,
+      guestId,
+      meetingId,
+      value: voteValue,
+      reason: voteReason ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [vote.memberId, vote.guestId, vote.meetingId],
+      set: {
+        value: sql`excluded.value`,
+        reason: sql`excluded.reason`,
+      },
+    })
+    .returning({
+      id: vote.id,
+      value: vote.value,
+      reason: vote.reason,
+      createdAt: vote.createdAt,
+    });
 
-    return NextResponse.json({ vote: inserted[0] }, { status: 201 });
-  } catch (e: unknown) {
-    // PostgreSQL unique violation = 23505
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code: string }).code === "23505"
-    ) {
-      return err(409, "Vote already cast for this guest in this meeting");
-    }
-    throw e;
-  }
+  return NextResponse.json({ vote: upserted[0] }, { status: 200 });
 }

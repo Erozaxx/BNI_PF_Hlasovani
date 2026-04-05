@@ -6,29 +6,6 @@ import { vote, meeting, member, meetingGuest } from "@/lib/db/schema";
 function getDb() { return drizzle(getSql()); }
 
 /**
- * Check whether a member has already voted for a guest in a meeting.
- */
-export async function hasVoted(
-  memberId: string,
-  guestId: string,
-  meetingId: string
-): Promise<boolean> {
-  const results = await getDb()
-    .select({ id: vote.id })
-    .from(vote)
-    .where(
-      and(
-        eq(vote.memberId, memberId),
-        eq(vote.guestId, guestId),
-        eq(vote.meetingId, meetingId)
-      )
-    )
-    .limit(1);
-
-  return results.length > 0;
-}
-
-/**
  * Get a member's vote for a specific guest in a meeting (if it exists).
  */
 export async function getVoteForGuestInMeeting(
