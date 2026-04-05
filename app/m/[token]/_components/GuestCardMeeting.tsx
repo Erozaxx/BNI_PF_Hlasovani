@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MeetingNoteForm } from "./MeetingNoteForm";
 import { MeetingVoteButtons } from "./MeetingVoteButtons";
-import { MeetingResultsView, VoteSummary } from "./MeetingResultsView";
+import { MeetingResultsView, VoteSummary, VoteDetailItem } from "./MeetingResultsView";
 
 export interface GuestNote {
   id: string;
@@ -30,6 +30,7 @@ export interface GuestCardMeetingProps {
   notes: GuestNote[];
   myVote: MyVote | null;
   voteSummary: VoteSummary;
+  voteDetail: VoteDetailItem[];
   phase: "active" | "voting" | "closed";
 }
 
@@ -57,6 +58,7 @@ export function GuestCardMeeting({
   notes: initialNotes,
   myVote: initialVote,
   voteSummary,
+  voteDetail,
   phase,
 }: GuestCardMeetingProps) {
   const [notes, setNotes] = useState<GuestNote[]>(initialNotes);
@@ -156,7 +158,7 @@ export function GuestCardMeeting({
       {/* Vote summary — visible in voting and closed phases */}
       {(phase === "voting" || phase === "closed") && (
         <div className="mt-4 pt-4 border-t border-border">
-          <MeetingResultsView summary={voteSummary} guestName={name} />
+          <MeetingResultsView summary={voteSummary} guestName={name} voteDetail={voteDetail} />
         </div>
       )}
     </Card>
