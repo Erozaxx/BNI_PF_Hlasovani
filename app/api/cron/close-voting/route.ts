@@ -9,9 +9,8 @@ import {
   getActiveMeetingsForDate,
   getPendingMorningEmailLinks,
   markMorningEmailSent,
-  activateMeetingVoting,
 } from "@/lib/db/queries/meeting-member-links";
-import { regenerateMeetingToken, buildMeetingMagicUrl, setMeetingLinksExpiry } from "@/lib/auth/meeting-magic";
+import { regenerateMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
 
 /**
  * Get today's date string in CET/CEST (Europe/Prague) timezone.
@@ -22,29 +21,16 @@ function todayInCET(): string {
 }
 
 /**
- * Get the current hour (0–23) in CET/CEST (Europe/Prague) timezone.
- */
-function currentHourInCET(): number {
-  const hourStr = new Date().toLocaleString("en-US", {
-    timeZone: "Europe/Prague",
-    hour: "numeric",
-    hour12: false,
-  });
-  return parseInt(hourStr, 10);
-}
-
-/**
  * Internal handler for /api/cron/close-voting
  *
- * Phase A: Morning email (5:00 CET) — send meeting magic link emails to all members
- *          where morningEmailSentAt IS NULL (idempotent).
- * Phase B: Activate voting (12:00 CET) — transition active meetings to 'voting',
- *          set votingOpenAt, votingClosesAt (+48h), and set expires_at on all links (+72h).
+ * Vercel Hobby: 1 cron job, runs once daily at 04:00 UTC (≈ 5:00 CET / 6:00 CEST).
+ *
+ * Phase A: Morning email — send meeting magic link emails to all members of active
+ *          meetings scheduled today where morningEmailSentAt IS NULL (idempotent).
+ *          Voting activation (12:00 CET) is manual-only — admin uses the UI button.
  * Phase C: Close expired voting — meetings in 'voting' status past their votingClosesAt.
  *          Sends report email for each closed meeting.
- * Phase D: Log expired tokens — meeting_member_link expiry is enforced at verification time;
- *          no active cleanup needed. Log count for observability.
- * Phase E: Renew expiring member tokens — existing logic, Vercel Hobby 1-cron constraint.
+ * Phase E: Renew expiring member tokens — existing logic.
  *
  * Protected by CRON_SECRET — Vercel sends this header automatically for cron jobs.
  */
@@ -65,17 +51,13 @@ async function handler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cetHour = currentHourInCET();
   const today = todayInCET();
 
-  console.log(`close-voting cron: cetHour=${cetHour}, today=${today}`);
+  console.log(`close-voting cron: today=${today}`);
 
   try {
-    // ── Phase A: Morning emails (5:00 CET) ──
-    const morningEmailResult = await sendMorningEmails(cetHour, today);
-
-    // ── Phase B: Activate voting (12:00 CET) ──
-    const votingActivationResult = await activateVotingForToday(cetHour, today);
+    // ── Phase A: Morning emails ──
+    const morningEmailResult = await sendMorningEmails(today);
 
     // ── Phase C: Close expired voting meetings ──
     const expiredMeetings = await getExpiredVotingMeetings();
@@ -121,15 +103,13 @@ async function handler(request: NextRequest) {
       }
     }
 
-    // ── Phase D: Log token expiry (enforced at verification time, no cleanup needed) ──
-    console.log("close-voting cron: Phase D — token expiry enforced at verification time, no active cleanup");
+    // Token expiry for meeting_member_link is enforced at verification time — no active cleanup needed.
 
     // ── Phase E: Renew expiring tokens ──
     const tokenRenewalResult = await renewExpiringTokens();
 
     return NextResponse.json({
       morningEmails: morningEmailResult,
-      votingActivation: votingActivationResult,
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
       reports: reportResults.length > 0 ? reportResults : undefined,
@@ -147,17 +127,12 @@ async function handler(request: NextRequest) {
 
 /**
  * Phase A: Send morning magic link emails for active meetings scheduled today.
- * Only fires when cetHour === 5. Idempotent via morningEmailSentAt IS NULL check.
+ * Idempotent via morningEmailSentAt IS NULL check — safe to run once daily.
  * Uses Promise.allSettled to send all emails concurrently (non-blocking per member).
  */
 async function sendMorningEmails(
-  cetHour: number,
   today: string
 ): Promise<{ skipped?: string; meetingsProcessed?: number; sent: number; errors?: string[] }> {
-  if (cetHour !== 5) {
-    return { skipped: `not 5:00 CET (current CET hour: ${cetHour})`, sent: 0 };
-  }
-
   const activeMeetings = await getActiveMeetingsForDate(today);
   if (activeMeetings.length === 0) {
     return { skipped: "no active meetings today", sent: 0 };
@@ -227,57 +202,6 @@ async function sendMorningEmails(
     meetingsProcessed: activeMeetings.length,
     sent: totalSent,
     errors: allErrors.length > 0 ? allErrors : undefined,
-  };
-}
-
-/**
- * Phase B: Activate voting for active meetings scheduled today at 12:00 CET.
- * Idempotent — activateMeetingVoting checks status='active' before transitioning.
- * After transition, sets expires_at on all meeting_member_link rows to votingOpenAt + 72h.
- */
-async function activateVotingForToday(
-  cetHour: number,
-  today: string
-): Promise<{ skipped?: string; activated: number; errors?: string[] }> {
-  if (cetHour !== 12) {
-    return { skipped: `not 12:00 CET (current CET hour: ${cetHour})`, activated: 0 };
-  }
-
-  const activeMeetings = await getActiveMeetingsForDate(today);
-  if (activeMeetings.length === 0) {
-    return { skipped: "no active meetings today", activated: 0 };
-  }
-
-  let activated = 0;
-  const errors: string[] = [];
-
-  for (const mtg of activeMeetings) {
-    try {
-      const updated = await activateMeetingVoting(mtg.id);
-      if (!updated) {
-        // Already transitioned (not status='active') — idempotent skip
-        console.log(`activate voting: meeting ${mtg.id} already transitioned, skipping`);
-        continue;
-      }
-
-      // Set expires_at on all links = votingOpenAt + 72h
-      if (updated.votingOpenAt) {
-        const expiresAt = new Date(updated.votingOpenAt.getTime() + 72 * 3600 * 1000);
-        await setMeetingLinksExpiry(mtg.id, expiresAt);
-      }
-
-      activated++;
-      console.log(`activate voting: meeting ${mtg.id} → voting, closesAt=${updated.votingClosesAt?.toISOString()}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error(`activate voting error for meeting ${mtg.id}:`, msg);
-      errors.push(`meeting ${mtg.id}: ${msg}`);
-    }
-  }
-
-  return {
-    activated,
-    errors: errors.length > 0 ? errors : undefined,
   };
 }
 
