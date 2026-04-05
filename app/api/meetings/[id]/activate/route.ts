@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { getSession } from "@/lib/auth/session";
-import { getMeetingById } from "@/lib/db/queries/meetings";
+import { getMeetingById, hasActiveOrVotingMeeting } from "@/lib/db/queries/meetings";
 import { getMembers } from "@/lib/db/queries/members";
 import { meeting as meetingTable } from "@/lib/db/schema";
 import {
@@ -53,6 +53,12 @@ export async function POST(
   // 3. State guard: must be draft
   if (meetingData.status !== "draft") {
     return err(409, `Cannot activate meeting in status '${meetingData.status}'`);
+  }
+
+  // 3b. Max-1-active guard: no other meeting may be active or voting
+  const conflict = await hasActiveOrVotingMeeting(meetingId);
+  if (conflict) {
+    return err(409, "Jiz existuje aktivni nebo hlasovaci schuzka. Nejdrive ji uzavrete.");
   }
 
   // 4. Load all members with an email address

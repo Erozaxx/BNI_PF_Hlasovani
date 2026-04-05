@@ -29,10 +29,42 @@ export async function getActiveMeeting(): Promise<{
 }
 
 /**
- * Get all meetings ordered by date desc.
+ * Get all meetings ordered by status priority (voting > active > draft > closed),
+ * then by date DESC within each group.
  */
 export async function getMeetings() {
-  return getDb().select().from(meeting).orderBy(desc(meeting.date));
+  return getDb()
+    .select()
+    .from(meeting)
+    .orderBy(
+      sql`CASE ${meeting.status}
+        WHEN 'voting' THEN 0
+        WHEN 'active' THEN 1
+        WHEN 'draft'  THEN 2
+        WHEN 'closed' THEN 3
+      END`,
+      desc(meeting.date)
+    );
+}
+
+/**
+ * Check if any meeting (other than excludeId) is currently active or voting.
+ * Used to enforce the max-1-active-or-voting business rule.
+ * Returns true if a conflict exists.
+ */
+export async function hasActiveOrVotingMeeting(excludeId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: meeting.id })
+    .from(meeting)
+    .where(
+      and(
+        ne(meeting.id, excludeId),
+        sql`${meeting.status} IN ('active', 'voting')`
+      )
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /**
