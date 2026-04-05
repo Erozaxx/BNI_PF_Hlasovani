@@ -38,7 +38,7 @@ async function main() {
     JOIN guest g ON g.id = mg.guest_id
     WHERE mg.meeting_id = ${meetingId}
   `;
-  console.log("Guests:", guests.map((g: { guest_id: string; name: string }) => `${g.guest_id}: ${g.name}`).join(", "));
+  console.log("Guests:", guests.map((g: Record<string, unknown>) => `${g.guest_id}: ${g.name}`).join(", "));
 }
 
 main().catch(console.error);
