@@ -18,7 +18,7 @@ async function main() {
     WHERE table_name = 'vote'
     ORDER BY ordinal_position
   `;
-  console.log("vote columns:", columns.map((c: { column_name: string; data_type: string }) => `${c.column_name}: ${c.data_type}`).join(", "));
+  console.log("vote columns:", columns.map((c: Record<string, unknown>) => `${c.column_name}: ${c.data_type}`).join(", "));
 
   console.log("\n=== Check: all votes for this meeting ===");
   const allVotes = await sql`
