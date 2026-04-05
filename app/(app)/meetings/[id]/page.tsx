@@ -169,17 +169,6 @@ export default async function MeetingDetailPage({
         </Card>
       )}
 
-      {/* Activation controls + MemberLinksManager (management only) */}
-      {isManagement && (
-        <section>
-          <MeetingActivationControls
-            meetingId={id}
-            meetingDate={meeting.date}
-            status={meeting.status}
-          />
-        </section>
-      )}
-
       {/* Guests list */}
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
@@ -232,6 +221,17 @@ export default async function MeetingDetailPage({
           </Card>
         )}
       </section>
+
+      {/* Activation controls + MemberLinksManager (management only) */}
+      {isManagement && (
+        <section>
+          <MeetingActivationControls
+            meetingId={id}
+            meetingDate={meeting.date}
+            status={meeting.status}
+          />
+        </section>
+      )}
     </div>
   );
 }

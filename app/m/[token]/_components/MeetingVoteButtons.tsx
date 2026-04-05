@@ -13,6 +13,27 @@ interface MeetingVoteButtonsProps {
 
 type VoteValue = "up" | "neutral" | "down";
 
+const voteOptions = [
+  {
+    value: "up" as VoteValue,
+    emoji: "👍",
+    label: "Pro",
+    selectedClass: "border-success bg-success-light",
+  },
+  {
+    value: "neutral" as VoteValue,
+    emoji: "🤷",
+    label: "Nevim",
+    selectedClass: "border-info bg-info-light",
+  },
+  {
+    value: "down" as VoteValue,
+    emoji: "👎",
+    label: "Proti",
+    selectedClass: "border-danger bg-danger-light",
+  },
+] as const;
+
 export function MeetingVoteButtons({
   token,
   guestId,
@@ -84,43 +105,25 @@ export function MeetingVoteButtons({
         Vas hlas
       </p>
       <div className="flex gap-2 flex-wrap">
-        <Button
-          type="button"
-          variant={selected === "up" ? "primary" : "secondary"}
-          size="sm"
-          onClick={() => handleSelect("up")}
-          disabled={loading}
-          className={
-            selected === "up"
-              ? "border-success bg-success-light text-success"
-              : ""
-          }
-        >
-          Pro
-        </Button>
-        <Button
-          type="button"
-          variant={selected === "neutral" ? "primary" : "secondary"}
-          size="sm"
-          onClick={() => handleSelect("neutral")}
-          disabled={loading}
-          className={
-            selected === "neutral"
-              ? "border-info bg-info-light text-info"
-              : ""
-          }
-        >
-          Nevim
-        </Button>
-        <Button
-          type="button"
-          variant={selected === "down" ? "danger" : "secondary"}
-          size="sm"
-          onClick={() => handleSelect("down")}
-          disabled={loading}
-        >
-          Proti
-        </Button>
+        {voteOptions.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => handleSelect(opt.value)}
+            disabled={loading}
+            className={[
+              "flex flex-col items-center gap-1 px-4 py-3 rounded-lg border-2 transition-colors",
+              "focus:outline-none focus:shadow-focus text-sm font-medium",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              selected === opt.value
+                ? opt.selectedClass
+                : "border-border bg-white hover:border-primary/50",
+            ].join(" ")}
+          >
+            <span className="text-2xl">{opt.emoji}</span>
+            <span className="text-xs">{opt.label}</span>
+          </button>
+        ))}
       </div>
 
       {selected === "down" && (

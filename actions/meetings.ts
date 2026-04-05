@@ -11,6 +11,7 @@ import {
   updateMeetingStatus,
   getMeetingGuestIds,
   setVotingEnabled,
+  hasActiveOrVotingMeeting,
 } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
 
@@ -144,6 +145,15 @@ export async function openVotingAction(
       return {
         success: false,
         error: "Hlasovani lze spustit pouze u schuzky ve stavu draft.",
+      };
+    }
+
+    // Max-1-active guard: no other meeting may be active or voting (excluding self)
+    const conflict = await hasActiveOrVotingMeeting(meetingId);
+    if (conflict) {
+      return {
+        success: false,
+        error: "Jiz existuje aktivni nebo hlasovaci schuzka. Nejdrive ji uzavrete.",
       };
     }
 
