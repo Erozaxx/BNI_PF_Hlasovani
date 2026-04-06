@@ -22,36 +22,23 @@ export function MeetingControls({ meetingId, status, guests }: MeetingControlsPr
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [step, setStep] = useState<"idle" | "select-guests">("idle");
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    guests.map((g) => g.guestId)
-  );
 
-  function handleToggleGuest(guestId: string) {
-    setSelectedIds((prev) =>
-      prev.includes(guestId)
-        ? prev.filter((id) => id !== guestId)
-        : [...prev, guestId]
-    );
-  }
-
-  async function handleConfirmVoting() {
-    if (selectedIds.length === 0) return;
+  async function handleStartVoting() {
+    if (!confirm("Spustit hlasování pro všechny hosty?")) return;
     setLoading(true);
     setError("");
     try {
-      const result = await openVotingAction(meetingId, selectedIds);
+      const result = await openVotingAction(meetingId, guests.map((g) => g.guestId));
       if (!result.success) {
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Hlasovani bylo spusteno.");
-        setStep("idle");
+        showToast("success", "Hlasování bylo spuštěno.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se spustit hlasovani.");
-      showToast("error", "Nepodarilo se spustit hlasovani.");
+      setError("Nepodařilo se spustit hlasování.");
+      showToast("error", "Nepodařilo se spustit hlasování.");
     } finally {
       setLoading(false);
     }
@@ -80,59 +67,16 @@ export function MeetingControls({ meetingId, status, guests }: MeetingControlsPr
     }
   }
 
-  if (status === "draft" && step === "select-guests") {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold text-text-main">
-          Vyberte hosty pro hlasovani
-        </p>
-        <div className="flex flex-col gap-2">
-          {guests.map((g) => (
-            <label key={g.guestId} className="flex items-center gap-2 text-sm text-text-main cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(g.guestId)}
-                onChange={() => handleToggleGuest(g.guestId)}
-                className="accent-primary"
-              />
-              {g.guestName}
-            </label>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleConfirmVoting}
-            loading={loading}
-            disabled={selectedIds.length === 0}
-          >
-            {selectedIds.length === 0 ? "Vyberte alespon jednoho hosta" : "Potvrdit a spustit"}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setStep("idle")}
-            disabled={loading}
-          >
-            Zrusit
-          </Button>
-        </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-wrap gap-3 items-center">
       {status === "draft" && (
         <Button
           variant="primary"
           size="sm"
-          onClick={() => setStep("select-guests")}
+          onClick={handleStartVoting}
           loading={loading}
         >
-          Spustit hlasovani
+          Spustit hlasování
         </Button>
       )}
 
