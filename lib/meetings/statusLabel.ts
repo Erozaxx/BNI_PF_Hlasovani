@@ -1,5 +1,5 @@
 export const statusLabel: Record<string, string> = {
-  draft: "Navrh",
+  draft: "Návrh",
   active: "Aktivni",
   voting: "Hlasování probíhá",
   closed: "Uzavřeno",
