@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getMeetings, getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
+import { statusLabel } from "@/lib/meetings/statusLabel";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
                 Schuzka: {upcomingMeeting.date}
               </p>
               <Badge variant="category" className="mt-1">
-                {upcomingMeeting.status}
+                {statusLabel[upcomingMeeting.status]}
               </Badge>
             </div>
             <Link href={`/meetings/${upcomingMeeting.id}`}>
