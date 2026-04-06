@@ -34,18 +34,6 @@ export interface GuestCardMeetingProps {
   phase: "active" | "voting" | "closed";
 }
 
-const voteLabel: Record<string, string> = {
-  up: "Pro",
-  neutral: "Nevim",
-  down: "Proti",
-};
-
-const voteBadgeVariant: Record<string, "success" | "neutral" | "danger"> = {
-  up: "success",
-  neutral: "neutral",
-  down: "danger",
-};
-
 export function GuestCardMeeting({
   token,
   guestId,
@@ -62,19 +50,16 @@ export function GuestCardMeeting({
   phase,
 }: GuestCardMeetingProps) {
   const [notes, setNotes] = useState<GuestNote[]>(initialNotes);
-  const [myVote, setMyVote] = useState<MyVote | null>(initialVote);
 
   const handleNoteAdded = (note: GuestNote) => {
     setNotes((prev) => [...prev, note]);
   };
 
-  const handleVoteCast = (vote: MyVote) => {
-    setMyVote(vote);
-  };
-
   const showNoteForm = phase === "active" || phase === "voting";
+  // Badge is now owned by MeetingVoteButtons in voting phase;
+  // show it here only outside voting (e.g. closed phase, after reload).
   const showVoteButtons = phase === "voting" && votingEnabled;
-  const showVoteResult = myVote !== null;
+  const showVoteBadgeHere = !showVoteButtons && initialVote !== null;
 
   return (
     <Card>
@@ -94,15 +79,19 @@ export function GuestCardMeeting({
             </Badge>
           )}
         </div>
-        {showVoteResult && (
+        {showVoteBadgeHere && initialVote && (
           <div className="flex flex-col items-start sm:items-end gap-1">
             <span className="text-xs text-text-muted">Vas hlas</span>
-            <Badge variant={voteBadgeVariant[myVote.value] ?? "neutral"}>
-              {voteLabel[myVote.value] ?? myVote.value}
+            <Badge
+              variant={
+                ({ up: "success", neutral: "neutral", down: "danger" } as Record<string, "success" | "neutral" | "danger">)[initialVote.value] ?? "neutral"
+              }
+            >
+              {({ up: "Pro", neutral: "Nevim", down: "Proti" } as Record<string, string>)[initialVote.value] ?? initialVote.value}
             </Badge>
-            {myVote.reason && (
+            {initialVote.reason && (
               <p className="text-xs text-text-muted max-w-xs text-right">
-                {myVote.reason}
+                {initialVote.reason}
               </p>
             )}
           </div>
@@ -144,13 +133,14 @@ export function GuestCardMeeting({
         />
       )}
 
-      {/* Vote buttons */}
-      {showVoteButtons && !myVote && (
+      {/* Vote buttons — shown whenever voting phase is active, regardless of prior vote */}
+      {showVoteButtons && (
         <div className="mt-4 pt-4 border-t border-border">
           <MeetingVoteButtons
             token={token}
             guestId={guestId}
-            onVoteCast={handleVoteCast}
+            initialVote={initialVote ?? null}
+            onVoteCast={() => {}}
           />
         </div>
       )}

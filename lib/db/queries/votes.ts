@@ -1,32 +1,9 @@
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { vote, meeting, member, meetingGuest } from "@/lib/db/schema";
 
 function getDb() { return drizzle(getSql()); }
-
-/**
- * Check whether a member has already voted for a guest in a meeting.
- */
-export async function hasVoted(
-  memberId: string,
-  guestId: string,
-  meetingId: string
-): Promise<boolean> {
-  const results = await getDb()
-    .select({ id: vote.id })
-    .from(vote)
-    .where(
-      and(
-        eq(vote.memberId, memberId),
-        eq(vote.guestId, guestId),
-        eq(vote.meetingId, meetingId)
-      )
-    )
-    .limit(1);
-
-  return results.length > 0;
-}
 
 /**
  * Get a member's vote for a specific guest in a meeting (if it exists).
@@ -57,7 +34,7 @@ export async function getVoteForGuestInMeeting(
 }
 
 /**
- * Cast a vote. Throws on duplicate (DB unique constraint).
+ * Cast or update a vote (UPSERT). Supports re-voting via onConflictDoUpdate.
  */
 export async function castVote(data: {
   memberId: string;
@@ -74,6 +51,13 @@ export async function castVote(data: {
       meetingId: data.meetingId,
       value: data.value,
       reason: data.reason || null,
+    })
+    .onConflictDoUpdate({
+      target: [vote.memberId, vote.guestId, vote.meetingId],
+      set: {
+        value: sql`excluded.value`,
+        reason: sql`excluded.reason`,
+      },
     })
     .returning();
 
