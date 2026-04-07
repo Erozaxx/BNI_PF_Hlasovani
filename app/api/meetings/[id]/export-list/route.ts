@@ -257,10 +257,10 @@ export async function GET(
   ];
 
   const maxLen = (arr: string[]) => Math.max(...arr.map((s) => s.length), 1);
-  const maxB = Math.max(10, maxLen(allNames) * 1.2);
-  const maxC = Math.max(10, maxLen(allCompanies) * 1.2);
-  const maxD = Math.max(10, maxLen(allObors) * 1.2);
-  const maxE = 20;
+  const maxB = Math.max(12, maxLen(allNames) * 1.44);
+  const maxC = Math.max(12, maxLen(allCompanies) * 1.44);
+  const maxD = Math.max(12, maxLen(allObors) * 1.44);
+  const maxE = 24;
 
   const newCols =
     `<cols>` +
