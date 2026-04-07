@@ -61,7 +61,7 @@ function buildRow(
   const c = inlineCell("C", rowNum, cS, cVal);
   const d = inlineCell("D", rowNum, dS, dVal);
   const e = `<c r="E${rowNum}" s="${eS}"/>`;
-  return `<row r="${rowNum}">${a}${b}${c}${d}${e}</row>`;
+  return `<row r="${rowNum}" ht="19.5" customHeight="1">${a}${b}${c}${d}${e}</row>`;
 }
 
 export async function GET(
@@ -114,6 +114,17 @@ export async function GET(
     zip = await JSZip.loadAsync(templateBuffer);
   } catch {
     return NextResponse.json({ error: "Failed to load template" }, { status: 500 });
+  }
+
+  // Scale font sizes in styles.xml by ~12%
+  const stylesFile = zip.file("xl/styles.xml");
+  if (stylesFile) {
+    const stylesXml = await stylesFile.async("text");
+    const scaledStyles = stylesXml.replace(/<sz val="([0-9]+(?:\.[0-9]+)?)"\s*\/>/g, (_m, v) => {
+      const scaled = Math.round(parseFloat(v) * 1.12);
+      return `<sz val="${scaled}"/>`;
+    });
+    zip.file("xl/styles.xml", scaledStyles);
   }
 
   // Read sheet1.xml
@@ -193,7 +204,7 @@ export async function GET(
 
   // "Hosté:" separator row
   rows.push(
-    `<row r="${rowNum}">` +
+    `<row r="${rowNum}" ht="19.5" customHeight="1">` +
     `<c r="A${rowNum}" s="${S.colA}"/>` +
     `<c r="B${rowNum}" s="${S.sepHoste_B}" t="inlineStr"><is><t>Hosté:</t></is></c>` +
     `<c r="C${rowNum}" s="${S.sepHoste_C}"/>` +
