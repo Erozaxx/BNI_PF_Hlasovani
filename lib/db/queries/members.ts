@@ -65,6 +65,16 @@ export async function updateMemberCompany(
     .where(eq(member.id, memberId));
 }
 
+export async function updateMemberEmail(
+  memberId: string,
+  email: string | null
+) {
+  await getDb()
+    .update(member)
+    .set({ email })
+    .where(eq(member.id, memberId));
+}
+
 /**
  * Find a member by email address.
  * Used for admin/moderator password login.
