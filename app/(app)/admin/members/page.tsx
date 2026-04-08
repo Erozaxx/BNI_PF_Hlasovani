@@ -7,6 +7,7 @@ import { ImportMembersForm } from "./ImportMembersForm";
 import { MemberActions } from "./MemberActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
 import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
+import { EditMemberEmailForm } from "./EditMemberEmailForm";
 
 export default async function AdminMembersPage() {
   const members = await getMembers();
@@ -57,7 +58,11 @@ export default async function AdminMembersPage() {
                   >
                     <td className="px-4 py-3 font-medium">{m.name}</td>
                     <td className="px-4 py-3 text-text-muted">
-                      {m.email || "—"}
+                      <div>{m.email || "—"}</div>
+                      <EditMemberEmailForm
+                        memberId={m.id}
+                        initialEmail={m.email ?? null}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-text-muted">{m.company || "—"}</div>

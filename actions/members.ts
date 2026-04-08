@@ -8,6 +8,7 @@ import {
   updateTokenUsed,
   deleteMember as dbDeleteMember,
   updateMemberCompany as dbUpdateMemberCompany,
+  updateMemberEmail as dbUpdateMemberEmail,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
@@ -200,6 +201,32 @@ export async function updateMemberCompanyAction(
   } catch (error) {
     console.error("updateMemberCompanyAction error:", error);
     return { success: false, error: "Nepodarilo se aktualizovat firmu/obor." };
+  }
+}
+
+/**
+ * Update email for a member. Requires admin role.
+ */
+export async function updateMemberEmailAction(
+  memberId: string,
+  email: string
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  try {
+    const memberData = await getMemberById(memberId);
+    if (!memberData) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    await dbUpdateMemberEmail(memberId, email.trim() || null);
+
+    revalidatePath("/admin/members");
+    return { success: true };
+  } catch (error) {
+    console.error("updateMemberEmailAction error:", error);
+    return { success: false, error: "Nepodarilo se aktualizovat email." };
   }
 }
 
