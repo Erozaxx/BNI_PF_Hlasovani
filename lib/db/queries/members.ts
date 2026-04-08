@@ -150,6 +150,33 @@ export async function deleteMember(id: string) {
 }
 
 /**
+ * Get all members with only the fields needed for import preview.
+ * More efficient than getMembers() when full member data is not required.
+ */
+export async function getMembersForImport(): Promise<
+  { id: string; name: string; obor: string | null }[]
+> {
+  return getDb()
+    .select({ id: member.id, name: member.name, obor: member.obor })
+    .from(member)
+    .orderBy(asc(member.name));
+}
+
+/**
+ * Update only the obor field for a member.
+ * Used during bulk import to avoid accidentally overwriting other fields.
+ */
+export async function updateMemberObor(
+  memberId: string,
+  obor: string | null
+): Promise<void> {
+  await getDb()
+    .update(member)
+    .set({ obor })
+    .where(eq(member.id, memberId));
+}
+
+/**
  * Update magic token for a member (used during token generation/renewal).
  * Moves current token to previous before setting the new one.
  * Uses a single atomic UPDATE to avoid race conditions in serverless.

@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
+import { ImportMembersForm } from "./ImportMembersForm";
 import { MemberActions } from "./MemberActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
 import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
@@ -19,6 +20,13 @@ export default async function AdminMembersPage() {
           Novy clen
         </h2>
         <CreateMemberForm />
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-semibold text-text-muted mb-3">
+          Import clenu z XLSX
+        </h2>
+        <ImportMembersForm />
       </Card>
 
       <section>
