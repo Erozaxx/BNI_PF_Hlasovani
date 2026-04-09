@@ -251,7 +251,6 @@ export async function deleteMemberAction(
     return { success: true };
   } catch (error) {
     console.error("deleteMemberAction error:", error);
-    const detail = error instanceof Error ? error.message : String(error);
-    return { success: false, error: `Nepodarilo se smazat clena: ${detail}` };
+    return { success: false, error: "Nepodarilo se smazat clena." };
   }
 }

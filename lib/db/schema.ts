@@ -281,7 +281,7 @@ export const eventParticipant = pgTable(
     eventId: uuid("event_id")
       .notNull()
       .references(() => event.id, { onDelete: "cascade" }),
-    memberId: uuid("member_id").references(() => member.id, { onDelete: "set null" }),
+    memberId: uuid("member_id").references(() => member.id, { onDelete: "cascade" }),
     externalName: text("external_name"),
     externalEmail: text("external_email"),
     // Global UNIQUE enforced at DB level (UNIQUE column)
