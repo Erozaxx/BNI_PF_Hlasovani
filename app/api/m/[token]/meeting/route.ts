@@ -3,9 +3,6 @@ import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
-
-// Opt out of Next.js Data Cache — DB state changes must be reflected immediately
-export const dynamic = "force-dynamic";
 import {
   meeting,
   meetingGuest,
@@ -15,6 +12,9 @@ import {
   vote,
   member,
 } from "@/lib/db/schema";
+
+// Opt out of Next.js Data Cache — DB state changes must be reflected immediately
+export const dynamic = "force-dynamic";
 
 function getDb() {
   return drizzle(getSql());
@@ -73,7 +73,24 @@ export async function GET(
 
   const meetingData = meetingRows[0];
 
-  // 3. Load member name
+  // 3. If meeting is in draft or active state, voting has not started yet —
+  //    return early with a minimal payload so the client can show a waiting screen.
+  if (meetingData.status === "draft" || meetingData.status === "active") {
+    const memberRowsEarly = await getDb()
+      .select({ name: member.name })
+      .from(member)
+      .where(eq(member.id, memberId))
+      .limit(1);
+
+    return NextResponse.json({
+      phase: "not_voting",
+      meetingDate: meetingData.date,
+      location: meetingData.location ?? null,
+      memberName: memberRowsEarly[0]?.name ?? null,
+    });
+  }
+
+  // 4. Load member name
   const memberRows = await getDb()
     .select({ name: member.name })
     .from(member)

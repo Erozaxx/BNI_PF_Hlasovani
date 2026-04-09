@@ -10,6 +10,7 @@ import {
   resendAllMagicLinksAction,
   resetParticipantTokenAction,
   removeParticipantAction,
+  getParticipantLinkAction,
 } from "@/actions/events";
 
 interface Participant {
@@ -75,8 +76,8 @@ export function ParticipantsManager({
     setPendingId(participantId);
 
     startTransition(async () => {
-      // Reset token to get a fresh raw token we can use
-      const result = await resetParticipantTokenAction(participantId);
+      // Read encrypted token and decrypt — does NOT invalidate the emailed token
+      const result = await getParticipantLinkAction(participantId);
       setPendingId(null);
       if (!result.success) {
         setError(result.error);
@@ -87,6 +88,9 @@ export function ParticipantsManager({
         await navigator.clipboard.writeText(result.data!.link);
         setCopiedId(participantId);
         setTimeout(() => setCopiedId(null), 2000);
+        if (result.data!.regenerated) {
+          setSuccessMsg("Link zkopirovan. Pozor: byl vygenerovan novy token (stary odkaz z emailu je neplatny).");
+        }
         router.refresh();
       } catch {
         setError("Kopirovani do schranky selhalo. Zkuste to znovu.");
@@ -202,7 +206,7 @@ export function ParticipantsManager({
                     onClick={() => handleCopyLink(p.id)}
                     loading={isThisPending && pendingId === p.id}
                     disabled={isPending}
-                    title="Zkopirovat magic link (vygeneruje novy token)"
+                    title="Zkopirovat magic link (stejny odkaz jako v emailu)"
                   >
                     {copiedId === p.id ? "Kopirovano!" : "Kopirovat link"}
                   </Button>

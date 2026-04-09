@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { member, eventParticipant } from "@/lib/db/schema";
 import { generateEventToken, hashEventToken, sendEventMagicLink } from "@/lib/events/magic-link";
+import { encryptToken } from "@/lib/events/token-encryption";
 
 function getDb() {
   return drizzle(getSql());
@@ -27,10 +28,13 @@ export async function bulkCreateParticipantsFromMembers(
 
   if (members.length === 0) return;
 
+  const encKey = process.env.EVENT_TOKEN_ENCRYPTION_KEY!;
+
   // Build participant rows with tokens
   const rows = members.map((m) => {
     const rawToken = generateEventToken();
     const tokenHash = hashEventToken(rawToken);
+    const encryptedToken = encryptToken(rawToken, encKey);
     return {
       member: m,
       rawToken,
@@ -38,6 +42,7 @@ export async function bulkCreateParticipantsFromMembers(
         eventId,
         memberId: m.id,
         magicTokenHash: tokenHash,
+        encryptedToken,
         tokenCreatedAt: new Date(),
       },
     };

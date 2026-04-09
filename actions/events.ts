@@ -21,6 +21,7 @@ import {
   buildEventLink,
 } from "@/lib/events/magic-link";
 import { castVote } from "@/lib/events/voting";
+import { encryptToken, decryptToken } from "@/lib/events/token-encryption";
 import type { ActionResult } from "@/lib/types";
 
 function getDb() {
@@ -454,6 +455,7 @@ export async function addParticipantAction(
 
     const rawToken = generateEventToken();
     const tokenHash = hashEventToken(rawToken);
+    const encryptedToken = encryptToken(rawToken, process.env.EVENT_TOKEN_ENCRYPTION_KEY!);
 
     const [participant] = await getDb()
       .insert(eventParticipant)
@@ -462,6 +464,7 @@ export async function addParticipantAction(
         externalName: name.trim(),
         externalEmail: email?.trim() || null,
         magicTokenHash: tokenHash,
+        encryptedToken,
         tokenCreatedAt: new Date(),
       })
       .returning();
@@ -604,10 +607,11 @@ export async function resendMagicLinkAction(
     // We can't recover the raw token from the hash — generate a new token
     const rawToken = generateEventToken();
     const tokenHash = hashEventToken(rawToken);
+    const encryptedToken = encryptToken(rawToken, process.env.EVENT_TOKEN_ENCRYPTION_KEY!);
 
     await getDb()
       .update(eventParticipant)
-      .set({ magicTokenHash: tokenHash, tokenCreatedAt: new Date() })
+      .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
       .where(eq(eventParticipant.id, participantId));
 
     const emailResult = await sendEventMagicLink(
@@ -665,10 +669,11 @@ export async function resendAllMagicLinksAction(
 
       const rawToken = generateEventToken();
       const tokenHash = hashEventToken(rawToken);
+      const encryptedToken = encryptToken(rawToken, process.env.EVENT_TOKEN_ENCRYPTION_KEY!);
 
       await db
         .update(eventParticipant)
-        .set({ magicTokenHash: tokenHash, tokenCreatedAt: new Date() })
+        .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
         .where(eq(eventParticipant.id, p.id));
 
       const emailResult = await sendEventMagicLink(email, name, eventData.title, rawToken, eventId);
@@ -685,6 +690,65 @@ export async function resendAllMagicLinksAction(
   } catch (error) {
     console.error("resendAllMagicLinksAction error:", error);
     return { success: false, error: "Nepodarilo se odeslat hromadne pozvanky." };
+  }
+}
+
+/**
+ * Return the magic link for a participant WITHOUT invalidating their token.
+ * Decrypts the stored encrypted_token. No DB write unless fallback is triggered.
+ *
+ * Fallback (NULL encrypted_token — legacy rows): generates a new token,
+ * stores both hash and encrypted form, returns the new link with a warning.
+ * This matches the current resetParticipantTokenAction behavior for legacy rows.
+ */
+export async function getParticipantLinkAction(
+  participantId: string
+): Promise<ActionResult<{ link: string; regenerated?: boolean }>> {
+  const auth = await requireManagementRole(["admin", "moderator"]);
+  if (!auth.success) return auth;
+
+  const encKey = process.env.EVENT_TOKEN_ENCRYPTION_KEY!;
+
+  try {
+    const participant = await getParticipantById(participantId);
+    if (!participant) {
+      return { success: false, error: "Ucastnik nebyl nalezen." };
+    }
+
+    if (participant.encryptedToken) {
+      // Happy path: decrypt and return — no DB write
+      try {
+        const rawToken = decryptToken(participant.encryptedToken, encKey);
+        const link = buildEventLink(participant.eventId, rawToken);
+        return { success: true, data: { link } };
+      } catch (decryptErr) {
+        console.error(
+          `getParticipantLinkAction: decryption failed for participant ${participantId}:`,
+          decryptErr
+        );
+        // Fall through to regenerate
+      }
+    }
+
+    // Fallback: legacy row or failed decryption — generate new token
+    console.warn(
+      `getParticipantLinkAction: encrypted_token missing or unreadable for participant ${participantId}, generating new token`
+    );
+    const rawToken = generateEventToken();
+    const tokenHash = hashEventToken(rawToken);
+    const encryptedToken = encryptToken(rawToken, encKey);
+
+    await getDb()
+      .update(eventParticipant)
+      .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
+      .where(eq(eventParticipant.id, participantId));
+
+    const link = buildEventLink(participant.eventId, rawToken);
+    revalidatePath(`/events/${participant.eventId}`);
+    return { success: true, data: { link, regenerated: true } };
+  } catch (error) {
+    console.error("getParticipantLinkAction error:", error);
+    return { success: false, error: "Nepodarilo se ziskat odkaz ucastnika." };
   }
 }
 
@@ -706,10 +770,11 @@ export async function resetParticipantTokenAction(
 
     const rawToken = generateEventToken();
     const tokenHash = hashEventToken(rawToken);
+    const encryptedToken = encryptToken(rawToken, process.env.EVENT_TOKEN_ENCRYPTION_KEY!);
 
     await getDb()
       .update(eventParticipant)
-      .set({ magicTokenHash: tokenHash, tokenCreatedAt: new Date() })
+      .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
       .where(eq(eventParticipant.id, participantId));
 
     const link = buildEventLink(participant.eventId, rawToken);

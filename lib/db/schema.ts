@@ -286,6 +286,7 @@ export const eventParticipant = pgTable(
     externalEmail: text("external_email"),
     // Global UNIQUE enforced at DB level (UNIQUE column)
     magicTokenHash: text("magic_token_hash").unique(),
+    encryptedToken: text("encrypted_token"),
     tokenCreatedAt: timestamp("token_created_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
