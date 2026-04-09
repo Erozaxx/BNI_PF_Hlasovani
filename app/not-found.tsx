@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/Button";
-
 export default function NotFoundPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -9,14 +6,11 @@ export default function NotFoundPage() {
           <span className="text-6xl font-bold text-primary">404</span>
         </div>
         <h1 className="text-2xl font-bold text-text-main mb-2">
-          Stranka nenalezena
+          Stránka nenalezena
         </h1>
         <p className="text-text-muted mb-6">
-          Omlouvame se, pozadovana stranka neexistuje nebo byla presunuty.
+          Omlouváme se, požadovaná stránka neexistuje nebo byla přesunuta.
         </p>
-        <Link href="/dashboard">
-          <Button variant="primary">Zpet na dashboard</Button>
-        </Link>
       </div>
     </div>
   );

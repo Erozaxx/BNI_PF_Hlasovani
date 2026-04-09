@@ -1,4 +1,5 @@
 import { MeetingExpired } from "./_components/MeetingExpired";
+import { MeetingWaiting } from "./_components/MeetingWaiting";
 import { GuestCardMeeting } from "./_components/GuestCardMeeting";
 import { Badge } from "@/components/ui/Badge";
 import type { VoteDetailItem } from "./_components/MeetingResultsView";
@@ -43,9 +44,16 @@ interface MeetingData {
   guests: GuestShape[];
 }
 
-async function fetchMeetingData(
-  token: string
-): Promise<MeetingData | null | "expired"> {
+interface NotVotingData {
+  phase: "not_voting";
+  meetingDate: string;
+  location: string | null;
+  memberName: string | null;
+}
+
+type FetchResult = MeetingData | NotVotingData | "expired" | null;
+
+async function fetchMeetingData(token: string): Promise<FetchResult> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   let res: Response;
@@ -66,7 +74,7 @@ async function fetchMeetingData(
   }
 
   try {
-    return (await res.json()) as MeetingData;
+    return (await res.json()) as MeetingData | NotVotingData;
   } catch {
     return null;
   }
@@ -97,6 +105,17 @@ export default async function MemberMeetingPage({
 
   if (data === "expired" || data === null) {
     return <MeetingExpired />;
+  }
+
+  // Early return for not_voting — MUST be before guests destructuring (MeetingData only)
+  if (data.phase === "not_voting") {
+    return (
+      <MeetingWaiting
+        meetingDate={data.meetingDate}
+        location={data.location}
+        memberName={data.memberName}
+      />
+    );
   }
 
   const { phase, meetingDate, location, memberName, guests } = data;
