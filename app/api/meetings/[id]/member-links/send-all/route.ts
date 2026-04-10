@@ -102,89 +102,69 @@ export async function POST(
     );
   }
 
-  // 5. Fan out sends with Promise.allSettled — never sequential for-await
-  const sendTasks = rows.map(
-    async (row): Promise<SendResult> => {
-      const memberId = row.memberId;
-      const rawToken = rawTokens[memberId];
+  // 5. Send sequentially with 250ms delay to stay under Resend rate limit (5 req/s)
+  const results: SendResult[] = [];
 
-      // Skip if no raw token supplied for this member
-      if (!rawToken) {
-        return {
-          memberId,
-          memberName: row.memberName,
-          memberEmail: row.memberEmail!,
-          status: "skipped",
-          reason: "No rawToken supplied for this member",
-        };
-      }
+  for (const row of rows) {
+    const memberId = row.memberId;
+    const rawToken = rawTokens[memberId];
 
-      // Verify rawToken matches stored hash (integrity check — prevents spoofed tokens)
-      const expectedHash = hashMeetingToken(rawToken);
-      if (expectedHash !== row.tokenHash) {
-        return {
-          memberId,
-          memberName: row.memberName,
-          memberEmail: row.memberEmail!,
-          status: "skipped",
-          reason: "Token mismatch — regenerate the link first",
-        };
-      }
-
-      // Skip revoked links
-      if (row.revokedAt !== null) {
-        return {
-          memberId,
-          memberName: row.memberName,
-          memberEmail: row.memberEmail!,
-          status: "skipped",
-          reason: "Link is revoked",
-        };
-      }
-
-      const magicUrl = buildMeetingMagicUrl(rawToken);
-
-      const result = await sendMeetingMagicLinkEmail(
-        row.memberEmail!,
-        magicUrl,
-        row.memberName,
-        meetingData.date
-      );
-
-      if (result.success) {
-        return {
-          memberId,
-          memberName: row.memberName,
-          memberEmail: row.memberEmail!,
-          status: "sent",
-        };
-      } else {
-        return {
-          memberId,
-          memberName: row.memberName,
-          memberEmail: row.memberEmail!,
-          status: "error",
-          reason: result.error,
-        };
-      }
+    // Skip if no raw token supplied for this member
+    if (!rawToken) {
+      results.push({
+        memberId,
+        memberName: row.memberName,
+        memberEmail: row.memberEmail!,
+        status: "skipped",
+        reason: "No rawToken supplied for this member",
+      });
+      continue;
     }
-  );
 
-  const settled = await Promise.allSettled(sendTasks);
-
-  const results: SendResult[] = settled.map((outcome) => {
-    if (outcome.status === "fulfilled") {
-      return outcome.value;
+    // Verify rawToken matches stored hash (integrity check — prevents spoofed tokens)
+    const expectedHash = hashMeetingToken(rawToken);
+    if (expectedHash !== row.tokenHash) {
+      results.push({
+        memberId,
+        memberName: row.memberName,
+        memberEmail: row.memberEmail!,
+        status: "skipped",
+        reason: "Token mismatch — regenerate the link first",
+      });
+      continue;
     }
-    // Promise rejected — unexpected (sendMeetingMagicLinkEmail handles errors internally)
-    return {
-      memberId: "unknown",
-      memberName: "unknown",
-      memberEmail: "unknown",
-      status: "error" as const,
-      reason: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
-    };
-  });
+
+    // Skip revoked links
+    if (row.revokedAt !== null) {
+      results.push({
+        memberId,
+        memberName: row.memberName,
+        memberEmail: row.memberEmail!,
+        status: "skipped",
+        reason: "Link is revoked",
+      });
+      continue;
+    }
+
+    const magicUrl = buildMeetingMagicUrl(rawToken);
+    const result = await sendMeetingMagicLinkEmail(
+      row.memberEmail!,
+      magicUrl,
+      row.memberName,
+      meetingData.date
+    );
+
+    results.push({
+      memberId,
+      memberName: row.memberName,
+      memberEmail: row.memberEmail!,
+      status: result.success ? "sent" : "error",
+      reason: result.success ? undefined : result.error,
+    });
+
+    // 250ms delay between sends — Resend limit is 5 req/s
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 
   const sent = results.filter((r) => r.status === "sent").length;
   const skipped = results.filter((r) => r.status === "skipped").length;
