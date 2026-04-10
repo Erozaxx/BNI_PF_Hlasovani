@@ -247,7 +247,13 @@ export async function sendMeetingMagicLinkEmail(
   memberName?: string,
   meetingDate?: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const fromField = `BNI Hlasovani <${fromEmail}>`;
+
+  console.info(`[sendMeetingMagicLinkEmail] to=${email} from=${fromField} apiKey=${apiKey ? apiKey.slice(0, 8) + "..." : "MISSING"} keyLength=${apiKey?.length ?? 0}`);
+
+  if (!apiKey) {
     console.warn("RESEND_API_KEY not configured, logging meeting magic link to console");
     console.log(`[MEETING MAGIC LINK] ${email}: ${magicLink}`);
     return { success: true };
@@ -256,8 +262,9 @@ export async function sendMeetingMagicLinkEmail(
   const dateLabel = meetingDate ? ` (${meetingDate})` : "";
 
   try {
-    const { error } = await resend.emails.send({
-      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+    console.info(`[sendMeetingMagicLinkEmail] calling resend.emails.send to=${email} from=${fromField}`);
+    const { data, error } = await resend.emails.send({
+      from: fromField,
       to: [email],
       subject: `BNI Hlasovani - Odkaz pro hlasovani${dateLabel}`,
       html: `<!DOCTYPE html>
@@ -279,14 +286,15 @@ export async function sendMeetingMagicLinkEmail(
     });
 
     if (error) {
-      console.error("sendMeetingMagicLinkEmail error:", error);
+      console.error(`[sendMeetingMagicLinkEmail] resend error: to=${email} from=${fromField} error=`, error);
       return { success: false, error: error.message };
     }
 
+    console.info(`[sendMeetingMagicLinkEmail] success: to=${email} id=${data?.id}`);
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("sendMeetingMagicLinkEmail error:", msg);
+    console.error(`[sendMeetingMagicLinkEmail] exception: to=${email} from=${fromField} error=${msg}`);
     return { success: false, error: msg };
   }
 }
