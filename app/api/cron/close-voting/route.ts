@@ -149,15 +149,13 @@ async function sendMorningEmails(
       continue;
     }
 
-    // Send all emails for this meeting concurrently with Promise.allSettled
-    const sendResults = await Promise.allSettled(
-      pendingLinks.map(async (link) => {
+    // Send sequentially with 250ms delay to stay under Resend rate limit (5 req/s)
+    for (const link of pendingLinks) {
+      try {
         if (!link.memberEmail) {
           throw new Error(`member ${link.memberId} has no email`);
         }
 
-        // Regenerate token to get a fresh raw token for URL construction.
-        // Raw tokens are not stored in DB (only hashes), so we must regenerate.
         const rawToken = await regenerateMeetingToken(link.meetingId, link.memberId);
         if (!rawToken) {
           throw new Error(`regenerate token failed for member ${link.memberId}`);
@@ -176,21 +174,16 @@ async function sendMorningEmails(
           throw new Error(`email send failed: ${emailResult.error}`);
         }
 
-        // Mark as sent immediately after success (idempotency per Addendum A2)
         await markMorningEmailSent(link.linkId, new Date());
-
-        return link.memberId;
-      })
-    );
-
-    for (const result of sendResults) {
-      if (result.status === "fulfilled") {
         totalSent++;
-      } else {
-        const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         console.error(`morning email error for meeting ${mtg.id}:`, msg);
         allErrors.push(`meeting ${mtg.id}: ${msg}`);
       }
+
+      // 250ms delay between sends — Resend limit is 5 req/s
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
 

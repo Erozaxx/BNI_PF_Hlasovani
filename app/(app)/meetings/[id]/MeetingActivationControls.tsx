@@ -85,7 +85,7 @@ export function MeetingActivationControls({
   async function handleActivateVoting() {
     if (
       !confirm(
-        "Spustit hlasovani? Status schuzky se zmeni na 'hlasovani' a tokeny zacnou expirovat za 72 hodin."
+        "Spustit hlasovani? Status schuzky se zmeni na 'hlasovani' a hlasovani se automaticky uzavre za 48 hodin."
       )
     ) {
       return;
