@@ -120,6 +120,8 @@ export function TimerDisplay({
   useEffect(() => {
     const tick = setInterval(() => {
       if (statusRef.current !== "running") return;
+      // Do not tick during grace period (server remaining still above display cap)
+      if (serverDisplayedRef.current >= displaySeconds) return;
       setDisplayedRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(tick);
