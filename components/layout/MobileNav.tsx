@@ -81,6 +81,15 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             Akce
           </Link>
         )}
+        {isManagement && (
+          <Link
+            href="/timers"
+            className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+            onClick={() => setOpen(false)}
+          >
+            Casovace
+          </Link>
+        )}
         <Link
           href="/archive"
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
