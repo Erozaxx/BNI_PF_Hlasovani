@@ -385,6 +385,67 @@ export const vote = pgTable(
 );
 
 // ============================================================
+// TIMER
+// Presentation countdown timer with two-link architecture.
+// 'paused' serves as both idle (elapsed=0) and pause state.
+// updated_at MUST be set explicitly in every UPDATE (no auto-update in Drizzle).
+// display_seconds = user-facing value; initial_seconds = display_seconds + LATENCY_PADDING_SECONDS (internal).
+// ============================================================
+export const timer = pgTable(
+  "timer",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // User-facing duration — value entered by admin, stored in DB
+    displaySeconds: integer("display_seconds").notNull(),
+    // Internal duration = displaySeconds + LATENCY_PADDING_SECONDS
+    initialSeconds: integer("initial_seconds").notNull(),
+    // 'paused' = idle (elapsed=0) or paused; 'running' = actively counting down
+    status: text("status").notNull().default("paused"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    elapsedSeconds: integer("elapsed_seconds").notNull().default(0),
+    viewToken: text("view_token").notNull().unique(),
+    controlToken: text("control_token").notNull().unique(),
+    createdBy: uuid("created_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // Must be set explicitly in every UPDATE — Drizzle has no auto-update
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    statusCheck: check(
+      "timer_status_check",
+      sql`${table.status} IN ('running', 'paused')`
+    ),
+    initialSecondsCheck: check(
+      "timer_initial_seconds_check",
+      sql`${table.initialSeconds} > 0 AND ${table.initialSeconds} <= 86400`
+    ),
+    displaySecondsCheck: check(
+      "timer_display_seconds_check",
+      sql`${table.displaySeconds} > 0 AND ${table.displaySeconds} <= 86400`
+    ),
+    // S-001: cross-column constraint — elapsed upper bound prevents negative remaining_seconds
+    elapsedCheck: check(
+      "timer_elapsed_check",
+      sql`${table.elapsedSeconds} >= 0 AND ${table.elapsedSeconds} <= ${table.initialSeconds}`
+    ),
+    nameCheck: check(
+      "timer_name_check",
+      sql`char_length(${table.name}) > 0 AND char_length(${table.name}) <= 100`
+    ),
+    viewTokenIdx: index("idx_timer_view_token").on(table.viewToken),
+    controlTokenIdx: index("idx_timer_control_token").on(table.controlToken),
+    statusIdx: index("idx_timer_status").on(table.status),
+  })
+);
+
+// ============================================================
 // MEETING_MEMBER_LINK
 // Per-meeting per-member magic link for voting access.
 // UNIQUE(meeting_id, member_id) enables UPDATE-only token regeneration.

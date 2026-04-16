@@ -51,6 +51,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow timer view pages (public read-only display) — LL-005
+  if (pathname.startsWith("/t/")) {
+    return NextResponse.next();
+  }
+
+  // Allow timer API endpoints (state polling + control) — LL-005
+  // Control endpoint (/api/t/[token]/control) is protected by control_token bearer auth in route handler
+  if (pathname.startsWith("/api/t/")) {
+    return NextResponse.next();
+  }
+
   // Get session from cookie
   const response = NextResponse.next();
   const session = await getIronSession<SessionData>(request, response, sessionOptions);
