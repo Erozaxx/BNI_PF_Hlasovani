@@ -27,6 +27,7 @@ interface TimerDisplayProps {
   initialStatus: "running" | "paused";
   initialRemainingSeconds: number;
   displaySeconds: number;
+  mini?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ export function TimerDisplay({
   initialStatus,
   initialRemainingSeconds,
   displaySeconds,
+  mini = false,
 }: TimerDisplayProps) {
   const initialDisplayed = computeDisplayed(initialRemainingSeconds, displaySeconds);
 
@@ -131,6 +133,25 @@ export function TimerDisplay({
 
   const isRunning = timerData.status === "running";
   const isExpired = displayedRemaining === 0;
+
+  // Mini view: only the countdown number, fills the window — for pinned presenter windows
+  if (mini) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        {isExpired ? (
+          <p className="text-[20vw] font-mono font-bold text-red-400 tabular-nums">
+            0:00
+          </p>
+        ) : (
+          <p
+            className={`text-[20vw] font-mono font-bold tabular-nums ${countdownColorClass(isRunning, displayedRemaining)}`}
+          >
+            {formatTime(displayedRemaining)}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950 px-4">
