@@ -12,10 +12,15 @@ import { TimerDisplay } from "./TimerDisplay";
 
 export default async function TimerViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
+  const sp = await searchParams;
+  const mini = sp["mini"] === "1";
+
   const timer = await getTimerByViewToken(token);
   if (!timer) notFound();
 
@@ -28,6 +33,7 @@ export default async function TimerViewPage({
       initialStatus={timer.status as "running" | "paused"}
       initialRemainingSeconds={remainingSeconds}
       displaySeconds={timer.displaySeconds}
+      mini={mini}
     />
   );
 }
