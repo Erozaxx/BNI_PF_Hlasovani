@@ -41,6 +41,13 @@ function computeDisplayed(remaining: number, display: number): number {
   return Math.max(0, Math.min(remaining, display));
 }
 
+function countdownColorClass(isRunning: boolean, remaining: number): string {
+  if (!isRunning) return "text-gray-400";
+  if (remaining <= 5) return "text-red-400";
+  if (remaining <= 10) return "text-yellow-400";
+  return "text-green-400";
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TimerDisplay({
@@ -140,9 +147,7 @@ export function TimerDisplay({
         </p>
       ) : (
         <p
-          className={`text-8xl sm:text-[12rem] font-mono font-bold tracking-widest tabular-nums ${
-            isRunning ? "text-green-400" : "text-gray-400"
-          }`}
+          className={`text-8xl sm:text-[12rem] font-mono font-bold tracking-widest tabular-nums ${countdownColorClass(isRunning, displayedRemaining)}`}
           aria-live="polite"
           aria-label={`Zbývající čas: ${formatTime(displayedRemaining)}`}
         >
