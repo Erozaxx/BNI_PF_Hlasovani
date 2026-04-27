@@ -37,6 +37,7 @@ async function handler(request: NextRequest) {
 
     // Find members with tokens expiring within 1 day
     const expiringMembers = members.filter((m) => {
+      if (m.managementRole) return false; // admins/moderators use password auth, not magic links
       if (!m.tokenExpiresAt) return false;
       if (m.tokenUsed) return false; // Already used, no need to renew
       return m.tokenExpiresAt < oneDayFromNow && m.tokenExpiresAt > now;
