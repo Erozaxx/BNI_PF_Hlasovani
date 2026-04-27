@@ -213,6 +213,7 @@ async function renewExpiringTokens(): Promise<{
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     const expiringMembers = members.filter((m) => {
+      if (m.managementRole) return false;
       if (!m.tokenExpiresAt) return false;
       if (m.tokenUsed) return false;
       return m.tokenExpiresAt < oneDayFromNow && m.tokenExpiresAt > now;

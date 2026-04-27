@@ -175,6 +175,8 @@ export async function deleteEventAction(id: string): Promise<ActionResult> {
 
 /**
  * Activate an event (draft → active). Requires admin or moderator.
+ * After flipping status, sends magic link emails to all participants with an email address.
+ * Uses decrypt(encryptedToken) to preserve the original link; falls back to new token on failure.
  */
 export async function activateEventAction(id: string): Promise<ActionResult> {
   const auth = await requireManagementRole(["admin", "moderator"]);
@@ -192,10 +194,65 @@ export async function activateEventAction(id: string): Promise<ActionResult> {
       };
     }
 
+    // 1) Flip status → active (idempotent guard via WHERE status='draft')
     await getDb()
       .update(event)
       .set({ status: "active", activatedAt: new Date() })
-      .where(eq(event.id, id));
+      .where(and(eq(event.id, id), eq(event.status, "draft")));
+
+    // 2) Send magic link emails to all participants with email + encryptedToken
+    const encKey = process.env.EVENT_TOKEN_ENCRYPTION_KEY!;
+    const participants = await getEventParticipants(id);
+
+    let sent = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const p of participants) {
+      const email = p.memberEmail ?? p.externalEmail ?? null;
+      const name  = p.memberName  ?? p.externalName  ?? "Ucastnik";
+
+      if (!email) { skipped++; continue; }
+
+      if (!p.encryptedToken) {
+        // Edge case: legacy/manual row without encrypted_token — generate fresh
+        const rawToken = generateEventToken();
+        const tokenHash = hashEventToken(rawToken);
+        const encryptedToken = encryptToken(rawToken, encKey);
+        await getDb()
+          .update(eventParticipant)
+          .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
+          .where(eq(eventParticipant.id, p.id));
+        const r = await sendEventMagicLink(email, name, existing.title, rawToken, id);
+        if (r.success) { sent++; } else { skipped++; errors.push(`${p.id}: ${r.error}`); }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+
+      try {
+        const rawToken = decryptToken(p.encryptedToken, encKey);
+        const r = await sendEventMagicLink(email, name, existing.title, rawToken, id);
+        if (r.success) { sent++; } else { skipped++; errors.push(`${p.id}: ${r.error}`); }
+      } catch (decryptErr) {
+        // Decrypt failed → fallback: regenerate token (matches getParticipantLinkAction behavior)
+        console.error(`activateEventAction: decrypt failed for participant ${p.id}:`, decryptErr);
+        const rawToken = generateEventToken();
+        const tokenHash = hashEventToken(rawToken);
+        const encryptedToken = encryptToken(rawToken, encKey);
+        await getDb()
+          .update(eventParticipant)
+          .set({ magicTokenHash: tokenHash, encryptedToken, tokenCreatedAt: new Date() })
+          .where(eq(eventParticipant.id, p.id));
+        const r = await sendEventMagicLink(email, name, existing.title, rawToken, id);
+        if (r.success) { sent++; } else { skipped++; errors.push(`${p.id}: ${r.error}`); }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    if (errors.length > 0) {
+      console.warn("activateEventAction email errors:", errors);
+    }
 
     revalidatePath("/events");
     revalidatePath(`/events/${id}`);

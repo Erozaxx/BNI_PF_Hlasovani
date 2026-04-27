@@ -134,6 +134,7 @@ export async function getEventParticipants(eventId: string) {
       externalName: eventParticipant.externalName,
       externalEmail: eventParticipant.externalEmail,
       magicTokenHash: eventParticipant.magicTokenHash,
+      encryptedToken: eventParticipant.encryptedToken,
       tokenCreatedAt: eventParticipant.tokenCreatedAt,
       createdAt: eventParticipant.createdAt,
       memberName: member.name,
