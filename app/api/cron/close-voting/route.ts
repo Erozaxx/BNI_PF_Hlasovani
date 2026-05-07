@@ -56,8 +56,8 @@ async function handler(request: NextRequest) {
   console.log(`close-voting cron: today=${today}`);
 
   try {
-    // ── Phase A: Morning emails ──
-    const morningEmailResult = await sendMorningEmails(today);
+    // ── Phase A: Morning emails (disabled) ──
+    const morningEmailResult = { skipped: "disabled", sent: 0 };
 
     // ── Phase C: Close expired voting meetings ──
     const expiredMeetings = await getExpiredVotingMeetings();
