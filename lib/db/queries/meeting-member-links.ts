@@ -44,6 +44,31 @@ export async function getPendingMorningEmailLinks(meetingId: string) {
 }
 
 /**
+ * Get all non-revoked meeting_member_link rows for a meeting that have an email.
+ * Joins member to get email and name for sending the voting magic link.
+ * Unlike getPendingMorningEmailLinks, this does NOT filter on morningEmailSentAt —
+ * it returns every active link so Thursday auto-activation can email all members.
+ */
+export async function getActiveMeetingLinks(meetingId: string) {
+  return getDb()
+    .select({
+      linkId: meetingMemberLink.id,
+      meetingId: meetingMemberLink.meetingId,
+      memberId: meetingMemberLink.memberId,
+      memberEmail: member.email,
+      memberName: member.name,
+    })
+    .from(meetingMemberLink)
+    .innerJoin(member, eq(meetingMemberLink.memberId, member.id))
+    .where(
+      and(
+        eq(meetingMemberLink.meetingId, meetingId),
+        isNull(meetingMemberLink.revokedAt)
+      )
+    );
+}
+
+/**
  * Mark morningEmailSentAt on a specific meeting_member_link row.
  * Called immediately after each successful email send (idempotency per brief A2).
  */
