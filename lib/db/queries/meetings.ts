@@ -142,8 +142,10 @@ export async function addGuestToMeeting(meetingId: string, guestId: string) {
 }
 
 /**
- * Reorder guests within a single meeting by setting display_order = index for
- * each guestId in orderedGuestIds. Sequential UPDATEs (LL-003: no transaction).
+ * Reorder guests within a single meeting by setting display_order = index+1
+ * (1-based) for each guestId in orderedGuestIds. 1-based matches the insert
+ * (COALESCE(MAX,0)+1) and migration backfill (ROW_NUMBER) schemes, keeping
+ * display_order consistent (M-2). Sequential UPDATEs (LL-003: no transaction).
  * Each UPDATE is scoped to (meeting_id, guest_id) and idempotent on retry.
  */
 export async function reorderMeetingGuests(
@@ -154,7 +156,7 @@ export async function reorderMeetingGuests(
   for (let i = 0; i < orderedGuestIds.length; i++) {
     await db
       .update(meetingGuest)
-      .set({ displayOrder: i })
+      .set({ displayOrder: i + 1 })
       .where(
         and(
           eq(meetingGuest.meetingId, meetingId),

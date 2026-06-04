@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -129,6 +129,13 @@ export function SortableMemberList({ members }: SortableMemberListProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<MemberRow[]>(members);
+
+  // Sync local optimistic state with server props after router.refresh()
+  // (e.g. when a member is added/removed/imported) — otherwise the new row
+  // would not appear until a hard reload (H-1).
+  useEffect(() => {
+    setItems(members);
+  }, [members]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

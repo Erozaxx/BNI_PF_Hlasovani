@@ -73,6 +73,17 @@ export async function POST(
     }
   }
 
+  // Completeness guard (M-1): the list must cover ALL guests of this meeting.
+  // A partial list would leave the missing guests with their old display_order,
+  // producing collisions / gaps. With the no-duplicates and subset checks above,
+  // length equality guarantees a full permutation of this meeting's guests.
+  if (orderedGuestIds.length !== meetingGuestIds.size) {
+    return err(
+      400,
+      "orderedGuestIds must contain every guest of this meeting exactly once"
+    );
+  }
+
   try {
     await reorderMeetingGuests(meetingId, orderedGuestIds as string[]);
     return NextResponse.json({ ok: true });

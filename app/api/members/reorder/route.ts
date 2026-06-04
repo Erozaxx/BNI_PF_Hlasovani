@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { reorderMembers } from "@/lib/db/queries/members";
+import { getMemberCount, reorderMembers } from "@/lib/db/queries/members";
 
 function err(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
@@ -43,6 +43,15 @@ export async function POST(req: NextRequest) {
   // Guard against duplicate ids (would otherwise produce ambiguous ordering)
   if (new Set(orderedIds).size !== orderedIds.length) {
     return err(400, "orderedIds contains duplicates");
+  }
+
+  // Completeness guard (M-1): the list must cover ALL members. A partial list
+  // would leave the missing rows with their old display_order, producing
+  // collisions / gaps in the index. Combined with the no-duplicates check
+  // above, length equality guarantees a full permutation.
+  const memberCount = await getMemberCount();
+  if (orderedIds.length !== memberCount) {
+    return err(400, "orderedIds must contain every member exactly once");
   }
 
   try {

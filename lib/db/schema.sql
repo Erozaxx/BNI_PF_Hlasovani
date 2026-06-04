@@ -79,7 +79,7 @@ CREATE TABLE meeting (
     voting_open_at    TIMESTAMPTZ,
     voting_closes_at  TIMESTAMPTZ,
     status            TEXT        NOT NULL DEFAULT 'draft'
-        CHECK (status IN ('draft', 'voting', 'closed')),
+        CHECK (status IN ('draft', 'active', 'voting', 'closed')),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT meeting_voting_window_valid
         CHECK (

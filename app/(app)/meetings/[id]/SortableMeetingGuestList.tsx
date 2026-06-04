@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -142,6 +142,13 @@ export function SortableMeetingGuestList({
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<MeetingGuestRow[]>(guests);
+
+  // Sync local optimistic state with server props after router.refresh()
+  // (e.g. when a guest is added/removed) — otherwise the new card would not
+  // appear until a hard reload (H-1).
+  useEffect(() => {
+    setItems(guests);
+  }, [guests]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
