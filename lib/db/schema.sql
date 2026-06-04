@@ -36,6 +36,7 @@ CREATE TABLE member (
     token_used                BOOLEAN     NOT NULL DEFAULT FALSE,
     previous_token_hash       TEXT,
     previous_token_expires_at TIMESTAMPTZ,
+    display_order    INTEGER,  -- iter-019: global drag&drop order (backfilled by created_at)
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT member_management_requires_credentials
         CHECK (
@@ -95,9 +96,10 @@ CREATE INDEX idx_meeting_status ON meeting (status);
 -- MEETING_GUEST  (M:N – host muze byt ve vice schuzkach)
 -- ============================================================
 CREATE TABLE meeting_guest (
-    meeting_id  UUID    NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
-    guest_id    UUID    NOT NULL REFERENCES guest(id) ON DELETE CASCADE,
-    added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    meeting_id    UUID    NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+    guest_id      UUID    NOT NULL REFERENCES guest(id) ON DELETE CASCADE,
+    added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    display_order INTEGER,  -- iter-019: per-meeting drag&drop order (backfilled by added_at)
     PRIMARY KEY (meeting_id, guest_id)
 );
 

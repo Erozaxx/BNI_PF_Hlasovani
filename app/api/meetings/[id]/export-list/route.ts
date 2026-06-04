@@ -91,12 +91,14 @@ export async function GET(
       company: guest.company,
       description: guest.description,
       categoryName: category.name,
+      displayOrder: meetingGuest.displayOrder,
+      addedAt: meetingGuest.addedAt,
     })
     .from(meetingGuest)
     .innerJoin(guest, eq(meetingGuest.guestId, guest.id))
     .leftJoin(category, eq(guest.categoryId, category.id))
     .where(eq(meetingGuest.meetingId, id))
-    .orderBy(asc(guest.name));
+    .orderBy(asc(meetingGuest.displayOrder), asc(meetingGuest.addedAt));
 
   const formattedDate = formatDateCzech(meetingData.date);
 

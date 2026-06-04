@@ -1,4 +1,4 @@
-import { eq, desc, and, ne, isNull, max, inArray, sql } from "drizzle-orm";
+import { eq, asc, desc, and, ne, isNull, max, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
@@ -96,13 +96,14 @@ export async function getMeetingWithGuests(id: string) {
       categoryId: guest.categoryId,
       categoryName: category.name,
       addedAt: meetingGuest.addedAt,
+      displayOrder: meetingGuest.displayOrder,
       votingEnabled: meetingGuest.votingEnabled,
     })
     .from(meetingGuest)
     .innerJoin(guest, eq(meetingGuest.guestId, guest.id))
     .leftJoin(category, eq(guest.categoryId, category.id))
     .where(eq(meetingGuest.meetingId, id))
-    .orderBy(guest.name);
+    .orderBy(asc(meetingGuest.displayOrder), asc(meetingGuest.addedAt));
 
   return { ...meetingData, guests };
 }
@@ -124,15 +125,43 @@ export async function createMeeting(dateStr: string, location?: string) {
 }
 
 /**
- * Add a guest to a meeting.
+ * Add a guest to a meeting. New guest goes to the end of the per-meeting order
+ * (max+1 within this meeting_id). COALESCE(MAX,0)+1 yields 1 for the first guest.
  */
 export async function addGuestToMeeting(meetingId: string, guestId: string) {
   const results = await getDb()
     .insert(meetingGuest)
-    .values({ meetingId, guestId })
+    .values({
+      meetingId,
+      guestId,
+      displayOrder: sql`(SELECT COALESCE(MAX(display_order), 0) + 1 FROM meeting_guest WHERE meeting_id = ${meetingId})`,
+    })
     .returning();
 
   return results[0];
+}
+
+/**
+ * Reorder guests within a single meeting by setting display_order = index for
+ * each guestId in orderedGuestIds. Sequential UPDATEs (LL-003: no transaction).
+ * Each UPDATE is scoped to (meeting_id, guest_id) and idempotent on retry.
+ */
+export async function reorderMeetingGuests(
+  meetingId: string,
+  orderedGuestIds: string[]
+): Promise<void> {
+  const db = getDb();
+  for (let i = 0; i < orderedGuestIds.length; i++) {
+    await db
+      .update(meetingGuest)
+      .set({ displayOrder: i })
+      .where(
+        and(
+          eq(meetingGuest.meetingId, meetingId),
+          eq(meetingGuest.guestId, orderedGuestIds[i])
+        )
+      );
+  }
 }
 
 /**

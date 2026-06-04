@@ -9,12 +9,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MeetingControls } from "@/components/meetings/MeetingControls";
-import { VoteResults } from "@/components/votes/VoteResults";
 import { ReportButton } from "@/components/meetings/ReportButton";
 import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
 import { ImportGuestsButton } from "./ImportGuestsButton";
 import { ExportListButton } from "./ExportListButton";
+import { SortableMeetingGuestList } from "./SortableMeetingGuestList";
 import { MeetingActivationControls } from "./MeetingActivationControls";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 
@@ -60,9 +60,14 @@ export default async function MeetingDetailPage({
       )
     : [];
 
-  const resultsByGuest = new Map(
-    guestResults.map((gr) => [gr.guestId, gr.results])
-  );
+  // Serialize results to a plain object so it can cross the server→client boundary.
+  const resultsByGuest: Record<string, typeof guestResults[number]["results"]> =
+    Object.fromEntries(guestResults.map((gr) => [gr.guestId, gr.results]));
+
+  // Reorder allowed for management while the meeting is editable (draft/active).
+  const guestsReorderable =
+    isManagement &&
+    (meeting.status === "draft" || meeting.status === "active");
 
   const statusBadge = (status: string) => {
     const label = statusLabel[status] ?? status;
@@ -175,43 +180,17 @@ export default async function MeetingDetailPage({
           Hoste ({meeting.guests.length})
         </h2>
         {meeting.guests.length > 0 ? (
-          <div className="space-y-3">
-            {meeting.guests.map((g) => {
-              const results = resultsByGuest.get(g.guestId);
-              return (
-                <div key={g.guestId} className="mb-3">
-                  <Link href={`/guests/${g.guestId}?from=/meetings/${id}`}>
-                    <Card variant="interactive">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-text-main">
-                            {g.guestName}
-                          </p>
-                          <Badge variant="category" className="mt-1">
-                            {g.categoryName ?? "[bez kategorie]"}
-                          </Badge>
-                        </div>
-                        <Button variant="link" size="sm">
-                          Detail &rarr;
-                        </Button>
-                      </div>
-                    </Card>
-                  </Link>
-                  {results && results.length > 0 && (
-                    <Card className="mt-2 ml-4">
-                      <h3 className="text-sm font-semibold text-text-muted mb-2">
-                        Vysledky hlasovani
-                      </h3>
-                      <VoteResults
-                        results={results}
-                        meetingStatus={meeting.status}
-                      />
-                    </Card>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <SortableMeetingGuestList
+            meetingId={id}
+            meetingStatus={meeting.status}
+            guests={meeting.guests.map((g) => ({
+              guestId: g.guestId,
+              guestName: g.guestName,
+              categoryName: g.categoryName ?? null,
+            }))}
+            resultsByGuest={resultsByGuest}
+            reorderable={guestsReorderable}
+          />
         ) : (
           <Card>
             <EmptyState
