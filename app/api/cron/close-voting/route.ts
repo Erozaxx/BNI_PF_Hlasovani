@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq, and } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/neon-http";
+import { getSql } from "@/lib/db/client";
+import { meeting as meetingTable, meetingMemberLink } from "@/lib/db/schema";
 import { getExpiredVotingMeetings } from "@/lib/db/queries/votes";
 import { updateMeetingStatus } from "@/lib/db/queries/meetings";
 import { sendReport } from "@/lib/email/resend";
@@ -7,10 +11,30 @@ import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail, sendMeetingMagicLinkEmail } from "@/lib/email/resend";
 import {
   getActiveMeetingsForDate,
+  getActiveMeetingLinks,
   getPendingMorningEmailLinks,
   markMorningEmailSent,
 } from "@/lib/db/queries/meeting-member-links";
 import { regenerateMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
+
+function getDb() {
+  return drizzle(getSql());
+}
+
+// Phase B (cron) uses a "next Wednesday 23:59:59 Europe/Prague" voting close window,
+// NOT the fixed 48h window. The manual endpoint activate-voting/route.ts keeps 48h.
+const TOKEN_EXPIRY_EXTRA_MS = 24 * 60 * 60 * 1000; // +24h buffer AFTER votingClosesAt
+
+/**
+ * Get the CZ-local weekday name (Europe/Prague) for the current instant.
+ * Returns e.g. "Thursday".
+ */
+function weekdayInCET(): string {
+  return new Date().toLocaleDateString("en-US", {
+    timeZone: "Europe/Prague",
+    weekday: "long",
+  });
+}
 
 /**
  * Get today's date string in CET/CEST (Europe/Prague) timezone.
@@ -21,13 +45,73 @@ function todayInCET(): string {
 }
 
 /**
+ * Compute the UTC instant for "next Wednesday 23:59:59 Europe/Prague" relative to `now`.
+ *
+ * Phase B activation runs on a Thursday (CZ), so the target is Thursday + 6 days,
+ * but the day delta is computed robustly from the CZ-local weekday (target = Wednesday)
+ * rather than hard-coding +6. If `now` is already CZ-Wednesday, this returns the
+ * Wednesday 7 days out (delta normalized to 1..7 so it's always strictly in the future
+ * relative to the start of today).
+ *
+ * DST-safe: derives the target CZ wall-clock date, then corrects a UTC guess by the
+ * actual Europe/Prague offset (CEST UTC+2 in summer, CET UTC+1 in winter).
+ */
+function nextWednesday2359InPrague(now: Date): Date {
+  // CZ-local weekday index 0..6 (Sun..Sat) for `now`.
+  const czWeekdayName = now.toLocaleDateString("en-US", {
+    timeZone: "Europe/Prague",
+    weekday: "long",
+  });
+  const weekdayIndex: Record<string, number> = {
+    Sunday: 0,
+    Monday: 1,
+    Tuesday: 2,
+    Wednesday: 3,
+    Thursday: 4,
+    Friday: 5,
+    Saturday: 6,
+  };
+  const todayIdx = weekdayIndex[czWeekdayName];
+  const WEDNESDAY = 3;
+  // Days until the NEXT Wednesday (1..7), never 0 — always a future Wednesday.
+  const daysUntilWed = ((WEDNESDAY - todayIdx + 7) % 7) || 7;
+
+  // Target CZ calendar date (YYYY-MM-DD) for that Wednesday.
+  const czTodayStr = now.toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
+  const [y, m, d] = czTodayStr.split("-").map(Number);
+  // Build at UTC noon to avoid date rollover near midnight, then add the day delta.
+  const targetMidUtc = new Date(Date.UTC(y, m - 1, d + daysUntilWed, 12, 0, 0));
+  const targetDateStr = targetMidUtc.toLocaleDateString("sv-SE", {
+    timeZone: "Europe/Prague",
+  });
+  const [ty, tm, td] = targetDateStr.split("-").map(Number);
+
+  // Treat "targetDate 23:59:59" as if it were UTC, then correct by the Prague offset
+  // so the resulting UTC instant renders as 23:59:59 wall-clock in Europe/Prague.
+  const guess = new Date(Date.UTC(ty, tm - 1, td, 23, 59, 59));
+  // Prague offset (ms) for this instant: same instant rendered in Prague minus in UTC.
+  // CEST (summer) → +2h, CET (winter) → +1h.
+  const inPrague = new Date(
+    guess.toLocaleString("en-US", { timeZone: "Europe/Prague" })
+  );
+  const inUtc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
+  const offsetMs = inPrague.getTime() - inUtc.getTime();
+  return new Date(guess.getTime() - offsetMs);
+}
+
+/**
  * Internal handler for /api/cron/close-voting
  *
- * Vercel Hobby: 1 cron job, runs once daily at 04:00 UTC (≈ 5:00 CET / 6:00 CEST).
+ * Vercel Hobby: 1 cron job, runs once daily at 05:00 UTC.
+ *   Summer (CEST, UTC+2): 05:00 UTC = 07:00 local — the intended Thursday 7:00 run.
+ *   Winter (CET, UTC+1):  05:00 UTC = 06:00 local — DST drift, accepted (no comments in vercel.json).
  *
- * Phase A: Morning email — send meeting magic link emails to all members of active
- *          meetings scheduled today where morningEmailSentAt IS NULL (idempotent).
- *          Voting activation (12:00 CET) is manual-only — admin uses the UI button.
+ * Phase A: Morning email — DISABLED. Kept as a stub; do not re-enable without product sign-off.
+ * Phase B: Thursday auto-activation — on Thursdays only, transition today's active meeting
+ *          to 'voting' (votingOpenAt=now, votingClosesAt=next Wed 23:59:59 Europe/Prague,
+ *          link expiresAt=votingClosesAt+24h) and email every member with an active link
+ *          a voting magic link.
+ *          Idempotent via WHERE status='active' guard — a second run the same day is a no-op.
  * Phase C: Close expired voting — meetings in 'voting' status past their votingClosesAt.
  *          Sends report email for each closed meeting.
  * Phase E: Renew expiring member tokens — existing logic.
@@ -58,6 +142,9 @@ async function handler(request: NextRequest) {
   try {
     // ── Phase A: Morning emails (disabled) ──
     const morningEmailResult = { skipped: "disabled", sent: 0 };
+
+    // ── Phase B: Thursday auto-activation ──
+    const thursdayActivationResult = await activateThursdayMeetings(today);
 
     // ── Phase C: Close expired voting meetings ──
     const expiredMeetings = await getExpiredVotingMeetings();
@@ -110,6 +197,7 @@ async function handler(request: NextRequest) {
 
     return NextResponse.json({
       morningEmails: morningEmailResult,
+      thursdayActivation: thursdayActivationResult,
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
       reports: reportResults.length > 0 ? reportResults : undefined,
@@ -123,6 +211,140 @@ async function handler(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Phase B: On Thursdays, auto-activate today's active meeting into 'voting' and
+ * email every member (with an active link) a voting magic link.
+ *
+ * Voting window (differs from the manual activate-voting endpoint, which stays at 48h):
+ *   - votingOpenAt = now
+ *   - votingClosesAt = next Wednesday 23:59:59 Europe/Prague (DST-aware UTC instant)
+ *   - meeting_member_link.expiresAt = votingClosesAt + 24h
+ *   - no transaction (LL-003): sequential UPDATEs, status='active' WHERE guard for idempotence.
+ *
+ * Idempotence: the status guard means a second run the same Thursday updates 0 rows,
+ * so no emails are re-sent.
+ */
+async function activateThursdayMeetings(today: string): Promise<{
+  skipped?: string;
+  activated?: number;
+  sent?: number;
+  errors?: string[];
+}> {
+  const weekday = weekdayInCET();
+  if (weekday !== "Thursday") {
+    return { skipped: "not Thursday" };
+  }
+
+  const meetings = await getActiveMeetingsForDate(today);
+  if (meetings.length === 0) {
+    return { skipped: "no active meetings today", activated: 0, sent: 0 };
+  }
+
+  let activatedCount = 0;
+  let totalSent = 0;
+  const allErrors: string[] = [];
+
+  for (const mtg of meetings) {
+    try {
+      const now = new Date();
+      const votingOpenAt = now;
+      // Voting closes at the next Wednesday 23:59:59 Europe/Prague (DST-aware UTC instant).
+      // Activation runs Thursday (CZ) → target is that Thursday + 6 days, but the day
+      // delta is derived from the CZ weekday so it never relies on a hard-coded +6.
+      const votingClosesAt = nextWednesday2359InPrague(now);
+      // Keep the +24h buffer AFTER voting closes (not after now).
+      const expiresAt = new Date(votingClosesAt.getTime() + TOKEN_EXPIRY_EXTRA_MS);
+      console.log(
+        `thursday-activation: meeting ${mtg.id} votingClosesAt=${votingClosesAt.toISOString()} ` +
+          `(expected Wed 23:59:59 Europe/Prague), expiresAt=${expiresAt.toISOString()}`
+      );
+
+      // Transition active -> voting. WHERE status='active' guard makes this idempotent:
+      // a repeat run the same day updates 0 rows and we skip emailing.
+      const updated = await getDb()
+        .update(meetingTable)
+        .set({ status: "voting", votingOpenAt, votingClosesAt })
+        .where(
+          and(
+            eq(meetingTable.id, mtg.id),
+            eq(meetingTable.status, "active")
+          )
+        )
+        .returning({ id: meetingTable.id });
+
+      if (updated.length === 0) {
+        console.log(
+          `thursday-activation: meeting ${mtg.id} already transitioned — skipping emails`
+        );
+        continue;
+      }
+
+      // Separate UPDATE: set link expiry on all member links (no transaction — LL-003).
+      await getDb()
+        .update(meetingMemberLink)
+        .set({ expiresAt })
+        .where(eq(meetingMemberLink.meetingId, mtg.id));
+
+      activatedCount++;
+      console.log(
+        `thursday-activation: meeting ${mtg.id} activated votingOpenAt=${votingOpenAt.toISOString()}`
+      );
+
+      // Email every member with an active link, regenerating a fresh token per member.
+      const links = await getActiveMeetingLinks(mtg.id);
+      for (const link of links) {
+        try {
+          if (!link.memberEmail) {
+            throw new Error(`member ${link.memberId} has no email`);
+          }
+
+          const rawToken = await regenerateMeetingToken(
+            link.meetingId,
+            link.memberId
+          );
+          if (!rawToken) {
+            throw new Error(
+              `regenerate token failed for member ${link.memberId}`
+            );
+          }
+
+          const magicUrl = buildMeetingMagicUrl(rawToken);
+
+          const emailResult = await sendMeetingMagicLinkEmail(
+            link.memberEmail,
+            magicUrl,
+            link.memberName ?? undefined,
+            mtg.date
+          );
+
+          if (!emailResult.success) {
+            throw new Error(`email send failed: ${emailResult.error}`);
+          }
+
+          totalSent++;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`thursday-activation email error for meeting ${mtg.id}:`, msg);
+          allErrors.push(`meeting ${mtg.id}: ${msg}`);
+        }
+
+        // 250ms delay between sends — Resend limit is 5 req/s.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`thursday-activation error for meeting ${mtg.id}:`, msg);
+      allErrors.push(`meeting ${mtg.id}: ${msg}`);
+    }
+  }
+
+  return {
+    activated: activatedCount,
+    sent: totalSent,
+    errors: allErrors.length > 0 ? allErrors : undefined,
+  };
 }
 
 /**
