@@ -1,4 +1,4 @@
-import { eq, asc, and, isNotNull, gte, sql } from "drizzle-orm";
+import { eq, asc, and, isNotNull, gte, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { member } from "@/lib/db/schema";
@@ -6,10 +6,15 @@ import { member } from "@/lib/db/schema";
 function getDb() { return drizzle(getSql()); }
 
 /**
- * Get all members ordered by name.
+ * Get all members ordered by drag&drop display order, then creation time.
+ * displayOrder is backfilled (migration) and always set on insert, so it is
+ * effectively non-null; createdAt is a stable tiebreaker.
  */
 export async function getMembers() {
-  return getDb().select().from(member).orderBy(asc(member.name));
+  return getDb()
+    .select()
+    .from(member)
+    .orderBy(asc(member.displayOrder), asc(member.createdAt));
 }
 
 /**
@@ -45,6 +50,10 @@ export async function createMember(data: {
       passwordHash: data.passwordHash || null,
       company: data.company || null,
       obor: data.obor || null,
+      // New members go to the end of the global order (max+1).
+      // COALESCE(MAX,0)+1 yields 1 for the first member. Subquery resolves at
+      // INSERT time; concurrent admin creates are rare and ties break on createdAt.
+      displayOrder: sql`(SELECT COALESCE(MAX(display_order), 0) + 1 FROM member)`,
     })
     .returning();
 
@@ -157,6 +166,32 @@ export async function updatePasswordHash(memberId: string, passwordHash: string)
  */
 export async function deleteMember(id: string) {
   await getDb().delete(member).where(eq(member.id, id));
+}
+
+/**
+ * Count all members. Used to enforce the "complete list" guard in the
+ * reorder endpoint (M-1).
+ */
+export async function getMemberCount(): Promise<number> {
+  const rows = await getDb().select({ value: count() }).from(member);
+  return rows[0]?.value ?? 0;
+}
+
+/**
+ * Reorder members by setting display_order = index+1 (1-based) for each id in
+ * orderedIds. 1-based matches the insert (COALESCE(MAX,0)+1) and migration
+ * backfill (ROW_NUMBER) schemes, keeping display_order consistent (M-2).
+ * Sequential UPDATEs (LL-003: no db.transaction in Vercel serverless).
+ * Each UPDATE is guarded by WHERE id = <id> and is idempotent on retry.
+ */
+export async function reorderMembers(orderedIds: string[]): Promise<void> {
+  const db = getDb();
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db
+      .update(member)
+      .set({ displayOrder: i + 1 })
+      .where(eq(member.id, orderedIds[i]));
+  }
 }
 
 /**

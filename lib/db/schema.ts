@@ -50,6 +50,9 @@ export const member = pgTable(
     previousTokenExpiresAt: timestamp("previous_token_expires_at", {
       withTimezone: true,
     }),
+    // Global display order for member listings (drag&drop). Nullable for legacy
+    // rows; backfilled by migration and always set on insert (max+1).
+    displayOrder: integer("display_order"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -151,6 +154,9 @@ export const meetingGuest = pgTable(
       .notNull()
       .defaultNow(),
     votingEnabled: boolean("voting_enabled").notNull().default(true),
+    // Per-meeting display order for guest listings (drag&drop). Nullable for
+    // legacy rows; backfilled per meeting by migration and set on insert (max+1).
+    displayOrder: integer("display_order"),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.meetingId, table.guestId] }),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { drizzle } from "drizzle-orm/neon-http";
-import { inArray, eq } from "drizzle-orm";
+import { inArray, eq, max } from "drizzle-orm";
 import { getSession } from "@/lib/auth/session";
 import { getSql } from "@/lib/db/client";
 import { category, guest, meetingGuest } from "@/lib/db/schema";
@@ -281,7 +281,21 @@ export async function POST(
   if (linkedGuestIds.length > 0) {
     // Deduplicate guest IDs (same guest may appear twice in the file without email)
     const uniqueGuestIds = [...new Set(linkedGuestIds)];
-    const values = uniqueGuestIds.map((guestId) => ({ meetingId, guestId }));
+
+    // Continue the per-meeting display order from the current max (max+1, max+2, …).
+    // Guests already linked to this meeting are skipped by ON CONFLICT DO NOTHING,
+    // so their display_order (and the reserved index here) simply leaves a small gap.
+    const maxRows = await db
+      .select({ maxOrder: max(meetingGuest.displayOrder) })
+      .from(meetingGuest)
+      .where(eq(meetingGuest.meetingId, meetingId));
+    let nextOrder = (maxRows[0]?.maxOrder ?? 0) + 1;
+
+    const values = uniqueGuestIds.map((guestId) => ({
+      meetingId,
+      guestId,
+      displayOrder: nextOrder++,
+    }));
 
     const linked = await db
       .insert(meetingGuest)
