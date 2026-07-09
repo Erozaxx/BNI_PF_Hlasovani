@@ -241,6 +241,7 @@ export function ImportMembersForm() {
                 <th className="px-3 py-2 font-semibold">Jmeno</th>
                 <th className="px-3 py-2 font-semibold">Obor (novy)</th>
                 <th className="px-3 py-2 font-semibold">Obor (stavajici)</th>
+                <th className="px-3 py-2 font-semibold">Datum vstupu</th>
               </tr>
             </thead>
             <tbody>
@@ -276,6 +277,18 @@ export function ImportMembersForm() {
                       {row.status === "skipped"
                         ? <span className="text-danger text-xs">{row.reason}</span>
                         : row.existingObor ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 text-text-muted">
+                      {row.xlsxJoinedAt ??
+                        (row.status === "new" ? (
+                          <span title="Chybi/nerozpoznano v souboru — pouzije se aktualni datum">
+                            — (dnesni datum)
+                          </span>
+                        ) : (
+                          <span title="Chybi/nerozpoznano v souboru — stavajici datum vstupu zustane beze zmeny">
+                            —
+                          </span>
+                        ))}
                     </td>
                   </tr>
                 );

@@ -37,6 +37,7 @@ CREATE TABLE member (
     previous_token_hash       TEXT,
     previous_token_expires_at TIMESTAMPTZ,
     display_order    INTEGER,  -- iter-019: global drag&drop order (backfilled by created_at)
+    joined_at        DATE        NOT NULL DEFAULT CURRENT_DATE,  -- iter-020: source of truth for BNI entry date (backfilled from created_at::date)
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT member_management_requires_credentials
         CHECK (
@@ -167,3 +168,92 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER vote_meeting_open_check
   BEFORE INSERT ON vote
   FOR EACH ROW EXECUTE FUNCTION check_meeting_voting_open();
+
+-- ============================================================
+-- iter-020 — POHOVORY SE CLENY (5/10 mesicu)
+-- Viz lib/db/migrations/iter-020-interviews.sql pro plnou migraci (idempotentni).
+-- ============================================================
+
+-- INTERVIEW_QUESTION — globalni editovatelna sada otazek
+CREATE TABLE interview_question (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    text          TEXT        NOT NULL,
+    question_type TEXT        NOT NULL DEFAULT 'text',
+    position      INTEGER     NOT NULL,
+    active        BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT interview_question_text_check
+        CHECK (char_length(text) > 0 AND char_length(text) <= 1000),
+    CONSTRAINT interview_question_type_check
+        CHECK (question_type IN ('text'))
+);
+CREATE INDEX idx_interview_question_active_position ON interview_question (active, position);
+
+-- INTERVIEW — instance pohovoru (partial UNIQUE: max 1 zivy 5m + 1 zivy 10m na clena)
+CREATE TABLE interview (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id    UUID        NOT NULL REFERENCES member(id) ON DELETE CASCADE,
+    type         TEXT        NOT NULL CHECK (type IN ('month_5', 'month_10')),
+    status       TEXT        NOT NULL DEFAULT 'open'
+                              CHECK (status IN ('open', 'submitted', 'cancelled')),
+    leader_id    UUID        REFERENCES member(id) ON DELETE SET NULL,
+    created_by   UUID        REFERENCES member(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    submitted_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX idx_interview_member_type_active
+    ON interview (member_id, type) WHERE status <> 'cancelled';
+CREATE INDEX idx_interview_member ON interview (member_id);
+CREATE INDEX idx_interview_status ON interview (status);
+CREATE INDEX idx_interview_leader ON interview (leader_id);
+
+-- INTERVIEW_QUESTION_SNAPSHOT — zamrazena kopie otazek pri zalozeni pohovoru
+CREATE TABLE interview_question_snapshot (
+    id                 UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    interview_id       UUID    NOT NULL REFERENCES interview(id) ON DELETE CASCADE,
+    source_question_id UUID    REFERENCES interview_question(id) ON DELETE SET NULL,
+    text               TEXT    NOT NULL,
+    question_type      TEXT    NOT NULL DEFAULT 'text',
+    position           INTEGER NOT NULL,
+    CONSTRAINT iqs_interview_position_unique UNIQUE (interview_id, position),
+    CONSTRAINT iqs_interview_source_unique   UNIQUE (interview_id, source_question_id),
+    CONSTRAINT iqs_id_interview_unique       UNIQUE (id, interview_id)
+);
+CREATE INDEX idx_iqs_interview ON interview_question_snapshot (interview_id);
+
+-- INTERVIEW_ANSWER — odpovedi vedouciho (composite FK = DB-level anti-IDOR)
+CREATE TABLE interview_answer (
+    id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    interview_id         UUID        NOT NULL REFERENCES interview(id) ON DELETE CASCADE,
+    snapshot_question_id UUID        NOT NULL,
+    value_text           TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT interview_answer_snapshot_unique UNIQUE (snapshot_question_id),
+    CONSTRAINT interview_answer_snapshot_fk
+        FOREIGN KEY (snapshot_question_id, interview_id)
+        REFERENCES interview_question_snapshot (id, interview_id)
+        ON DELETE CASCADE
+);
+CREATE INDEX idx_interview_answer_interview ON interview_answer (interview_id);
+
+-- INTERVIEW_LINK — scoped magic link pohovoru (expires_at NOT NULL, 1 radek per pohovor)
+CREATE TABLE interview_link (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    interview_id UUID        NOT NULL UNIQUE REFERENCES interview(id) ON DELETE CASCADE,
+    leader_id    UUID        NOT NULL REFERENCES member(id) ON DELETE CASCADE,
+    token_hash   TEXT        NOT NULL UNIQUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at   TIMESTAMPTZ NOT NULL,
+    revoked_at   TIMESTAMPTZ,
+    last_sent_at TIMESTAMPTZ
+);
+CREATE INDEX idx_interview_link_token_hash ON interview_link (token_hash);
+
+-- AUTH_THROTTLE — DB-backed fixed-window rate-limit (bez Upstash)
+CREATE TABLE auth_throttle (
+    key          TEXT        PRIMARY KEY,
+    window_start TIMESTAMPTZ NOT NULL,
+    count        INTEGER     NOT NULL DEFAULT 0
+);

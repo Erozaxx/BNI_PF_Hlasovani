@@ -25,6 +25,7 @@ import { MemberActions } from "./MemberActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
 import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
 import { EditMemberEmailForm } from "./EditMemberEmailForm";
+import { EditMemberJoinedAtForm } from "./EditMemberJoinedAtForm";
 
 export interface MemberRow {
   id: string;
@@ -35,6 +36,10 @@ export interface MemberRow {
   managementRole: string | null;
   magicTokenHash: string | null;
   tokenUsed: boolean;
+  /** "YYYY-MM-DD" (arch 7.1, iter-020) — BNI entry date, admin-editable. */
+  joinedAt: string;
+  /** Number of interview records (any status) that would cascade-delete with this member (R-11). */
+  interviewCount: number;
 }
 
 interface SortableMemberListProps {
@@ -97,6 +102,10 @@ function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
         />
       </td>
       <td className="px-4 py-3 text-text-muted">{m.obor || "—"}</td>
+      <td className="px-4 py-3 text-text-muted">
+        <div>{new Date(`${m.joinedAt}T00:00:00Z`).toLocaleDateString("cs-CZ")}</div>
+        <EditMemberJoinedAtForm memberId={m.id} initialJoinedAt={m.joinedAt} />
+      </td>
       <td className="px-4 py-3">
         {m.managementRole ? (
           <Badge variant={m.managementRole === "admin" ? "danger" : "info"}>
@@ -118,7 +127,11 @@ function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
       <td className="px-4 py-3">
         <div className="flex flex-col gap-2">
           <MemberActions memberId={m.id} hasToken={Boolean(m.magicTokenHash)} />
-          <DeleteMemberButton memberId={m.id} memberName={m.name} />
+          <DeleteMemberButton
+            memberId={m.id}
+            memberName={m.name}
+            interviewCount={m.interviewCount}
+          />
         </div>
       </td>
     </tr>
@@ -186,6 +199,7 @@ export function SortableMemberList({ members }: SortableMemberListProps) {
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Firma</th>
               <th className="px-4 py-3 font-semibold">Obor</th>
+              <th className="px-4 py-3 font-semibold">Datum vstupu</th>
               <th className="px-4 py-3 font-semibold">Role</th>
               <th className="px-4 py-3 font-semibold">Token</th>
               <th className="px-4 py-3 font-semibold">Akce</th>

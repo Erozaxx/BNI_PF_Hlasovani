@@ -16,6 +16,7 @@ import {
   markMorningEmailSent,
 } from "@/lib/db/queries/meeting-member-links";
 import { regenerateMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
+import { cleanupStaleThrottleRows } from "@/lib/auth/throttle";
 
 function getDb() {
   return drizzle(getSql());
@@ -194,6 +195,16 @@ async function handler(request: NextRequest) {
 
     // ── Phase E: Renew expiring tokens ──
     const tokenRenewalResult = await renewExpiringTokens();
+
+    // ── Housekeeping: stale auth_throttle row cleanup (MINOR-1, T-013) ──
+    // Best-effort, sequential DELETE (no db.transaction() — LL-003). Own
+    // try/catch so a failure here never fails the cron's main logic above.
+    try {
+      await cleanupStaleThrottleRows();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("close-voting cron: throttle cleanup failed:", msg);
+    }
 
     return NextResponse.json({
       morningEmails: morningEmailResult,

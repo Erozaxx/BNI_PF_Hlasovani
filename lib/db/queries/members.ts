@@ -32,6 +32,12 @@ export async function getMemberById(id: string) {
 
 /**
  * Create a new member.
+ *
+ * joinedAt (iter-020, MAJOR-3): optional "YYYY-MM-DD" entry date, normally
+ * sourced from the XLSX import's "Datum vstupu" column. When omitted/null the
+ * column is left out of the insert values entirely so the schema's own
+ * default (CURRENT_DATE) applies — the import must never be blocked by a
+ * missing entry date.
  */
 export async function createMember(data: {
   name: string;
@@ -40,6 +46,7 @@ export async function createMember(data: {
   passwordHash?: string | null;
   company?: string | null;
   obor?: string | null;
+  joinedAt?: string | null;
 }) {
   const results = await getDb()
     .insert(member)
@@ -50,6 +57,7 @@ export async function createMember(data: {
       passwordHash: data.passwordHash || null,
       company: data.company || null,
       obor: data.obor || null,
+      ...(data.joinedAt ? { joinedAt: data.joinedAt } : {}),
       // New members go to the end of the global order (max+1).
       // COALESCE(MAX,0)+1 yields 1 for the first member. Subquery resolves at
       // INSERT time; concurrent admin creates are rare and ties break on createdAt.
@@ -81,6 +89,21 @@ export async function updateMemberEmail(
   await getDb()
     .update(member)
     .set({ email })
+    .where(eq(member.id, memberId));
+}
+
+/**
+ * Update the joined_at (entry date) for a member. Admin-only at the action
+ * layer (arch 7.1) — this query itself has no guard, callers must enforce it.
+ * `joinedAt` is a "YYYY-MM-DD" string (DATE column, no timezone).
+ */
+export async function updateMemberJoinedAt(
+  memberId: string,
+  joinedAt: string
+) {
+  await getDb()
+    .update(member)
+    .set({ joinedAt })
     .where(eq(member.id, memberId));
 }
 

@@ -9,6 +9,7 @@ import {
   deleteMember as dbDeleteMember,
   updateMemberCompany as dbUpdateMemberCompany,
   updateMemberEmail as dbUpdateMemberEmail,
+  updateMemberJoinedAt as dbUpdateMemberJoinedAt,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
@@ -227,6 +228,48 @@ export async function updateMemberEmailAction(
   } catch (error) {
     console.error("updateMemberEmailAction error:", error);
     return { success: false, error: "Nepodarilo se aktualizovat email." };
+  }
+}
+
+/**
+ * Update the joined_at (entry date) for a member. Requires admin role
+ * (arch 7.1 — deliberately admin-only, not moderator, unlike the interview
+ * question editor).
+ *
+ * Editing this value is also how the "neoverene datum vstupu" indicator on
+ * the /interviews due-list clears — that indicator is a zero-schema
+ * heuristic (joined_at == created_at::date), so once an admin sets a real
+ * entry date it naturally stops matching created_at and disappears.
+ */
+export async function updateMemberJoinedAtAction(
+  memberId: string,
+  joinedAt: string
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(joinedAt)) {
+    return { success: false, error: "Neplatny format data. Pouzijte format RRRR-MM-DD." };
+  }
+
+  const parsed = new Date(`${joinedAt}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return { success: false, error: "Neplatne datum." };
+  }
+
+  try {
+    const memberData = await getMemberById(memberId);
+    if (!memberData) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    await dbUpdateMemberJoinedAt(memberId, joinedAt);
+
+    revalidatePath("/admin/members");
+    return { success: true };
+  } catch (error) {
+    console.error("updateMemberJoinedAtAction error:", error);
+    return { success: false, error: "Nepodarilo se aktualizovat datum vstupu." };
   }
 }
 

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { InterviewDueSection } from "@/components/interviews/InterviewDueSection";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -66,6 +67,9 @@ export default async function DashboardPage() {
           </Link>
         </div>
       )}
+
+      {/* Pohovory k zalozeni (5/10 mesicu) — mod/admin only, arch section 7.2 */}
+      {isManagement && <InterviewDueSection />}
 
       {/* Recent guests */}
       <section>
