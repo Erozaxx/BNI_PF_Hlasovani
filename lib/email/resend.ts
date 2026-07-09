@@ -157,7 +157,8 @@ function escapeHtml(str: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 }
 
 function formatDate(d: Date): string {
@@ -295,6 +296,67 @@ export async function sendMeetingMagicLinkEmail(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(`[sendMeetingMagicLinkEmail] exception: to=${email} from=${fromField} error=${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Send a scoped interview magic link email to the interview leader (iter-020,
+ * T-008, arch section 8c). Same code path is used for the first send and for
+ * every regeneration — the caller (sendInterviewLinkAction) always passes a
+ * freshly (re)generated token, so there is nothing "resend"-specific here.
+ */
+export async function sendInterviewLinkEmail(
+  email: string,
+  magicLink: string,
+  leaderName: string | null,
+  memberName: string,
+  typeLabel: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const fromField = `BNI Hlasovani <${fromEmail}>`;
+
+  if (!apiKey) {
+    console.warn("RESEND_API_KEY not configured, logging interview magic link to console");
+    console.log(`[INTERVIEW MAGIC LINK] ${email}: ${magicLink}`);
+    return { success: true };
+  }
+
+  try {
+    console.info(`[sendInterviewLinkEmail] calling resend.emails.send to=${email} from=${fromField}`);
+    const { data, error } = await resend.emails.send({
+      from: fromField,
+      to: [email],
+      subject: `BNI Hlasovani - Pohovor (${typeLabel}) - ${memberName}`,
+      html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
+  <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+  </div>
+  <p>Dobry den${leaderName ? ` ${escapeHtml(leaderName)}` : ""},</p>
+  <p>Byl pro vas pripraven odkaz na vyplneni pohovoru (<strong>${escapeHtml(typeLabel)}</strong>) se clenem <strong>${escapeHtml(memberName)}</strong>. Kliknutim nize otevrete formular:</p>
+  <div style="text-align:center;margin:24px 0;">
+    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Vyplnit pohovor</a>
+  </div>
+  <p style="color:#666;font-size:13px;">Odkaz je platny 30 dni. Odpovedi muzete prubezne ukladat a vratit se k nim pozdeji; po odeslani jsou jen ke cteni.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+</body>
+</html>`,
+    });
+
+    if (error) {
+      console.error(`[sendInterviewLinkEmail] resend error: to=${email} from=${fromField} error=`, error);
+      return { success: false, error: error.message };
+    }
+
+    console.info(`[sendInterviewLinkEmail] success: to=${email} id=${data?.id}`);
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[sendInterviewLinkEmail] exception: to=${email} from=${fromField} error=${msg}`);
     return { success: false, error: msg };
   }
 }

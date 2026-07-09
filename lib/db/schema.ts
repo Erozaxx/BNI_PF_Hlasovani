@@ -56,6 +56,12 @@ export const member = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // iter-020: source of truth for BNI entry date (used by interview 5/10-month
+    // due logic). Backfilled from created_at::date (migration); created_at is
+    // import time for bulk-imported members, NOT actual entry date — hence a
+    // dedicated, admin-editable column. DATE (not timestamp): entry is a
+    // calendar day, month arithmetic without timezone concerns.
+    joinedAt: date("joined_at").notNull().default(sql`CURRENT_DATE`),
   },
   (table) => ({
     emailUnique: unique("member_email_unique").on(table.email),
@@ -487,3 +493,198 @@ export const meetingMemberLink = pgTable(
     memberIdIdx: index("idx_mml_member_id").on(table.memberId),
   })
 );
+
+// ============================================================
+// INTERVIEW_QUESTION — iter-020, globální editovatelná sada otázek
+// position: bez UNIQUE (reorder = sekvenční UPDATEy bez transakce, LL-003 —
+//           UNIQUE by kolidoval transientně; stejný přístup jako display_order)
+// active:   archivace místo hard delete (zachová source_question_id párování)
+// ============================================================
+export const interviewQuestion = pgTable(
+  "interview_question",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    text: text("text").notNull(),
+    questionType: text("question_type").notNull().default("text"),
+    position: integer("position").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Musí být nastaven explicitně v každém UPDATE (Drizzle nemá auto-update)
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    textNotEmpty: check(
+      "interview_question_text_check",
+      sql`char_length(${table.text}) > 0 AND char_length(${table.text}) <= 1000`
+    ),
+    // Rozšiřitelnost: dnes jen 'text'; budoucí 'scale_1_5' = rozšíření CHECK + value_scale sloupec v answer
+    typeCheck: check(
+      "interview_question_type_check",
+      sql`${table.questionType} IN ('text')`
+    ),
+    activePositionIdx: index("idx_interview_question_active_position").on(
+      table.active,
+      table.position
+    ),
+  })
+);
+
+// ============================================================
+// INTERVIEW — iter-020, instance pohovoru
+// Partial UNIQUE (member_id, type) WHERE status <> 'cancelled':
+//   max 1 živý pohovor 5m a 1 živý 10m na člena → porovnání 5 vs 10 je 1:1.
+// member_id ON DELETE CASCADE: smazání člena (deleteMemberAction) maže i jeho
+//   pohovory vč. submitted — VĚDOMÉ rozhodnutí, konzistentní s vote.member_id
+//   (hlasovací historie člena dnes mizí stejně). Viz R-11.
+// leader_id nullable + SET NULL: smazání člena-vedoucího nesmí smazat pohovor.
+// Smazání dotazníku (T-004a): HARD DELETE řádku (admin i mod, open i submitted) —
+//   DB cascade smaže snapshot/odpovědi/link jedním příkazem (flow 8h). Hodnota
+//   'cancelled' zůstává v CHECK jako rezerva; žádná MVP cesta ji nenastavuje.
+// ============================================================
+export const interview = pgTable(
+  "interview",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    status: text("status").notNull().default("open"),
+    leaderId: uuid("leader_id").references(() => member.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (table) => ({
+    typeCheck: check(
+      "interview_type_check",
+      sql`${table.type} IN ('month_5', 'month_10')`
+    ),
+    statusCheck: check(
+      "interview_status_check",
+      sql`${table.status} IN ('open', 'submitted', 'cancelled')`
+    ),
+    // Partial UNIQUE — enforced at DB level in migration (CREATE UNIQUE INDEX);
+    // v Drizzle jen plain index s where — konvence projektu, viz event_participant
+    memberTypeActiveIdx: index("idx_interview_member_type_active")
+      .on(table.memberId, table.type)
+      .where(sql`${table.status} <> 'cancelled'`),
+    memberIdx: index("idx_interview_member").on(table.memberId),
+    statusIdx: index("idx_interview_status").on(table.status),
+    leaderIdx: index("idx_interview_leader").on(table.leaderId),
+  })
+);
+
+// ============================================================
+// INTERVIEW_QUESTION_SNAPSHOT — iter-020, zamrazená kopie otázek při založení
+// source_question_id: primární párovací klíč 5 vs 10 (SET NULL při smazání zdroje)
+// position: hustý rank 1..N přiřazený při kopii (NE surová position z živé sady —
+//   duplicitní pozice v živé sadě, R-8, nemůže způsobit kolizi v kopii)
+// UNIQUE(interview_id, source_question_id): idempotence repair-on-retry klíčovaná
+//   OTÁZKOU, ne pozicí — opakovaný insert nikdy tiše nezahodí jinou otázku (MAJOR-1);
+//   NULLs distinct (Postgres default) → řádky se source SET NULL nekolidují
+// UNIQUE(interview_id, position): tvrdá integrita pozic — neočekávaná kolize = 23505
+//   (viditelná chyba), už NENÍ conflict target pro DO NOTHING
+// UNIQUE(id, interview_id): cíl composite FK z interview_answer (anti-IDOR na DB úrovni)
+// ============================================================
+export const interviewQuestionSnapshot = pgTable(
+  "interview_question_snapshot",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interviewId: uuid("interview_id")
+      .notNull()
+      .references(() => interview.id, { onDelete: "cascade" }),
+    sourceQuestionId: uuid("source_question_id").references(
+      () => interviewQuestion.id,
+      { onDelete: "set null" }
+    ),
+    text: text("text").notNull(),
+    questionType: text("question_type").notNull().default("text"),
+    position: integer("position").notNull(),
+  },
+  (table) => ({
+    interviewPositionUnique: unique("iqs_interview_position_unique").on(
+      table.interviewId,
+      table.position
+    ),
+    interviewSourceUnique: unique("iqs_interview_source_unique").on(
+      table.interviewId,
+      table.sourceQuestionId
+    ),
+    idInterviewUnique: unique("iqs_id_interview_unique").on(
+      table.id,
+      table.interviewId
+    ),
+    interviewIdx: index("idx_iqs_interview").on(table.interviewId),
+  })
+);
+
+// ============================================================
+// INTERVIEW_ANSWER — iter-020, odpovědi vedoucího
+// snapshot_question_id UNIQUE: max 1 odpověď na otázku (upsert ON CONFLICT).
+// Composite FK (snapshot_question_id, interview_id) → snapshot(id, interview_id):
+//   DB-level záruka, že odpověď patří k otázce SVÉHO pohovoru — druhá linie
+//   obrany proti IDOR (H-7/H-8 lesson). Composite FK je v projektu NOVÝ vzor
+//   (Drizzle ho neumí deklarovat) — vynucen jen na DB úrovni migrací (viz
+//   lib/db/migrations/iter-020-interviews.sql).
+// value_text nullable: prázdná odpověď povolena (submit nevyžaduje úplnost).
+// ============================================================
+export const interviewAnswer = pgTable(
+  "interview_answer",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interviewId: uuid("interview_id")
+      .notNull()
+      .references(() => interview.id, { onDelete: "cascade" }),
+    snapshotQuestionId: uuid("snapshot_question_id").notNull(),
+    valueText: text("value_text"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    snapshotUnique: unique("interview_answer_snapshot_unique").on(
+      table.snapshotQuestionId
+    ),
+    interviewIdx: index("idx_interview_answer_interview").on(table.interviewId),
+  })
+);
+
+// ============================================================
+// INTERVIEW_LINK — iter-020, scoped magic link pohovoru (vzor meeting_member_link)
+// interview_id UNIQUE: 1 řádek per pohovor → regenerace = UPDATE (starý hash
+//   okamžitě zaniká; žádný previous_token fallback — H-9 lesson).
+// expires_at NOT NULL: token NIKDY bez expirace (H-3 lesson).
+// leader_id: token je vázán na konkrétního vedoucího; změna vedoucího token revokuje.
+// ============================================================
+export const interviewLink = pgTable(
+  "interview_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    interviewId: uuid("interview_id")
+      .notNull()
+      .unique()
+      .references(() => interview.id, { onDelete: "cascade" }),
+    leaderId: uuid("leader_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+  },
+  (table) => ({
+    tokenHashIdx: index("idx_interview_link_token_hash").on(table.tokenHash),
+  })
+);
+
+// ============================================================
+// AUTH_THROTTLE — iter-020, DB-backed fixed-window rate-limit (H-4 lesson, bez Upstash)
+// key formát: "<scope>:<ip>" např. "i-verify:203.0.113.5"
+// Jediný atomický UPSERT per failed pokus — bezpečné v serverless bez transakce.
+// ============================================================
+export const authThrottle = pgTable("auth_throttle", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull().default(0),
+});

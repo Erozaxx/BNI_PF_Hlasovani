@@ -7,6 +7,7 @@ import {
   getMembersForImport,
   createMember,
   updateMemberObor,
+  updateMemberJoinedAt,
   getMemberById,
 } from "@/lib/db/queries/members";
 import type { ActionResult } from "@/lib/types";
@@ -74,6 +75,7 @@ export async function parseXlsxAction(
         xlsxName: xlsxRow.name,
         xlsxObor: xlsxRow.obor,
         xlsxRole: xlsxRow.role,
+        xlsxJoinedAt: xlsxRow.joinedAt,
         status: "skipped",
         reason: "Duplicitni jmeno v souboru",
       });
@@ -89,6 +91,7 @@ export async function parseXlsxAction(
         xlsxName: xlsxRow.name,
         xlsxObor: xlsxRow.obor,
         xlsxRole: xlsxRow.role,
+        xlsxJoinedAt: xlsxRow.joinedAt,
         status: "new",
       });
       newCount++;
@@ -101,6 +104,7 @@ export async function parseXlsxAction(
           xlsxName: xlsxRow.name,
           xlsxObor: xlsxRow.obor,
           xlsxRole: xlsxRow.role,
+          xlsxJoinedAt: xlsxRow.joinedAt,
           status: "update",
           existingMemberId: dbMatch.id,
           existingObor: dbMatch.obor,
@@ -111,6 +115,7 @@ export async function parseXlsxAction(
           xlsxName: xlsxRow.name,
           xlsxObor: xlsxRow.obor,
           xlsxRole: xlsxRow.role,
+          xlsxJoinedAt: xlsxRow.joinedAt,
           status: "unchanged",
           existingMemberId: dbMatch.id,
           existingObor: dbMatch.obor,
@@ -164,6 +169,10 @@ export async function importMembersAction(
         await createMember({
           name: row.xlsxName.trim(),
           obor: row.xlsxObor ?? null,
+          // joined_at: XLSX value if present (MAJOR-3), otherwise omitted so
+          // the column's own DB default (CURRENT_DATE) applies — import must
+          // never be blocked by a missing entry date.
+          joinedAt: row.xlsxJoinedAt ?? null,
           // managementRole is intentionally omitted — import creates regular members only
         });
         createdCount++;
@@ -183,6 +192,12 @@ export async function importMembersAction(
         }
 
         await updateMemberObor(row.existingMemberId, row.xlsxObor ?? null);
+        // joined_at: only touched when the XLSX row actually has a value
+        // (MAJOR-3) — an update row never clears an existing entry date just
+        // because the column was left blank in the file.
+        if (row.xlsxJoinedAt) {
+          await updateMemberJoinedAt(row.existingMemberId, row.xlsxJoinedAt);
+        }
         updatedCount++;
       }
     } catch (err) {

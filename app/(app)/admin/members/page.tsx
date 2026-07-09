@@ -1,4 +1,5 @@
 import { getMembers } from "@/lib/db/queries/members";
+import { getInterviewCountsByMember } from "@/lib/db/queries/interviews";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
@@ -6,7 +7,10 @@ import { ImportMembersForm } from "./ImportMembersForm";
 import { SortableMemberList } from "./SortableMemberList";
 
 export default async function AdminMembersPage() {
-  const members = await getMembers();
+  const [members, interviewCounts] = await Promise.all([
+    getMembers(),
+    getInterviewCountsByMember(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -41,6 +45,8 @@ export default async function AdminMembersPage() {
               managementRole: m.managementRole ?? null,
               magicTokenHash: m.magicTokenHash ?? null,
               tokenUsed: m.tokenUsed,
+              joinedAt: m.joinedAt,
+              interviewCount: interviewCounts.get(m.id) ?? 0,
             }))}
           />
         ) : (

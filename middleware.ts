@@ -62,6 +62,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow interview fill-form magic link paths (leader access via scoped
+  // token, no iron-session) — LL-005 (iter-020, T-008)
+  if (pathname.startsWith("/i/") || pathname.startsWith("/api/i/")) {
+    return NextResponse.next();
+  }
+
   // Get session from cookie
   const response = NextResponse.next();
   const session = await getIronSession<SessionData>(request, response, sessionOptions);
