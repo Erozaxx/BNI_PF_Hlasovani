@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireManagementRole } from "@/lib/auth/guards";
 import {
   createQuestion as dbCreateQuestion,
-  updateQuestionText as dbUpdateQuestionText,
+  updateQuestion as dbUpdateQuestion,
   setQuestionActive as dbSetQuestionActive,
   reorderQuestions as dbReorderQuestions,
   getQuestionById,
@@ -32,10 +32,29 @@ function validateText(text: string): string | null {
 }
 
 /**
+ * Server-side mirror of the UI checkbox validation (arch T-001 1.2 / 7.2):
+ * a question that applies to neither interview type is a meaningless state
+ * (unfillable and struck through everywhere). UI validation is not authority.
+ */
+function validateApplies(
+  appliesMonth5: boolean,
+  appliesMonth10: boolean
+): string | null {
+  if (!appliesMonth5 && !appliesMonth10) {
+    return "Otazka musi platit alespon pro jeden typ pohovoru.";
+  }
+  return null;
+}
+
+/**
  * Create a new question at the end of the ordering. Requires admin or moderator role.
+ * appliesMonth5/appliesMonth10 default to true (both checkboxes checked by
+ * default in the editor, arch T-001 7.1).
  */
 export async function createQuestionAction(
-  text: string
+  text: string,
+  appliesMonth5: boolean = true,
+  appliesMonth10: boolean = true
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -45,8 +64,17 @@ export async function createQuestionAction(
     return { success: false, error: validationError };
   }
 
+  const appliesError = validateApplies(appliesMonth5, appliesMonth10);
+  if (appliesError) {
+    return { success: false, error: appliesError };
+  }
+
   try {
-    const created = await dbCreateQuestion({ text: text.trim() });
+    const created = await dbCreateQuestion({
+      text: text.trim(),
+      appliesMonth5,
+      appliesMonth10,
+    });
     revalidatePath(QUESTIONS_PATH);
     return { success: true, data: { id: created.id } };
   } catch (error) {
@@ -56,13 +84,19 @@ export async function createQuestionAction(
 }
 
 /**
- * Update the text of an existing question. Requires admin or moderator role.
- * Existing snapshots (already-founded interviews) are copies and are
- * unaffected — only future interviews pick up the new text.
+ * Update the text and applicability flags of an existing question. Requires
+ * admin or moderator role. Existing snapshots (already-founded interviews) are
+ * copies and are unaffected — only future interviews pick up the new values.
+ *
+ * One call updates text + both flags atomically (arch T-001 7.2 — a separate
+ * flags-only action was rejected, the "aspoň jeden true" validation needs
+ * both flags together).
  */
-export async function updateQuestionTextAction(
+export async function updateQuestionAction(
   id: string,
-  text: string
+  text: string,
+  appliesMonth5: boolean,
+  appliesMonth10: boolean
 ): Promise<ActionResult> {
   const auth = await requireManagementRole(["admin", "moderator"]);
   if (!auth.success) return auth;
@@ -72,17 +106,26 @@ export async function updateQuestionTextAction(
     return { success: false, error: validationError };
   }
 
+  const appliesError = validateApplies(appliesMonth5, appliesMonth10);
+  if (appliesError) {
+    return { success: false, error: appliesError };
+  }
+
   try {
     const existing = await getQuestionById(id);
     if (!existing) {
       return { success: false, error: "Otazka nebyla nalezena." };
     }
 
-    await dbUpdateQuestionText(id, text.trim());
+    await dbUpdateQuestion(id, {
+      text: text.trim(),
+      appliesMonth5,
+      appliesMonth10,
+    });
     revalidatePath(QUESTIONS_PATH);
     return { success: true };
   } catch (error) {
-    console.error("updateQuestionTextAction error:", error);
+    console.error("updateQuestionAction error:", error);
     return { success: false, error: "Nepodarilo se upravit otazku." };
   }
 }

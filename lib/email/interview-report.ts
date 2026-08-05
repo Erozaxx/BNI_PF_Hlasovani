@@ -29,13 +29,35 @@ function hasText(value: string | null): value is string {
   return value !== null && value.trim() !== "";
 }
 
-/** One question + its (possibly empty) answer, rendered as a bordered block. */
-function answerBlock(text: string, valueText: string | null): string {
+/**
+ * One question + its (possibly empty) answer, rendered as a bordered block.
+ *
+ * iter-021 (arch T-001 6.3, T-003 NIT-1, decision D-4): `applies === false`
+ * means the question does not apply to this interview's type — the question
+ * text is wrapped in <s> with the strike-through style on THAT element (not a
+ * bare text-decoration on the wrapping <div>/<p> — a chunk of mail clients,
+ * notably Outlook desktop, ignore that). The answer line is replaced with
+ * "Neplati pro tento typ pohovoru", which must read clearly on its own even
+ * if the <s> never renders — Resend sends html-only, no text/plain fallback.
+ * `applies === true` renders byte-for-byte identical to the pre-iter-021
+ * output (old interviews, backfilled true/true).
+ */
+function answerBlock(text: string, valueText: string | null, applies: boolean): string {
   const answered = hasText(valueText);
+  const questionHtml = applies
+    ? escapeHtml(text)
+    : `<s style="text-decoration:line-through;color:#999;">${escapeHtml(text)}</s>`;
+  const answerHtml = applies
+    ? answered
+      ? escapeHtml(valueText as string)
+      : "Bez odpovedi"
+    : "Neplati pro tento typ pohovoru";
+  const answerColor = applies ? (answered ? "#1a1a1a" : "#999") : "#999";
+
   return `
     <div style="margin-bottom:12px;padding:12px 16px;border:1px solid #E8E8E8;border-radius:12px;">
-      <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#1a1a1a;">${escapeHtml(text)}</p>
-      <p style="margin:0;font-size:13px;white-space:pre-wrap;color:${answered ? "#1a1a1a" : "#999"};">${answered ? escapeHtml(valueText as string) : "Bez odpovedi"}</p>
+      <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#1a1a1a;">${questionHtml}</p>
+      <p style="margin:0;font-size:13px;white-space:pre-wrap;color:${answerColor};">${answerHtml}</p>
     </div>`;
 }
 
@@ -59,6 +81,9 @@ function htmlShell(title: string, subtitle: string, bodyHtml: string): string {
 export interface InterviewReportQuestion {
   text: string;
   valueText: string | null;
+  // iter-021: derived by the caller from interview.type x appliesMonth5/10
+  // (arch T-001 5.1 pattern, applied here to the report per T-001 1.8).
+  applies: boolean;
 }
 
 export interface InterviewReportData {
@@ -89,7 +114,7 @@ export function buildInterviewReportHtml(data: InterviewReportData): string {
 
   const questionsHtml =
     data.questions.length > 0
-      ? data.questions.map((q) => answerBlock(q.text, q.valueText)).join("\n")
+      ? data.questions.map((q) => answerBlock(q.text, q.valueText, q.applies)).join("\n")
       : `<p style="font-size:13px;color:#999;">Tento pohovor nema zadne otazky v zamrazenem snapshotu.</p>`;
 
   return htmlShell(
@@ -116,7 +141,14 @@ export interface InterviewCompareReportData {
 export function buildInterviewCompareReportHtml(
   data: InterviewCompareReportData
 ): string {
-  const answerCell = (value: string | null) => {
+  // iter-021 (T-003 NIT-1): applies === false → cell text wrapped in <s> on
+  // that element (D-4, not a bare text-decoration on the <td>); "Neplati"
+  // reads on its own even without the strike rendering. true/null → today's
+  // output unchanged (old interviews, backfilled true/true).
+  const answerCell = (value: string | null, applies: boolean | null): string => {
+    if (applies === false) {
+      return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:#999;"><s style="text-decoration:line-through;color:#999;">Neplati</s></td>`;
+    }
     const answered = hasText(value);
     return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:${answered ? "#1a1a1a" : "#999"};">${answered ? escapeHtml(value as string) : "Bez odpovedi"}</td>`;
   };
@@ -136,8 +168,8 @@ export function buildInterviewCompareReportHtml(
               .map(
                 (row) => `<tr style="border-bottom:1px solid #E8E8E8;">
                   <td style="padding:6px 8px;font-size:13px;font-weight:600;vertical-align:top;">${escapeHtml(row.questionText)}</td>
-                  ${answerCell(row.answer5)}
-                  ${answerCell(row.answer10)}
+                  ${answerCell(row.answer5, row.applies5)}
+                  ${answerCell(row.answer10, row.applies10)}
                 </tr>`
               )
               .join("\n")}
@@ -145,6 +177,11 @@ export function buildInterviewCompareReportHtml(
         </table>`
       : `<p style="font-size:13px;color:#999;margin-bottom:24px;">Zadne sparovane otazky.</p>`;
 
+  // iter-021 (T-003 NIT-1): onlySection ALWAYS reads applies of its OWN side
+  // — applies5 for "Jen v pohovoru 5 mesicu", applies10 for "... 10 mesicu".
+  // The other side is always null here (question doesn't exist there) and is
+  // never read. `?? true` is a purely defensive fallback (own side can't
+  // legally be null per the pairing contract, T-001 6.2).
   const onlySection = (
     title: string,
     rows: PairedQuestionRow[],
@@ -153,9 +190,11 @@ export function buildInterviewCompareReportHtml(
     rows.length > 0
       ? `<h3 style="font-size:14px;color:#333;margin:0 0 8px;">${escapeHtml(title)}</h3>
          ${rows
-           .map((row) =>
-             answerBlock(row.questionText, side === "5" ? row.answer5 : row.answer10)
-           )
+           .map((row) => {
+             const value = side === "5" ? row.answer5 : row.answer10;
+             const applies = side === "5" ? row.applies5 : row.applies10;
+             return answerBlock(row.questionText, value, applies ?? true);
+           })
            .join("\n")}`
       : "";
 

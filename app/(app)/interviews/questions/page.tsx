@@ -58,6 +58,8 @@ export default async function InterviewQuestionsPage() {
               id: q.id,
               text: q.text,
               active: q.active,
+              appliesMonth5: q.appliesMonth5,
+              appliesMonth10: q.appliesMonth10,
             }))}
           />
         ) : (

@@ -57,16 +57,24 @@ export async function getQuestionById(id: string) {
 /**
  * Create a new question at the end of the ordering (max(position)+1).
  * Mirrors createMember's displayOrder pattern (lib/db/queries/members.ts).
+ * iter-021: appliesMonth5/appliesMonth10 default to true (both checkboxes
+ * checked by default in the editor, arch T-001 7.1) — the DB column default
+ * already covers an omitted value, the optional params just let a caller be
+ * explicit without a second UPDATE.
  */
 export async function createQuestion(data: {
   text: string;
   questionType?: string;
+  appliesMonth5?: boolean;
+  appliesMonth10?: boolean;
 }) {
   const results = await getDb()
     .insert(interviewQuestion)
     .values({
       text: data.text,
       questionType: data.questionType ?? "text",
+      appliesMonth5: data.appliesMonth5 ?? true,
+      appliesMonth10: data.appliesMonth10 ?? true,
       position: sql`(SELECT COALESCE(MAX(position), 0) + 1 FROM interview_question)`,
     })
     .returning();
@@ -75,13 +83,26 @@ export async function createQuestion(data: {
 }
 
 /**
- * Update the text of a question. updated_at must be set explicitly (Drizzle has
- * no auto-update).
+ * Update a question's text AND both applicability flags in one statement
+ * (arch T-001 7.2 / T-003 section 7 — assigned to T-005 as a query-layer
+ * function; the T-006 editor UI + `actions/interview-questions.ts` wire this
+ * as the sole text/flags update path). One UPDATE = no transient false/false
+ * row; the DB CHECK (`interview_question_applies_check`) still guards any
+ * caller that bypasses the intended "validate aspoň jeden in the action"
+ * flow. updated_at set explicitly, same convention as the rest of this file.
  */
-export async function updateQuestionText(id: string, text: string): Promise<void> {
+export async function updateQuestion(
+  id: string,
+  data: { text: string; appliesMonth5: boolean; appliesMonth10: boolean }
+): Promise<void> {
   await getDb()
     .update(interviewQuestion)
-    .set({ text, updatedAt: new Date() })
+    .set({
+      text: data.text,
+      appliesMonth5: data.appliesMonth5,
+      appliesMonth10: data.appliesMonth10,
+      updatedAt: new Date(),
+    })
     .where(eq(interviewQuestion.id, id));
 }
 

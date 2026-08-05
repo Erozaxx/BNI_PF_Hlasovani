@@ -175,18 +175,24 @@ CREATE TRIGGER vote_meeting_open_check
 -- ============================================================
 
 -- INTERVIEW_QUESTION — globalni editovatelna sada otazek
+-- iter-021: applies_month_5 / applies_month_10 — platnost otazky pro dany typ
+-- pohovoru. Viz lib/db/migrations/iter-021-question-scope.sql pro delta migraci.
 CREATE TABLE interview_question (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    text          TEXT        NOT NULL,
-    question_type TEXT        NOT NULL DEFAULT 'text',
-    position      INTEGER     NOT NULL,
-    active        BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    text             TEXT        NOT NULL,
+    question_type    TEXT        NOT NULL DEFAULT 'text',
+    position         INTEGER     NOT NULL,
+    active           BOOLEAN     NOT NULL DEFAULT TRUE,
+    applies_month_5  BOOLEAN     NOT NULL DEFAULT TRUE,
+    applies_month_10 BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT interview_question_text_check
         CHECK (char_length(text) > 0 AND char_length(text) <= 1000),
     CONSTRAINT interview_question_type_check
-        CHECK (question_type IN ('text'))
+        CHECK (question_type IN ('text')),
+    CONSTRAINT interview_question_applies_check
+        CHECK (applies_month_5 OR applies_month_10)
 );
 CREATE INDEX idx_interview_question_active_position ON interview_question (active, position);
 
@@ -209,6 +215,9 @@ CREATE INDEX idx_interview_status ON interview (status);
 CREATE INDEX idx_interview_leader ON interview (leader_id);
 
 -- INTERVIEW_QUESTION_SNAPSHOT — zamrazena kopie otazek pri zalozeni pohovoru
+-- iter-021: applies_month_5 / applies_month_10 kopirovany ze zdroje pri zalozeni,
+-- dale nemenne (radek se po insertu neupdatuje). CHECK i zde — pojistka proti
+-- bugu v kopirovaci logice (arch T-001 1.3).
 CREATE TABLE interview_question_snapshot (
     id                 UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
     interview_id       UUID    NOT NULL REFERENCES interview(id) ON DELETE CASCADE,
@@ -216,9 +225,13 @@ CREATE TABLE interview_question_snapshot (
     text               TEXT    NOT NULL,
     question_type      TEXT    NOT NULL DEFAULT 'text',
     position           INTEGER NOT NULL,
+    applies_month_5    BOOLEAN NOT NULL DEFAULT TRUE,
+    applies_month_10   BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT iqs_interview_position_unique UNIQUE (interview_id, position),
     CONSTRAINT iqs_interview_source_unique   UNIQUE (interview_id, source_question_id),
-    CONSTRAINT iqs_id_interview_unique       UNIQUE (id, interview_id)
+    CONSTRAINT iqs_id_interview_unique       UNIQUE (id, interview_id),
+    CONSTRAINT iqs_applies_check
+        CHECK (applies_month_5 OR applies_month_10)
 );
 CREATE INDEX idx_iqs_interview ON interview_question_snapshot (interview_id);
 

@@ -1,4 +1,4 @@
-import { eq, and, ne, asc, desc, count, inArray, sql } from "drizzle-orm";
+import { eq, and, or, ne, asc, desc, count, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/neon-http";
 import { addMonths, differenceInCalendarDays, isAfter, parseISO } from "date-fns";
@@ -18,6 +18,30 @@ function getDb() {
 export type InterviewType = "month_5" | "month_10";
 export type InterviewStatus = "open" | "submitted" | "cancelled";
 
+/**
+ * Derive whether a snapshot question applies to an interview's type (arch
+ * T-001 5.1). Single source of truth for `type === "month_5" ? appliesMonth5
+ * : appliesMonth10` — used by both GET /api/i/[token]/form and the server
+ * component app/i/[token]/page.tsx (T-009 review MINOR-1). The two call
+ * sites stay duplicated in WHERE they call this from (the server component
+ * loads data in-process instead of self-fetching its own API route, see its
+ * doc comment — M-1 iter-020), but the derivation rule itself now lives in
+ * exactly one place.
+ *
+ * `type` is typed as `string`, not `InterviewType`, because both call sites
+ * pass `interview.type` straight from `getInterviewDetail()` — a plain
+ * `text()` column at the Drizzle layer (DB-level CHECK constrains it to
+ * "month_5"/"month_10", but that is not reflected in the inferred select
+ * type). Anything other than "month_5" falls into the `appliesMonth10`
+ * branch, matching the pre-existing ternary this replaces.
+ */
+export function deriveApplies(
+  type: string,
+  q: { appliesMonth5: boolean; appliesMonth10: boolean }
+): boolean {
+  return type === "month_5" ? q.appliesMonth5 : q.appliesMonth10;
+}
+
 // ============================================================
 // Snapshot founding (arch section 4.1) — the core "create interview" sequence.
 // No db.transaction() anywhere (LL-003): sequential statements with WHERE
@@ -29,9 +53,22 @@ export type CreateInterviewResult =
   | { status: "repaired"; interviewId: string; questionCount: number }
   | { status: "duplicate"; interviewId: string }
   | { status: "empty_question_set" }
+  // iter-021 (T-003 MAJOR-1 fix, sekce 2.2): vraceno JEN při zakládání
+  // čerstvého pohovoru (žádný non-cancelled pohovor pro member+type
+  // neexistuje) a živá sada nemá pro daný typ jedinou platnou otázku.
+  // Existuje-li pohovor k opravě/deduplikaci, řídí se dál handleDuplicateInterview
+  // a tenhle status se nikdy nevrátí — repair-on-retry zůstává nezablokovaný.
+  | { status: "no_applicable_questions" }
   | { status: "failed" };
 
-type ActiveQuestionRow = { id: string; text: string; questionType: string };
+type ActiveQuestionRow = {
+  id: string;
+  text: string;
+  questionType: string;
+  // iter-021: platnost otázky pro daný typ pohovoru (arch T-001 sekce 4)
+  appliesMonth5: boolean;
+  appliesMonth10: boolean;
+};
 
 /**
  * Re-check snapshot coverage for an interview against the currently active
@@ -74,6 +111,11 @@ async function repairSnapshotCoverage(
     sourceQuestionId: q.id,
     text: q.text,
     questionType: q.questionType,
+    // iter-021: repair kopíruje AKTUÁLNÍ příznaky živé sady (mixed-generation
+    // edge case akceptovaný v arch T-001 sekci 4 — identická sémantika jako
+    // dnešní editace textu mezi pokusy).
+    appliesMonth5: q.appliesMonth5,
+    appliesMonth10: q.appliesMonth10,
     position: maxPosition + idx + 1,
   }));
 
@@ -182,6 +224,8 @@ export async function createInterviewWithSnapshot(params: {
       id: interviewQuestion.id,
       text: interviewQuestion.text,
       questionType: interviewQuestion.questionType,
+      appliesMonth5: interviewQuestion.appliesMonth5,
+      appliesMonth10: interviewQuestion.appliesMonth10,
     })
     .from(interviewQuestion)
     .where(eq(interviewQuestion.active, true))
@@ -193,6 +237,37 @@ export async function createInterviewWithSnapshot(params: {
 
   if (activeQuestions.length === 0) {
     return { status: "empty_question_set" };
+  }
+
+  // iter-021 guard (T-003 MAJOR-1 fix, sekce 2.2): sada bez jediné otázky
+  // platné pro `type` by založila 100% přeškrtnutý formulář. Guard platí
+  // JEN pro čerstvé založení — pokud pro (member, type) už existuje
+  // non-cancelled pohovor, jde o retry/duplicate a řízení přebírá
+  // handleDuplicateInterview beze změny (repair-on-retry nesmí guard
+  // zablokovat). Nulová cena na happy path: dodatečný SELECT se provede
+  // jen když `applicable.length === 0`.
+  const applicable = activeQuestions.filter((q) =>
+    type === "month_5" ? q.appliesMonth5 : q.appliesMonth10
+  );
+  if (applicable.length === 0) {
+    const existing = await db
+      .select({ id: interview.id })
+      .from(interview)
+      .where(
+        and(
+          eq(interview.memberId, memberId),
+          eq(interview.type, type),
+          ne(interview.status, "cancelled")
+        )
+      )
+      .limit(1);
+    if (existing.length > 0) {
+      // Stejná větev, do které by vedl 23505: kompletní snapshot → čitelná
+      // dedup chyba; nekompletní → repair. Guard se na existující pohovor
+      // neaplikuje.
+      return handleDuplicateInterview(db, memberId, type, activeQuestions);
+    }
+    return { status: "no_applicable_questions" };
   }
 
   let interviewId: string;
@@ -215,6 +290,11 @@ export async function createInterviewWithSnapshot(params: {
     sourceQuestionId: q.id,
     text: q.text,
     questionType: q.questionType,
+    // iter-021: kopírují se VŠECHNY aktivní otázky vč. příznaků, i ty, které
+    // pro `type` neplatí (arch T-001 1.4 — filtr je až read-time, snapshot
+    // dál věrně dokumentuje podobu sady při založení).
+    appliesMonth5: q.appliesMonth5,
+    appliesMonth10: q.appliesMonth10,
     position: idx + 1,
   }));
 
@@ -436,6 +516,12 @@ export async function getInterviewQuestionsWithAnswers(interviewId: string) {
       position: interviewQuestionSnapshot.position,
       text: interviewQuestionSnapshot.text,
       questionType: interviewQuestionSnapshot.questionType,
+      // iter-021 (T-007): raw per-type flags, read here so callers can derive
+      // `applies` against interview.type. Kept raw (not pre-derived) because
+      // this same query also feeds the admin detail/compare views (T-008),
+      // which need both flags, not just the one for a single type.
+      appliesMonth5: interviewQuestionSnapshot.appliesMonth5,
+      appliesMonth10: interviewQuestionSnapshot.appliesMonth10,
       answerId: interviewAnswer.id,
       valueText: interviewAnswer.valueText,
       answerUpdatedAt: interviewAnswer.updatedAt,
@@ -457,6 +543,15 @@ export async function getInterviewQuestionsWithAnswers(interviewId: string) {
  * composite FK (interview_answer.snapshot_question_id, interview_id) →
  * interview_question_snapshot(id, interview_id) is the second line of defense
  * at the DB level for any write that bypasses this function.
+ *
+ * iter-021 (arch T-001 5.2): the same guard SELECT is extended with the
+ * question's applicability for this interview's type — a snapshot row that
+ * does not apply to the interview's type is treated exactly like a
+ * foreign/mismatched id (uniform { success: false }, no enumeration signal).
+ * UI never renders an input for such a question (T-007), this is the
+ * server-side authority that a bypass still can't write past. Old interviews
+ * (true/true backfill) always satisfy the OR below, so this is fully
+ * backward compatible.
  */
 export async function upsertInterviewAnswer(params: {
   interviewId: string;
@@ -469,10 +564,21 @@ export async function upsertInterviewAnswer(params: {
   const owned = await db
     .select({ id: interviewQuestionSnapshot.id })
     .from(interviewQuestionSnapshot)
+    .innerJoin(interview, eq(interview.id, interviewQuestionSnapshot.interviewId))
     .where(
       and(
         eq(interviewQuestionSnapshot.id, snapshotQuestionId),
-        eq(interviewQuestionSnapshot.interviewId, interviewId)
+        eq(interviewQuestionSnapshot.interviewId, interviewId),
+        or(
+          and(
+            eq(interview.type, "month_5"),
+            eq(interviewQuestionSnapshot.appliesMonth5, true)
+          ),
+          and(
+            eq(interview.type, "month_10"),
+            eq(interviewQuestionSnapshot.appliesMonth10, true)
+          )
+        )
       )
     )
     .limit(1);
@@ -638,6 +744,11 @@ export type PairedQuestionRow = {
   questionText: string;
   answer5: string | null;
   answer10: string | null;
+  // iter-021 (arch T-001 sekce 6.2): null = otazka na te strane vubec neni
+  // (patri do sekce "Jen v pohovoru X"); false = je ve snapshotu, ale pro
+  // tento typ pohovoru neplati (preskrtnout). Tyhle dva stavy nesmi splynout.
+  applies5: boolean | null;
+  applies10: boolean | null;
 };
 
 /**
@@ -647,6 +758,10 @@ export type PairedQuestionRow = {
  * source_question_id). Ordered by the month_10 snapshot's position (newer
  * structure leads); unmatched rows never disappear, they land in separate
  * onlyIn5 / onlyIn10 lists.
+ *
+ * iter-021 (arch T-001 6.2): each row also carries applies5/applies10 read
+ * straight from each side's OWN snapshot flags — the pairing algorithm itself
+ * is unchanged, flags never enter the matching logic.
  */
 export function pairInterviewAnswersForCompare(
   month5Questions: Array<{
@@ -654,12 +769,16 @@ export function pairInterviewAnswersForCompare(
     text: string;
     position: number;
     valueText: string | null;
+    appliesMonth5: boolean;
+    appliesMonth10: boolean;
   }>,
   month10Questions: Array<{
     sourceQuestionId: string | null;
     text: string;
     position: number;
     valueText: string | null;
+    appliesMonth5: boolean;
+    appliesMonth10: boolean;
   }>
 ): {
   paired: PairedQuestionRow[];
@@ -698,16 +817,30 @@ export function pairInterviewAnswersForCompare(
         questionText: q10.text,
         answer5: month5Questions[idx5].valueText,
         answer10: q10.valueText,
+        applies5: month5Questions[idx5].appliesMonth5,
+        applies10: q10.appliesMonth10,
       });
     } else {
-      onlyIn10.push({ questionText: q10.text, answer5: null, answer10: q10.valueText });
+      onlyIn10.push({
+        questionText: q10.text,
+        answer5: null,
+        answer10: q10.valueText,
+        applies5: null,
+        applies10: q10.appliesMonth10,
+      });
     }
   }
 
   const onlyIn5: PairedQuestionRow[] = month5Questions
     .map((q, idx) => ({ q, idx }))
     .filter(({ idx }) => !used5.has(idx))
-    .map(({ q }) => ({ questionText: q.text, answer5: q.valueText, answer10: null }));
+    .map(({ q }) => ({
+      questionText: q.text,
+      answer5: q.valueText,
+      answer10: null,
+      applies5: q.appliesMonth5,
+      applies10: null,
+    }));
 
   return { paired, onlyIn5, onlyIn10 };
 }

@@ -29,6 +29,8 @@ export interface QuestionRow {
   id: string;
   text: string;
   active: boolean;
+  appliesMonth5: boolean;
+  appliesMonth10: boolean;
 }
 
 interface SortableQuestionListProps {
@@ -80,9 +82,23 @@ function SortableQuestionRow({ q }: { q: QuestionRow }) {
           <p className="text-sm text-text-main whitespace-pre-wrap break-words">
             {q.text}
           </p>
+          {/* Scope badge only for restricted questions — a question valid for
+              both types (the default, and the majority of the set) gets no
+              badge so the label actually carries information (arch T-001 7.3). */}
+          {q.appliesMonth5 && !q.appliesMonth10 && (
+            <Badge variant="info">Jen 5 mesicu</Badge>
+          )}
+          {!q.appliesMonth5 && q.appliesMonth10 && (
+            <Badge variant="info">Jen 10 mesicu</Badge>
+          )}
           {!q.active && <Badge variant="neutral">Archivovano</Badge>}
         </div>
-        <EditQuestionForm questionId={q.id} currentText={q.text} />
+        <EditQuestionForm
+          questionId={q.id}
+          currentText={q.text}
+          currentAppliesMonth5={q.appliesMonth5}
+          currentAppliesMonth10={q.appliesMonth10}
+        />
       </div>
       <ArchiveQuestionButton questionId={q.id} active={q.active} />
     </li>

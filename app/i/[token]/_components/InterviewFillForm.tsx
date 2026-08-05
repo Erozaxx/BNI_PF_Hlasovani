@@ -11,6 +11,15 @@ export interface InterviewQuestionShape {
   position: number;
   text: string;
   valueText: string | null;
+  /**
+   * iter-021 (arch T-001 5.1/5.3, decision T-004 delta D-5): server-derived
+   * boolean — false means the question does not apply to this interview's
+   * type. Such a question renders as struck-through text with an explanatory
+   * sentence, no input at all (not even disabled) — the server-side
+   * upsertInterviewAnswer guard is the actual write authority regardless of
+   * what the UI renders.
+   */
+  applies: boolean;
 }
 
 interface InterviewFillFormProps {
@@ -78,8 +87,11 @@ export function InterviewFillForm({
     }
   }
 
+  // iter-021: questions that do not apply to this interview's type are
+  // excluded from the unanswered count — the leader could not have answered
+  // them, so they must not count as "left blank" in the submit confirm.
   const unansweredCount = initialQuestions.filter(
-    (q) => !(answers[q.snapshotId] ?? "").trim()
+    (q) => q.applies && !(answers[q.snapshotId] ?? "").trim()
   ).length;
 
   async function handleSubmit() {
@@ -151,10 +163,25 @@ export function InterviewFillForm({
 
           {initialQuestions.map((q) => (
             <Card key={q.snapshotId}>
-              <p className="text-sm font-medium text-text-main mb-2">
+              <p
+                className={`text-sm font-medium mb-2 ${
+                  q.applies
+                    ? "text-text-main"
+                    : "text-text-muted line-through opacity-60"
+                }`}
+              >
                 {q.text}
               </p>
-              {readOnly ? (
+              {!q.applies ? (
+                // iter-021 (decision T-004 delta D-5): no <Textarea>, not even
+                // disabled — the question simply isn't rendered as
+                // answerable. This sentence must always be present (editable
+                // AND read-only mode), never left as a blank gap and never
+                // "Bez odpovedi".
+                <p className="text-sm text-text-muted italic">
+                  Neplati pro pohovor {typeLabel}
+                </p>
+              ) : readOnly ? (
                 answers[q.snapshotId]?.trim() ? (
                   <p className="text-sm text-text-main whitespace-pre-wrap">
                     {answers[q.snapshotId]}

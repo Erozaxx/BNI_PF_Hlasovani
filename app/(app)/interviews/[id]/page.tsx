@@ -68,7 +68,21 @@ export default async function InterviewDetailPage({
     label: detail.status,
     variant: "neutral" as const,
   };
+  const questionApplies = (q: { appliesMonth5: boolean; appliesMonth10: boolean }) =>
+    detail.type === "month_5" ? q.appliesMonth5 : q.appliesMonth10;
+
+  // iter-021 (arch T-001 6.1): DeleteInterviewButton warning counts REAL
+  // existing answers, unfiltered by applicability — unchanged semantics.
   const answeredCount = questions.filter(
+    (q) => q.valueText !== null && q.valueText.trim() !== ""
+  ).length;
+
+  // Header "X/Y vyplneno" — Y = jen platne otazky pro tento typ, X =
+  // zodpovezene z platnych (konzistentni s fill-form countem, T-007). Pro
+  // stare pohovory (true/true) je applicableQuestions === questions, takze
+  // se cislo nezmeni ani o znak.
+  const applicableQuestions = questions.filter(questionApplies);
+  const answeredApplicableCount = applicableQuestions.filter(
     (q) => q.valueText !== null && q.valueText.trim() !== ""
   ).length;
 
@@ -78,7 +92,11 @@ export default async function InterviewDetailPage({
     leaderName: detail.leaderName,
     createdAt: detail.createdAt,
     submittedAt: detail.submittedAt,
-    questions: questions.map((q) => ({ text: q.text, valueText: q.valueText })),
+    questions: questions.map((q) => ({
+      text: q.text,
+      valueText: q.valueText,
+      applies: questionApplies(q),
+    })),
   });
 
   const reportRecipients = members
@@ -163,26 +181,40 @@ export default async function InterviewDetailPage({
 
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Otazky a odpovedi ({answeredCount}/{questions.length} vyplneno)
+          Otazky a odpovedi ({answeredApplicableCount}/{applicableQuestions.length} vyplneno)
         </h2>
         {questions.length > 0 ? (
           <div className="space-y-3">
-            {questions.map((q) => (
-              <Card key={q.snapshotId}>
-                <p className="text-sm font-medium text-text-main mb-2">
-                  {q.text}
-                </p>
-                {q.valueText && q.valueText.trim() !== "" ? (
-                  <p className="text-sm text-text-main whitespace-pre-wrap">
-                    {q.valueText}
+            {questions.map((q) => {
+              const applies = questionApplies(q);
+              const hasAnswer = q.valueText !== null && q.valueText.trim() !== "";
+              return (
+                <Card key={q.snapshotId}>
+                  <p
+                    className={
+                      applies
+                        ? "text-sm font-medium text-text-main mb-2"
+                        : "text-sm font-medium text-text-muted line-through opacity-60 mb-2"
+                    }
+                  >
+                    {q.text}
                   </p>
-                ) : (
-                  <p className="text-sm text-text-muted italic">
-                    Bez odpovedi
-                  </p>
-                )}
-              </Card>
-            ))}
+                  {hasAnswer ? (
+                    <p className="text-sm text-text-main whitespace-pre-wrap">
+                      {q.valueText}
+                    </p>
+                  ) : applies ? (
+                    <p className="text-sm text-text-muted italic">
+                      Bez odpovedi
+                    </p>
+                  ) : (
+                    <p className="text-sm text-text-muted italic">
+                      Neplati pro tento typ pohovoru
+                    </p>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <Card>
