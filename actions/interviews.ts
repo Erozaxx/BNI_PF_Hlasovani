@@ -105,6 +105,15 @@ export async function createInterviewAction(
           error:
             "Sada otazek pro pohovory je prazdna. Pred zalozenim pridejte alespon jednu otazku v sekci Pohovory > Sprava otazek.",
         };
+      case "no_applicable_questions":
+        // iter-021 (arch T-003 MAJOR-2): zivá sada nema pro tento typ pohovoru
+        // jedinou platnou otazku — zalozeni by vytvorilo 100% preskrtnuty
+        // formular. Vraceno jen pro cerstve zalozeni (repair-on-retry existujiciho
+        // pohovoru timhle statusem nikdy neprojde, viz lib/db/queries/interviews.ts).
+        return {
+          success: false,
+          error: `Sada neobsahuje zadnou otazku platnou pro pohovor ${TYPE_LABELS[type]}. Upravte sadu otazek v sekci Pohovory > Sprava otazek.`,
+        };
       case "failed":
       default:
         return {
@@ -354,7 +363,15 @@ export async function sendInterviewReportAction(
       leaderName: detail.leaderName,
       createdAt: detail.createdAt,
       submittedAt: detail.submittedAt,
-      questions: questions.map((q) => ({ text: q.text, valueText: q.valueText })),
+      // iter-021 (arch T-001 6.3 / 1.8): applies derived from interview.type,
+      // same pattern as the fill-form (T-007) — the mail must not render
+      // "Bez odpovedi" for a question the leader could not fill in.
+      questions: questions.map((q) => ({
+        text: q.text,
+        valueText: q.valueText,
+        applies:
+          detail.type === "month_5" ? q.appliesMonth5 : q.appliesMonth10,
+      })),
     });
 
     const sendResult = await sendInterviewReportEmail(

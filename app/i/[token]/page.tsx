@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { verifyInterviewToken } from "@/lib/auth/interview-magic";
 import { getClientIp } from "@/lib/auth/throttle";
 import {
+  deriveApplies,
   getInterviewDetail,
   getInterviewQuestionsWithAnswers,
 } from "@/lib/db/queries/interviews";
@@ -72,6 +73,13 @@ async function loadFormData(token: string): Promise<FetchResult> {
         position: q.position,
         text: q.text,
         valueText: q.valueText,
+        // iter-021 (arch T-001 5.1): same server-side derivation as
+        // GET /api/i/[token]/form — this server component loads the data
+        // in-process rather than self-fetching that route (see loadFormData
+        // doc comment above), so the CALL is duplicated here, but the
+        // derivation rule itself is shared via deriveApplies() (T-009 review
+        // MINOR-1).
+        applies: deriveApplies(detail.type, q),
       })),
     };
   } catch {

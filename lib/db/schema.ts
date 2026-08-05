@@ -508,6 +508,11 @@ export const interviewQuestion = pgTable(
     questionType: text("question_type").notNull().default("text"),
     position: integer("position").notNull(),
     active: boolean("active").notNull().default(true),
+    // iter-021: platnost otázky pro daný typ pohovoru. Oba default TRUE
+    // (zpětná kompatibilita se starou sdílenou sadou); CHECK níže vynucuje
+    // "aspoň jeden" — otázka neplatná pro oba typy je nesmyslný stav.
+    appliesMonth5: boolean("applies_month_5").notNull().default(true),
+    appliesMonth10: boolean("applies_month_10").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // Musí být nastaven explicitně v každém UPDATE (Drizzle nemá auto-update)
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -521,6 +526,11 @@ export const interviewQuestion = pgTable(
     typeCheck: check(
       "interview_question_type_check",
       sql`${table.questionType} IN ('text')`
+    ),
+    // iter-021: otázka musí platit aspoň pro jeden typ pohovoru
+    appliesCheck: check(
+      "interview_question_applies_check",
+      sql`${table.appliesMonth5} OR ${table.appliesMonth10}`
     ),
     activePositionIdx: index("idx_interview_question_active_position").on(
       table.active,
@@ -601,6 +611,11 @@ export const interviewQuestionSnapshot = pgTable(
     text: text("text").notNull(),
     questionType: text("question_type").notNull().default("text"),
     position: integer("position").notNull(),
+    // iter-021: kopie příznaků platnosti ze zdrojové otázky v okamžiku založení
+    // (zamrazeno navždy jako zbytek řádku). Viz arch T-001 sekce 1.3 pro
+    // zdůvodnění, proč CHECK dává smysl i na insert-only tabulce.
+    appliesMonth5: boolean("applies_month_5").notNull().default(true),
+    appliesMonth10: boolean("applies_month_10").notNull().default(true),
   },
   (table) => ({
     interviewPositionUnique: unique("iqs_interview_position_unique").on(
@@ -616,6 +631,11 @@ export const interviewQuestionSnapshot = pgTable(
       table.interviewId
     ),
     interviewIdx: index("idx_iqs_interview").on(table.interviewId),
+    // iter-021: stejný "aspoň jeden" CHECK jako na živé sadě (1.3)
+    appliesCheck: check(
+      "iqs_applies_check",
+      sql`${table.appliesMonth5} OR ${table.appliesMonth10}`
+    ),
   })
 );
 

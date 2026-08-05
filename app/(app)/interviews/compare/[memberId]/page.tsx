@@ -21,14 +21,40 @@ const STATUS_BADGE: Record<string, { label: string; variant: BadgeVariant }> = {
   cancelled: { label: "Zruseny", variant: "neutral" },
 };
 
-function AnswerCell({ value }: { value: string | null }) {
-  return value && value.trim() !== "" ? (
-    <>{value}</>
-  ) : (
-    <span className="text-text-muted italic">Bez odpovedi</span>
-  );
+// iter-021 (arch T-001 6.2): applies === false -> struck-through muted "Neplati"
+// (question exists in the snapshot but does not apply to this side's type).
+// applies === true / null -> today's behaviour unchanged. In the paired table
+// the question text itself is never struck through (it applies to at least
+// one side, per the CHECK) — only this answer cell is.
+// hasAnswer-first (T-009 review MINOR-2, mirrors OnlyInSection below): an
+// existing non-empty value always wins over `applies === false`, so data is
+// never hidden — unreachable today (server-side guard in upsertInterviewAnswer
+// rejects writes to a non-applicable question), but keeps this defense-in-depth
+// rule consistent with OnlyInSection and the detail page instead of only two
+// out of three places implementing it.
+function AnswerCell({
+  value,
+  applies,
+}: {
+  value: string | null;
+  applies: boolean | null;
+}) {
+  const hasAnswer = value !== null && value.trim() !== "";
+  if (hasAnswer) {
+    return <>{value}</>;
+  }
+  if (applies === false) {
+    return <span className="text-text-muted line-through opacity-60">Neplati</span>;
+  }
+  return <span className="text-text-muted italic">Bez odpovedi</span>;
 }
 
+// iter-021 (arch T-001 6.2): rows here represent a question that exists only
+// on ONE side, so — unlike the paired table — the question text itself gets
+// struck through when it doesn't apply to that side's own type, with "Neplati
+// pro tento typ pohovoru" instead of "Bez odpovedi" (mirrors the detail page).
+// `side` always reads its OWN applies flag (T-003 NIT-1 rule), never null here
+// (own side can't legally be null in an onlyIn row).
 function OnlyInSection({
   title,
   rows,
@@ -43,16 +69,36 @@ function OnlyInSection({
     <section>
       <h2 className="text-lg font-semibold text-text-main mb-4">{title}</h2>
       <div className="space-y-3">
-        {rows.map((row, idx) => (
-          <Card key={idx}>
-            <p className="text-sm font-medium text-text-main mb-2">
-              {row.questionText}
-            </p>
-            <p className="text-sm text-text-main whitespace-pre-wrap">
-              <AnswerCell value={side === "5" ? row.answer5 : row.answer10} />
-            </p>
-          </Card>
-        ))}
+        {rows.map((row, idx) => {
+          const value = side === "5" ? row.answer5 : row.answer10;
+          const applies = side === "5" ? row.applies5 : row.applies10;
+          const doesNotApply = applies === false;
+          const hasAnswer = value !== null && value.trim() !== "";
+          return (
+            <Card key={idx}>
+              <p
+                className={
+                  doesNotApply
+                    ? "text-sm font-medium text-text-muted line-through opacity-60 mb-2"
+                    : "text-sm font-medium text-text-main mb-2"
+                }
+              >
+                {row.questionText}
+              </p>
+              <p className="text-sm text-text-main whitespace-pre-wrap">
+                {hasAnswer ? (
+                  value
+                ) : doesNotApply ? (
+                  <span className="text-text-muted italic">
+                    Neplati pro tento typ pohovoru
+                  </span>
+                ) : (
+                  <span className="text-text-muted italic">Bez odpovedi</span>
+                )}
+              </p>
+            </Card>
+          );
+        })}
       </div>
     </section>
   );
@@ -199,10 +245,10 @@ export default async function InterviewComparePage({
                   >
                     <td className="px-4 py-3 font-medium">{row.questionText}</td>
                     <td className="px-4 py-3 whitespace-pre-wrap text-text-main">
-                      <AnswerCell value={row.answer5} />
+                      <AnswerCell value={row.answer5} applies={row.applies5} />
                     </td>
                     <td className="px-4 py-3 whitespace-pre-wrap text-text-main">
-                      <AnswerCell value={row.answer10} />
+                      <AnswerCell value={row.answer10} applies={row.applies10} />
                     </td>
                   </tr>
                 ))}

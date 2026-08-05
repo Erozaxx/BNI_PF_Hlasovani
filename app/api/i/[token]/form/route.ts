@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyInterviewToken } from "@/lib/auth/interview-magic";
 import { getClientIp } from "@/lib/auth/throttle";
 import {
+  deriveApplies,
   getInterviewDetail,
   getInterviewQuestionsWithAnswers,
 } from "@/lib/db/queries/interviews";
@@ -76,6 +77,10 @@ export async function GET(
       position: q.position,
       text: q.text,
       valueText: q.valueText,
+      // iter-021 (arch T-001 5.1): derived server-side from interview.type —
+      // the client never sees the two raw per-type flags and cannot get the
+      // derivation wrong.
+      applies: deriveApplies(detail.type, q),
     })),
   });
 }
