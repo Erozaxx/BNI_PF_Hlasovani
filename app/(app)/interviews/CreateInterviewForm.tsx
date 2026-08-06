@@ -26,17 +26,23 @@ interface CreateInterviewFormProps {
   /** memberId -> which types already have a non-cancelled interview, for a
    *  comfort hint only — the DB partial UNIQUE is the real authority (8a). */
   existingByMember: Record<string, { month5: boolean; month10: boolean }>;
+  /** Pre-fill from a due-chip click on /admin/members (arch iter-023 T-001 §3.3).
+   *  Caller passes a `key` so the form remounts when these change. */
+  initialMemberId?: string;
+  initialType?: InterviewType;
 }
 
 export function CreateInterviewForm({
   members,
   currentMemberId,
   existingByMember,
+  initialMemberId,
+  initialType,
 }: CreateInterviewFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [memberId, setMemberId] = useState("");
-  const [type, setType] = useState<InterviewType | "">("");
+  const [memberId, setMemberId] = useState(initialMemberId ?? "");
+  const [type, setType] = useState<InterviewType | "">(initialType ?? "");
   const [leaderId, setLeaderId] = useState(currentMemberId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

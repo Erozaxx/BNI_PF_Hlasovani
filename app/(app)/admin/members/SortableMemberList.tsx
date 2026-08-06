@@ -19,7 +19,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { MemberActions } from "./MemberActions";
 import { DeleteMemberButton } from "./DeleteMemberButton";
@@ -40,6 +41,36 @@ export interface MemberRow {
   joinedAt: string;
   /** Number of interview records (any status) that would cascade-delete with this member (R-11). */
   interviewCount: number;
+  /** From getInterviewDueList() (arch iter-023 T-001 §3.1), unchanged upstream logic. */
+  due5: boolean;
+  due10: boolean;
+}
+
+/**
+ * Chip linking to a pre-filled "founding interview" form (arch iter-023 T-001
+ * §3.2). Plain <Link> wrapping a <Badge> (<span>) — no interactive descendant,
+ * not nested inside another <Link>/<button> (iter-022 lesson, kept even though
+ * that regression never actually happened, see decision_iter-023_T-002 §3).
+ */
+function DueChip({
+  type,
+  memberId,
+}: {
+  type: "month_5" | "month_10";
+  memberId: string;
+}) {
+  const label = type === "month_5" ? "5 mesicu" : "10 mesicu";
+  const variant: BadgeVariant = type === "month_5" ? "info" : "warning";
+  return (
+    <Link
+      href={`/interviews?memberId=${memberId}&type=${type}`}
+      title={`Zalozit pohovor ${label}`}
+      aria-label={`Zalozit pohovor ${label}`}
+      className="hover:opacity-80"
+    >
+      <Badge variant={variant}>{label}</Badge>
+    </Link>
+  );
 }
 
 interface SortableMemberListProps {
@@ -88,7 +119,15 @@ function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
       <td className="px-2 py-3 align-top">
         <DragHandle attributes={attributes} listeners={listeners} />
       </td>
-      <td className="px-4 py-3 font-medium">{m.name}</td>
+      <td className="px-4 py-3 font-medium">
+        <div>{m.name}</div>
+        {(m.due5 || m.due10) && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {m.due5 && <DueChip type="month_5" memberId={m.id} />}
+            {m.due10 && <DueChip type="month_10" memberId={m.id} />}
+          </div>
+        )}
+      </td>
       <td className="px-4 py-3 text-text-muted">
         <div>{m.email || "—"}</div>
         <EditMemberEmailForm memberId={m.id} initialEmail={m.email ?? null} />
