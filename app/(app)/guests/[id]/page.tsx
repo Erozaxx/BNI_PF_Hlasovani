@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { GuestCategoryChanger } from "./GuestCategoryChanger";
 import { DeleteGuestButton } from "@/components/guests/DeleteGuestButton";
+import { PromoteGuestButton } from "@/components/guests/PromoteGuestButton";
 import { NoteList } from "@/components/notes/NoteList";
 import { NoteForm } from "@/components/notes/NoteForm";
 
@@ -69,9 +70,19 @@ export default async function GuestDetailPage({
             </p>
           )}
         </div>
-        {isAdmin && (
-          <DeleteGuestButton guestId={guest.id} guestName={guest.name} />
-        )}
+        <div className="flex gap-2">
+          {isManagement && (
+            <PromoteGuestButton
+              guestId={guest.id}
+              guestName={guest.name}
+              hasEmail={!!guest.email}
+              redirectTo="/guests"
+            />
+          )}
+          {isAdmin && (
+            <DeleteGuestButton guestId={guest.id} guestName={guest.name} />
+          )}
+        </div>
       </div>
 
       {/* Description */}

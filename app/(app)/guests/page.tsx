@@ -4,6 +4,7 @@ import { getCategoriesWithGuests } from "@/lib/db/queries/categories";
 import { getSession } from "@/lib/auth/session";
 import { getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
+import { PromoteGuestButton } from "@/components/guests/PromoteGuestButton";
 import { CategoryFilter } from "@/components/guests/CategoryFilter";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -51,17 +52,26 @@ export default async function GuestsPage({
           {guests.map((g) => {
             const lastMeetingDate = lastMeetingDates.get(g.id) ?? null;
             return (
-              <Link key={g.id} href={`/guests/${g.id}`}>
-                <GuestCard
-                  name={g.name}
-                  company={g.company}
-                  email={g.email}
-                  description={g.description}
-                  categoryName={g.categoryName}
-                  lastMeetingDate={lastMeetingDate}
-                  interactive
-                />
-              </Link>
+              <div key={g.id} className="flex flex-col gap-2">
+                <Link href={`/guests/${g.id}`}>
+                  <GuestCard
+                    name={g.name}
+                    company={g.company}
+                    email={g.email}
+                    description={g.description}
+                    categoryName={g.categoryName}
+                    lastMeetingDate={lastMeetingDate}
+                    interactive
+                  />
+                </Link>
+                {isManagement && (
+                  <PromoteGuestButton
+                    guestId={g.id}
+                    guestName={g.name}
+                    hasEmail={!!g.email}
+                  />
+                )}
+              </div>
             );
           })}
         </div>
