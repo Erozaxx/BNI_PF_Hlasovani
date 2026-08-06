@@ -618,7 +618,9 @@ export type InterviewDueEntry = {
   hasMonth10Interview: boolean;
   due5: boolean;
   due10: boolean;
+  /** Days since due5 turned on (i.e. since entering month 5) — not days overdue. */
   due5SinceDays: number | null;
+  /** Days since due10 turned on (i.e. since entering month 10) — not days overdue. */
   due10SinceDays: number | null;
   upcoming5: boolean;
   upcoming10: boolean;
@@ -627,9 +629,17 @@ export type InterviewDueEntry = {
 /**
  * Compute the 5/10-month due-list for every member (arch section 7.2).
  * One query with a LEFT JOIN + aggregation, date math done in TS (date-fns).
- * "Due" is a standing condition (due from the date onward, not just on the
- * exact day) — a member stays in the due-list until the interview is created,
- * however long the admin/mod goes without checking.
+ *
+ * "Due" fires while the interview is relevant, not once it's overdue: due5
+ * turns on when the member enters month 5 of membership (4 completed
+ * months) and due10 when they enter month 10 (9 completed months). Per
+ * iter-024, this replaced the original "5/10 completed months" threshold,
+ * which fired a month too late — the interview is meant to happen during
+ * the relevant month, not after it has fully elapsed.
+ *
+ * "Due" is also a standing condition (due from the date onward, not just on
+ * the exact day) — a member stays in the due-list until the interview is
+ * created, however long the admin/mod goes without checking.
  */
 export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
   const rows = await getDb()
@@ -655,8 +665,10 @@ export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
 
   return rows.map((row) => {
     const joined = parseISO(row.joinedAt);
-    const due5Date = addMonths(joined, 5);
-    const due10Date = addMonths(joined, 10);
+    // due5Date/due10Date are the dates the member ENTERS the relevant month
+    // (4 / 9 completed months), not the dates that month elapses — iter-024.
+    const due5Date = addMonths(joined, 4);
+    const due10Date = addMonths(joined, 9);
 
     const due5 = !row.hasMonth5Interview && !isAfter(due5Date, today);
     const due10 = !row.hasMonth10Interview && !isAfter(due10Date, today);
