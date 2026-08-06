@@ -70,13 +70,13 @@ function DueRow({
       <div className="flex flex-wrap gap-2 items-center text-sm">
         {entry.due5 && entry.due5SinceDays !== null && (
           <Badge variant="danger">
-            5 mesicu — po terminu {entry.due5SinceDays}{" "}
+            5 mesicu — sviti {entry.due5SinceDays}{" "}
             {daysLabel(entry.due5SinceDays)}
           </Badge>
         )}
         {entry.due10 && entry.due10SinceDays !== null && (
           <Badge variant="danger">
-            10 mesicu — po terminu {entry.due10SinceDays}{" "}
+            10 mesicu — sviti {entry.due10SinceDays}{" "}
             {daysLabel(entry.due10SinceDays)}
           </Badge>
         )}
