@@ -122,6 +122,46 @@ export async function getMemberByEmail(email: string) {
 }
 
 /**
+ * Find a member by email, case-insensitive and trimmed (iter-022, arch T-003
+ * MINOR-3). Used by promoteGuestToMemberAction's duplicate pre-check instead
+ * of getMemberByEmail, so a guest email differing only by case/whitespace
+ * still lands in the repair/conflict branch instead of a raw INSERT that
+ * would hit the (case-sensitive) member_email_unique constraint.
+ *
+ * getMemberByEmail itself is NOT touched -- it backs admin/moderator login
+ * and changing its semantics is out of scope for this feature.
+ *
+ * NULL member emails never match (lower(trim(NULL)) is NULL), so members
+ * without an email correctly fall outside this lookup.
+ */
+export async function findMemberByEmailInsensitive(email: string) {
+  const results = await getDb()
+    .select()
+    .from(member)
+    .where(sql`lower(trim(${member.email})) = lower(trim(${email}))`)
+    .limit(1);
+
+  return results[0] ?? null;
+}
+
+/**
+ * Find a member by name, case-insensitive and trimmed (iter-022, arch T-001
+ * 7.1 / T-003 §7). Used by promoteGuestToMemberAction for guests without an
+ * email: member.name has no UNIQUE constraint, so this is the only signal
+ * available to block a promotion that would otherwise silently create a
+ * same-named duplicate member.
+ */
+export async function findMemberByNameInsensitive(name: string) {
+  const results = await getDb()
+    .select()
+    .from(member)
+    .where(sql`lower(trim(${member.name})) = lower(trim(${name}))`)
+    .limit(1);
+
+  return results[0] ?? null;
+}
+
+/**
  * Find a member by current magic token hash.
  * Only returns members with a valid (non-expired, non-used) token.
  */

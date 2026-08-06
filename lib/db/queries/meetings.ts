@@ -68,6 +68,27 @@ export async function hasActiveOrVotingMeeting(excludeId: string): Promise<boole
 }
 
 /**
+ * Check whether a guest is currently attached to a meeting in 'voting' status.
+ * Used by promoteGuestToMemberAction (iter-022) to block promotion while a
+ * meeting's voting is live -- deleting the guest mid-vote would pull them off
+ * open voting screens and CASCADE-delete already-cast votes.
+ *
+ * Deliberately ignores votingEnabled (arch T-003 NIT-2): checking only
+ * meeting.status = 'voting' is stricter but does not rely on the emergent,
+ * unenforced assumption that votingEnabled is set once and never changes.
+ */
+export async function isGuestInVotingMeeting(guestId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ meetingId: meetingGuest.meetingId })
+    .from(meetingGuest)
+    .innerJoin(meeting, eq(meetingGuest.meetingId, meeting.id))
+    .where(and(eq(meetingGuest.guestId, guestId), eq(meeting.status, "voting")))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/**
  * Get a single meeting by ID.
  */
 export async function getMeetingById(id: string) {
