@@ -1,5 +1,8 @@
 import { getMembers } from "@/lib/db/queries/members";
-import { getInterviewCountsByMember } from "@/lib/db/queries/interviews";
+import {
+  getInterviewCountsByMember,
+  getInterviewDueList,
+} from "@/lib/db/queries/interviews";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
@@ -7,10 +10,15 @@ import { ImportMembersForm } from "./ImportMembersForm";
 import { SortableMemberList } from "./SortableMemberList";
 
 export default async function AdminMembersPage() {
-  const [members, interviewCounts] = await Promise.all([
+  const [members, interviewCounts, dueList] = await Promise.all([
     getMembers(),
     getInterviewCountsByMember(),
+    getInterviewDueList(),
   ]);
+
+  // memberId -> { due5, due10 } (arch iter-023 T-001 §3.1) — getInterviewDueList()
+  // itself is unchanged, this only maps its output for the sortable list.
+  const dueByMember = new Map(dueList.map((d) => [d.memberId, d]));
 
   return (
     <div className="space-y-6">
@@ -47,6 +55,8 @@ export default async function AdminMembersPage() {
               tokenUsed: m.tokenUsed,
               joinedAt: m.joinedAt,
               interviewCount: interviewCounts.get(m.id) ?? 0,
+              due5: dueByMember.get(m.id)?.due5 ?? false,
+              due10: dueByMember.get(m.id)?.due10 ?? false,
             }))}
           />
         ) : (

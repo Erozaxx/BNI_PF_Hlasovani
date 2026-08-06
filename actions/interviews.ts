@@ -92,6 +92,11 @@ export async function createInterviewAction(
       case "created":
       case "repaired":
         revalidatePath(INTERVIEWS_PATH);
+        // D-1 (decision_iter-023_T-002): without this the due5/due10 chip on
+        // /admin/members would only disappear after a hard refresh — the
+        // page relies on getInterviewDueList(), which is correct, but Next's
+        // client router cache would keep serving the stale chip otherwise.
+        revalidatePath("/admin/members");
         return { success: true, data: { id: result.interviewId } };
       case "duplicate":
         // Readable dedup error (T-004a delta 3, arch 8a) — never a 500.
@@ -303,6 +308,9 @@ export async function deleteInterviewAction(
     await dbDeleteInterview(interviewId);
 
     revalidatePath(INTERVIEWS_PATH);
+    // D-1 (decision_iter-023_T-002): deleting an interview must bring its
+    // due5/due10 chip back on /admin/members without a hard refresh.
+    revalidatePath("/admin/members");
     return { success: true };
   } catch (error) {
     console.error("deleteInterviewAction error:", error);
