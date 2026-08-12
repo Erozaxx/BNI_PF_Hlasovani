@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:dedup": "tsx scripts/test-dedup-guests.ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "seed": "tsx scripts/seed-admin.ts"
