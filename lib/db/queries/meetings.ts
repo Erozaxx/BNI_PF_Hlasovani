@@ -89,6 +89,69 @@ export async function isGuestInVotingMeeting(guestId: string): Promise<boolean> 
 }
 
 /**
+ * Get the meeting scheduled for a given date, without filtering on status
+ * (iter-026, arch 2.4 — replaces getActiveMeetingsForDate). meeting.date has
+ * a UNIQUE constraint (schema.ts:122), so this returns at most one row. The
+ * caller (voting-dispatch guard chain, cron phase 2) decides what to do with
+ * whatever status it finds — a `closed` meeting is a guard rejection
+ * ("meeting-closed"), not a "no meeting today" silence, and those two must
+ * stay distinguishable.
+ */
+export async function getMeetingByDate(dateStr: string) {
+  const results = await getDb()
+    .select()
+    .from(meeting)
+    .where(eq(meeting.date, dateStr))
+    .limit(1);
+
+  return results[0] ?? null;
+}
+
+/**
+ * Get meetings scheduled for any of the given dates (iter-026, arch 8.1) —
+ * backs DraftMeetingBanner's `getMeetingsForDates([today, tomorrow])` call
+ * from app/(app)/layout.tsx. `meeting.date` is UNIQUE (schema.ts:122), so at
+ * most one row per date and at most `dates.length` rows total. Uses
+ * `idx_meeting_date` (schema.ts:142), same as getMeetingByDate.
+ */
+export async function getMeetingsForDates(dates: string[]) {
+  if (dates.length === 0) return [];
+
+  return getDb()
+    .select({ id: meeting.id, date: meeting.date, status: meeting.status })
+    .from(meeting)
+    .where(inArray(meeting.date, dates));
+}
+
+/**
+ * Get the other meeting (if any) currently active or voting, for building
+ * the conflict guard's message (arch 2.5). Deliberately separate from
+ * hasActiveOrVotingMeeting: that function stays a pure boolean guard exactly
+ * as it is used elsewhere (arch 2.5 pseudocode calls it directly), this one
+ * is only ever called once the boolean guard has already tripped, purely to
+ * fetch the date/uzávěrka for the human-readable message. Coder deviation
+ * (not in arch 13.1/13.2's explicit "new functions" list) — see handoff.
+ */
+export async function getConflictingMeeting(excludeId: string) {
+  const rows = await getDb()
+    .select({
+      id: meeting.id,
+      date: meeting.date,
+      votingClosesAt: meeting.votingClosesAt,
+    })
+    .from(meeting)
+    .where(
+      and(
+        ne(meeting.id, excludeId),
+        sql`${meeting.status} IN ('active', 'voting')`
+      )
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
  * Get a single meeting by ID.
  */
 export async function getMeetingById(id: string) {
@@ -218,7 +281,9 @@ export async function getGuestIdsForMeeting(meetingId: string): Promise<Set<stri
 
 /**
  * Get all guest IDs for a meeting (regardless of votingEnabled).
- * Used for B-001 subset validation in openVotingAction.
+ * Used by the "no-guests" guard in runVotingDispatch (iter-026, arch 2.6/#4):
+ * a meeting with zero guests must never reach voting, in either mode and in
+ * any pre-closed state — including via the Thursday cron under E1.
  */
 export async function getMeetingGuestIds(meetingId: string): Promise<Set<string>> {
   const rows = await getDb()
@@ -226,20 +291,6 @@ export async function getMeetingGuestIds(meetingId: string): Promise<Set<string>
     .from(meetingGuest)
     .where(eq(meetingGuest.meetingId, meetingId));
   return new Set(rows.map((r) => r.guestId));
-}
-
-/**
- * Bulk-update voting_enabled on meeting_guest for all guests of a meeting.
- * Guests in enabledIds get voting_enabled = true; all others get voting_enabled = false.
- * Single atomic UPDATE: SET voting_enabled = (guest_id = ANY($enabledIds)) WHERE meeting_id = $meetingId.
- */
-export async function setVotingEnabled(meetingId: string, enabledIds: string[]): Promise<void> {
-  await getDb()
-    .update(meetingGuest)
-    .set({
-      votingEnabled: sql<boolean>`(${meetingGuest.guestId} = ANY(ARRAY[${sql.join(enabledIds.map((id) => sql`${id}::uuid`), sql`, `)}]))`,
-    })
-    .where(eq(meetingGuest.meetingId, meetingId));
 }
 
 /**

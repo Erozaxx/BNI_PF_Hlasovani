@@ -1,109 +1,59 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { meetingMemberLink, meeting, member } from "@/lib/db/schema";
+import { meetingMemberLink } from "@/lib/db/schema";
 
 function getDb() {
   return drizzle(getSql());
 }
 
 /**
- * Get all active meetings (status='active') whose date matches the given date string.
- * Date is compared as a plain DATE string (YYYY-MM-DD) matching meeting.date.
+ * Get all meeting_member_link rows for a meeting (iter-026, arch 13.2 —
+ * replaces getActiveMeetingLinks + getPendingMorningEmailLinks). Returns
+ * every row for the meeting, revoked or not, with or without a sent marker —
+ * planVotingDispatch (lib/meetings/voting-plan.ts) needs the full picture to
+ * decide who gets skipped and why, not a pre-filtered subset. Does not join
+ * member: the caller already has the member list from getMembers() for step
+ * 4 of runVotingDispatch (arch 2.3).
  */
-export async function getActiveMeetingsForDate(dateStr: string) {
-  return getDb()
-    .select({ id: meeting.id, date: meeting.date })
-    .from(meeting)
-    .where(and(eq(meeting.status, "active"), eq(meeting.date, dateStr)));
-}
-
-/**
- * Get all meeting_member_link rows for a meeting where morningEmailSentAt IS NULL.
- * Joins member to get email and name for sending the email.
- * Does NOT include revoked links.
- */
-export async function getPendingMorningEmailLinks(meetingId: string) {
+export async function getMeetingLinkRows(meetingId: string) {
   return getDb()
     .select({
-      linkId: meetingMemberLink.id,
-      meetingId: meetingMemberLink.meetingId,
       memberId: meetingMemberLink.memberId,
-      memberEmail: member.email,
-      memberName: member.name,
+      linkId: meetingMemberLink.id,
+      revokedAt: meetingMemberLink.revokedAt,
+      linkEmailSentAt: meetingMemberLink.morningEmailSentAt,
     })
     .from(meetingMemberLink)
-    .innerJoin(member, eq(meetingMemberLink.memberId, member.id))
-    .where(
-      and(
-        eq(meetingMemberLink.meetingId, meetingId),
-        isNull(meetingMemberLink.revokedAt),
-        isNull(meetingMemberLink.morningEmailSentAt)
-      )
-    );
+    .where(eq(meetingMemberLink.meetingId, meetingId));
 }
 
 /**
- * Get all non-revoked meeting_member_link rows for a meeting that have an email.
- * Joins member to get email and name for sending the voting magic link.
- * Unlike getPendingMorningEmailLinks, this does NOT filter on morningEmailSentAt —
- * it returns every active link so Thursday auto-activation can email all members.
+ * Mark a member's voting link as "email sent" for a specific meeting
+ * (iter-026, arch 2.4 — renamed from markMorningEmailSent; sémantika sloupce
+ * se mění na "odkaz odeslán", schema.ts:morningEmailSentAt nese komentář).
+ *
+ * Coder deviation from the literal "rename" instruction: resignatured from
+ * (linkId, sentAt) to (meetingId, memberId, sentAt). Step 8 of
+ * runVotingDispatch (arch 2.3) regenerates the token for every recipient,
+ * including links that were just created in step 5 via generateMeetingToken
+ * — that call only returns the raw token, not the row id, so linkId is not
+ * available at the point markLinkEmailSent needs to be called. Matching by
+ * (meetingId, memberId) is available for every recipient immediately and the
+ * UPDATE is still a plain WHERE-guarded write (LL-003).
  */
-export async function getActiveMeetingLinks(meetingId: string) {
-  return getDb()
-    .select({
-      linkId: meetingMemberLink.id,
-      meetingId: meetingMemberLink.meetingId,
-      memberId: meetingMemberLink.memberId,
-      memberEmail: member.email,
-      memberName: member.name,
-    })
-    .from(meetingMemberLink)
-    .innerJoin(member, eq(meetingMemberLink.memberId, member.id))
-    .where(
-      and(
-        eq(meetingMemberLink.meetingId, meetingId),
-        isNull(meetingMemberLink.revokedAt)
-      )
-    );
-}
-
-/**
- * Mark morningEmailSentAt on a specific meeting_member_link row.
- * Called immediately after each successful email send (idempotency per brief A2).
- */
-export async function markMorningEmailSent(
-  linkId: string,
+export async function markLinkEmailSent(
+  meetingId: string,
+  memberId: string,
   sentAt: Date
 ): Promise<void> {
   await getDb()
     .update(meetingMemberLink)
     .set({ morningEmailSentAt: sentAt })
-    .where(eq(meetingMemberLink.id, linkId));
-}
-
-/**
- * Transition a meeting from 'active' to 'voting'.
- * Sets votingOpenAt and votingClosesAt (now + 48h).
- * Returns the updated row or null if not found / wrong status.
- */
-export async function activateMeetingVoting(meetingId: string) {
-  const now = new Date();
-  const votingClosesAt = new Date(now.getTime() + 48 * 3600 * 1000);
-
-  const rows = await getDb()
-    .update(meeting)
-    .set({
-      status: "voting",
-      votingOpenAt: now,
-      votingClosesAt,
-    })
-    .where(and(eq(meeting.id, meetingId), eq(meeting.status, "active")))
-    .returning({
-      id: meeting.id,
-      votingOpenAt: meeting.votingOpenAt,
-      votingClosesAt: meeting.votingClosesAt,
-    });
-
-  return rows[0] ?? null;
+    .where(
+      and(
+        eq(meetingMemberLink.meetingId, meetingId),
+        eq(meetingMemberLink.memberId, memberId)
+      )
+    );
 }

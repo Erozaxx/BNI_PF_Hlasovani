@@ -3,19 +3,22 @@ import { notFound } from "next/navigation";
 import { getMeetingWithGuests } from "@/lib/db/queries/meetings";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getVotingResults } from "@/lib/db/queries/votes";
+import { getMembers } from "@/lib/db/queries/members";
+import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { getSession } from "@/lib/auth/session";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MeetingControls } from "@/components/meetings/MeetingControls";
+import { StartVotingPanel } from "@/components/meetings/StartVotingPanel";
 import { ReportButton } from "@/components/meetings/ReportButton";
 import { DeleteMeetingButton } from "@/components/meetings/DeleteMeetingButton";
 import { AddGuestToMeetingForm } from "./AddGuestToMeetingForm";
 import { ImportGuestsButton } from "./ImportGuestsButton";
 import { ExportListButton } from "./ExportListButton";
 import { SortableMeetingGuestList } from "./SortableMeetingGuestList";
-import { MeetingActivationControls } from "./MeetingActivationControls";
+import { MemberLinksManager } from "./MemberLinksManager";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingDetailPage({
@@ -69,6 +72,28 @@ export default async function MeetingDetailPage({
     isManagement &&
     (meeting.status === "draft" || meeting.status === "active");
 
+  // Data pro StartVotingPanel (iter-026, arch 2.6/#4 a 8.3): "X z Y clenu" a
+  // disabled tlacitko u schuzky bez hostu. Obe hodnoty jsou levke SELECTy
+  // (getMembers/getMeetingLinkRows uz repo pouziva jinde) — zadny novy dotaz
+  // nad ramec toho, co uz na strance beze i tak existuje (MemberLinksManager
+  // cte tutez informaci pres GET /member-links).
+  const hasGuests = meeting.guests.length > 0;
+  let membersWithEmailCount = 0;
+  let initialLinkEmailSentCount = 0;
+  if (isManagement) {
+    const [allMembers, linkRows] = await Promise.all([
+      getMembers(),
+      getMeetingLinkRows(id),
+    ]);
+    membersWithEmailCount = allMembers.filter((m) => !!m.email).length;
+    const sentByMember = new Map(
+      linkRows.map((l) => [l.memberId, l.linkEmailSentAt !== null])
+    );
+    initialLinkEmailSentCount = allMembers.filter(
+      (m) => !!m.email && sentByMember.get(m.id) === true
+    ).length;
+  }
+
   const statusBadge = (status: string) => {
     const label = statusLabel[status] ?? status;
     switch (status) {
@@ -118,14 +143,7 @@ export default async function MeetingDetailPage({
 
         <div className="flex items-center gap-3 flex-wrap">
           {isManagement && (
-            <MeetingControls
-              meetingId={id}
-              status={meeting.status}
-              guests={meeting.guests.map((g) => ({
-                guestId: g.guestId,
-                guestName: g.guestName,
-              }))}
-            />
+            <MeetingControls meetingId={id} status={meeting.status} />
           )}
           {isManagement && meeting.status === "closed" && (
             <ReportButton meetingId={id} />
@@ -201,14 +219,21 @@ export default async function MeetingDetailPage({
         )}
       </section>
 
-      {/* Activation controls + MemberLinksManager (management only) */}
+      {/* Spusteni hlasovani + MemberLinksManager (management only) — iter-026 */}
       {isManagement && (
-        <section>
-          <MeetingActivationControls
+        <section className="space-y-4">
+          <StartVotingPanel
             meetingId={id}
-            meetingDate={meeting.date}
             status={meeting.status}
+            hasGuests={hasGuests}
+            initialLinkEmailSentCount={initialLinkEmailSentCount}
+            membersWithEmailCount={membersWithEmailCount}
           />
+          {(meeting.status === "active" ||
+            meeting.status === "voting" ||
+            meeting.status === "closed") && (
+            <MemberLinksManager meetingId={id} meetingDate={meeting.date} />
+          )}
         </section>
       )}
     </div>

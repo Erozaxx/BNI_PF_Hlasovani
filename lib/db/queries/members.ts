@@ -1,4 +1,4 @@
-import { eq, asc, and, isNotNull, gte, sql, count } from "drizzle-orm";
+import { eq, asc, and, isNotNull, ne, gte, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { member } from "@/lib/db/schema";
@@ -304,4 +304,45 @@ export async function updateMagicToken(
       tokenUsed: false,
     })
     .where(eq(member.id, memberId));
+}
+
+/**
+ * Get admin and moderator members with a non-null, non-empty email —
+ * recipients for the čtvrteční varovný mail (iter-026, arch 7.2) and, since
+ * it filters in SQL and returns name + role too, the new backing
+ * implementation for `getManagementEmails()` in lib/email/resend.ts (which
+ * used to load *every* member via getMembers() and filter in JS — two
+ * definitions of "management" would otherwise drift apart).
+ *
+ * `ne(member.email, "")` alongside `isNotNull` — review MINOR-2 (T-006r):
+ * bez něj by jeden admin/moderátor s prázdným řetězcem místo NULL prošel do
+ * `to` pole volání Resendu a mohl shodit celý varovný mail pro všechny
+ * příjemce. Stejná podmínka jako `voting-dispatch.ts` (`!!m.email`) a
+ * `voting-plan.ts` (`!member.memberEmail`) jinde ve stejném PR.
+ */
+export async function getManagementRecipients(): Promise<
+  { memberId: string; name: string; email: string; role: string }[]
+> {
+  const rows = await getDb()
+    .select({
+      memberId: member.id,
+      name: member.name,
+      email: member.email,
+      role: member.managementRole,
+    })
+    .from(member)
+    .where(
+      and(
+        sql`${member.managementRole} IN ('admin', 'moderator')`,
+        isNotNull(member.email),
+        ne(member.email, "")
+      )
+    );
+
+  return rows.map((r) => ({
+    memberId: r.memberId,
+    name: r.name,
+    email: r.email as string,
+    role: r.role as string,
+  }));
 }

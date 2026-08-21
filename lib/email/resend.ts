@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { getMeetingWithGuests } from "@/lib/db/queries/meetings";
 import { getVotingResults } from "@/lib/db/queries/votes";
 import { getNotesForGuest } from "@/lib/db/queries/notes";
-import { getMembers } from "@/lib/db/queries/members";
+import { getManagementRecipients } from "@/lib/db/queries/members";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -173,16 +173,15 @@ function formatDate(d: Date): string {
 
 /**
  * Get admin and moderator email addresses.
+ *
+ * Iter-026 (arch 7.2): přepsáno nad `getManagementRecipients()`
+ * (lib/db/queries/members.ts) — ta filtruje admin/moderator + neprázdný
+ * e-mail přímo v SQL, aby v repu neexistovaly dvě nezávislé definice toho,
+ * kdo je "management".
  */
 async function getManagementEmails(): Promise<string[]> {
-  const members = await getMembers();
-  return members
-    .filter(
-      (m) =>
-        (m.managementRole === "admin" || m.managementRole === "moderator") &&
-        m.email
-    )
-    .map((m) => m.email!);
+  const recipients = await getManagementRecipients();
+  return recipients.map((r) => r.email);
 }
 
 /**
@@ -408,5 +407,87 @@ export async function sendMagicLinkEmail(
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("sendMagicLinkEmail error:", msg);
     return { success: false, error: msg };
+  }
+}
+
+/**
+ * Build HTML body for the Thursday voting warning email. `lines` are the
+ * pre-decided, pre-formatted paragraph/bullet strings from
+ * decideThursdayWarning (lib/meetings/warning-plan.ts, arch iter-026 3.4) —
+ * this function only wraps them, it makes no decision and formats no text
+ * of its own.
+ */
+function buildVotingWarningHtml(subject: string, lines: string[]): string {
+  const bodyLines = lines
+    .map((line) => `<p style="margin:0 0 10px;">${escapeHtml(line)}</p>`)
+    .join("\n");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#1a1a1a;">
+  <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <p style="margin:4px 0 0;color:#666;font-size:13px;">${escapeHtml(subject)}</p>
+  </div>
+  <div style="font-size:14px;line-height:1.5;">${bodyLines}</div>
+  <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8E8E8;text-align:center;">
+    <p style="color:#999;font-size:12px;">Automaticky generovany varovny email z BNI Hlasovani</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Odešle čtvrteční varovný mail management týmu — jedno volání Resendu, se
+ * všemi adresami v poli `to` (iter-026, arch 7.2/7.5). `subject` a `lines`
+ * přicházejí hotové z `decideThursdayWarning`; tahle funkce nic nerozhoduje,
+ * jen odešle a zaloguje výsledek.
+ *
+ * Nemá vlastní try/catch jen navíc pro paranoju — volající (cron fáze 3,
+ * app/api/cron/close-voting/route.ts) obaluje celou fázi vlastním
+ * try/catch, aby pád varování nikdy nespadl cron (arch 7.5). Tahle funkce
+ * ale sama nikdy nevyhazuje: Resend chyby i síťové výjimky se tu zachytávají
+ * a vrací jako `{ sent: 0, error }`, přesně jako u ostatních send* funkcí v
+ * tomto souboru.
+ */
+export async function sendVotingWarningEmail(
+  subject: string,
+  lines: string[]
+): Promise<{ sent: number; recipients: string[]; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY not configured, logging voting warning to console");
+    console.log(`[VOTING WARNING] ${subject}\n${lines.join("\n")}`);
+    return { sent: 0, recipients: [], error: "RESEND_API_KEY is not configured" };
+  }
+
+  const recipients = await getManagementRecipients();
+  if (recipients.length === 0) {
+    console.error("[voting-warning] zadny prijemce s managementRole a emailem");
+    return { sent: 0, recipients: [], error: "no-management-recipients" };
+  }
+
+  const emails = recipients.map((r) => r.email);
+  const html = buildVotingWarningHtml(subject, lines);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      to: emails,
+      subject,
+      html,
+    });
+
+    if (error) {
+      console.error("[voting-warning] Resend send error:", error);
+      return { sent: 0, recipients: emails, error: `Resend API error: ${error.message}` };
+    }
+
+    console.info(`[voting-warning] sent to ${emails.length} recipients: ${subject}`);
+    return { sent: emails.length, recipients: emails };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error("[voting-warning] sendVotingWarningEmail error:", msg);
+    return { sent: 0, recipients: emails, error: msg };
   }
 }
