@@ -1,103 +1,175 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-http";
-import { getSql } from "@/lib/db/client";
-import { meeting as meetingTable, meetingMemberLink } from "@/lib/db/schema";
 import { getExpiredVotingMeetings } from "@/lib/db/queries/votes";
-import { updateMeetingStatus } from "@/lib/db/queries/meetings";
-import { sendReport } from "@/lib/email/resend";
+import { getMeetingByDate, updateMeetingStatus } from "@/lib/db/queries/meetings";
+import { sendReport, sendMagicLinkEmail, sendVotingWarningEmail } from "@/lib/email/resend";
 import { getMembers } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
-import { sendMagicLinkEmail, sendMeetingMagicLinkEmail } from "@/lib/email/resend";
-import {
-  getActiveMeetingsForDate,
-  getActiveMeetingLinks,
-  getPendingMorningEmailLinks,
-  markMorningEmailSent,
-} from "@/lib/db/queries/meeting-member-links";
-import { regenerateMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
+import { weekdayInPrague, todayInPrague } from "@/lib/meetings/voting-window";
+import { runVotingDispatch, type VotingDispatchResult } from "@/lib/meetings/voting-dispatch";
+import { decideThursdayWarning, type WarningInput } from "@/lib/meetings/warning-plan";
 import { cleanupStaleThrottleRows } from "@/lib/auth/throttle";
 
-function getDb() {
-  return drizzle(getSql());
-}
-
-// Phase B (cron) uses a "next Wednesday 23:59:59 Europe/Prague" voting close window,
-// NOT the fixed 48h window. The manual endpoint activate-voting/route.ts keeps 48h.
-const TOKEN_EXPIRY_EXTRA_MS = 24 * 60 * 60 * 1000; // +24h buffer AFTER votingClosesAt
+// Fáze 2 (dispatch) je při 27 členech ~15s (regenerate + Resend + 250ms pauza
+// na člena, arch iter-026 9.2). Vercel Hobby default limit funkce (10s) by to
+// oříznul. maxDuration = 60 je strop Hobby plánu.
+export const maxDuration = 60;
 
 /**
- * Get the CZ-local weekday name (Europe/Prague) for the current instant.
- * Returns e.g. "Thursday".
- */
-function weekdayInCET(): string {
-  return new Date().toLocaleDateString("en-US", {
-    timeZone: "Europe/Prague",
-    weekday: "long",
-  });
-}
-
-/**
- * Get today's date string in CET/CEST (Europe/Prague) timezone.
- * Returns "YYYY-MM-DD" using the Swedish locale format (ISO-like).
- */
-function todayInCET(): string {
-  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
-}
-
-/**
- * Compute the UTC instant for "next Wednesday 23:59:59 Europe/Prague" relative to `now`.
+ * Fáze 2: ve čtvrtek (Europe/Prague) spustí runVotingDispatch pro schůzku
+ * naplánovanou na dnešek, v libovolném stavu draft/active/voting (E1, arch
+ * 15.1) — cron sám aktivuje i schůzku, kterou nikdo nepřipravil.
  *
- * Phase B activation runs on a Thursday (CZ), so the target is Thursday + 6 days,
- * but the day delta is computed robustly from the CZ-local weekday (target = Wednesday)
- * rather than hard-coding +6. If `now` is already CZ-Wednesday, this returns the
- * Wednesday 7 days out (delta normalized to 1..7 so it's always strictly in the future
- * relative to the start of today).
+ * getMeetingByDate nefiltruje na stav — filtr je až uvnitř
+ * runVotingDispatch. Schůzku ve stavu closed fáze 2 pozná a odmítne guardem
+ * "meeting-closed", ne tím, že by ji nenašla — "nenašel jsem nic" (žádná
+ * schůzka na dnešek) a "našel jsem a nesmím" (guard padl) jsou dvě různé
+ * věci a musí zůstat rozeznatelné pro fázi 3 (varování, T-006).
  *
- * DST-safe: derives the target CZ wall-clock date, then corrects a UTC guess by the
- * actual Europe/Prague offset (CEST UTC+2 in summer, CET UTC+1 in winter).
+ * Návratová hodnota se NEZAHAZUJE — `result` (ok:true i ok:false) je přesně
+ * to, co T-006 potřebuje předat do decideThursdayWarning jako
+ * dispatchFailure / failedRecipients / membersWithoutEmail (arch 2.6.1, 3.4,
+ * 9.1). Tenhle návratový typ je ten hook point.
  */
-function nextWednesday2359InPrague(now: Date): Date {
-  // CZ-local weekday index 0..6 (Sun..Sat) for `now`.
-  const czWeekdayName = now.toLocaleDateString("en-US", {
-    timeZone: "Europe/Prague",
-    weekday: "long",
-  });
-  const weekdayIndex: Record<string, number> = {
-    Sunday: 0,
-    Monday: 1,
-    Tuesday: 2,
-    Wednesday: 3,
-    Thursday: 4,
-    Friday: 5,
-    Saturday: 6,
+export interface ThursdayDispatchOutcome {
+  weekday: string;
+  ranDispatch: boolean;
+  meetingId: string | null;
+  result: VotingDispatchResult | null;
+  /**
+   * Vyplněno JEN když `runThursdayDispatch()` samotná vyhodila výjimku —
+   * skutečná infra chyba mimo pět guard kódů (voting-dispatch.ts hlavička,
+   * odchylka 5 handoffu T-005), zachycená a syntetizovaná na úrovni cronu
+   * (`handler()`, review MAJOR-1, T-006r). `result` v tom případě zůstává
+   * `null` — nejde o žádný z pěti guardů, `runVotingDispatch` nevrátila nic.
+   */
+  infraError?: { code: "infra-error"; message: string };
+}
+
+async function runThursdayDispatch(today: string): Promise<ThursdayDispatchOutcome> {
+  const weekday = weekdayInPrague();
+  if (weekday !== "Thursday") {
+    return { weekday, ranDispatch: false, meetingId: null, result: null };
+  }
+
+  const mtg = await getMeetingByDate(today);
+  if (!mtg) {
+    return { weekday, ranDispatch: false, meetingId: null, result: null };
+  }
+
+  const result = await runVotingDispatch(mtg.id, { mode: "start", actor: "cron" });
+
+  if (result.ok) {
+    console.log(
+      `thursday-dispatch: meeting=${mtg.id} statusBefore=${result.statusBefore} ` +
+        `statusAfter=${result.statusAfter} sent=${result.counts.sent} ` +
+        `skipped=${result.counts.skipped} errors=${result.counts.error}`
+    );
+  } else {
+    console.error(`thursday-dispatch: meeting=${mtg.id} guard failed code=${result.code}: ${result.error}`);
+  }
+
+  return { weekday, ranDispatch: true, meetingId: mtg.id, result };
+}
+
+/**
+ * Sestaví `WarningInput` (arch iter-026 3.4) z `ThursdayDispatchOutcome`
+ * fáze 2 (iter-026, T-006). Nesahá na `runVotingDispatch` ani na
+ * `voting-dispatch.ts` — jen z návratové hodnoty fáze 2 (včetně
+ * `infraError`, T-006r, MAJOR-1) odvozuje, co `decideThursdayWarning`
+ * potřebuje.
+ *
+ * `dispatch.infraError` má přednost před `dispatch.result` — obojí najednou
+ * nikdy nenastane (buď `runThursdayDispatch()` vrátila `result`, nebo
+ * vyhodila výjimku a handler() ji nahradil `infraError`), ale `??` dává
+ * najevo, že jde o dvě alternativní cesty ke stejnému poli, ne o prioritu.
+ */
+async function buildWarningInput(
+  dispatch: ThursdayDispatchOutcome,
+  today: string
+): Promise<WarningInput> {
+  const meeting = await resolveWarningMeeting(dispatch, today);
+  const { failedRecipients, membersWithoutEmail } = deriveWarningSignals(dispatch.result);
+
+  return {
+    weekdayPrague: dispatch.weekday,
+    todayIso: today,
+    meeting,
+    dispatchFailure:
+      dispatch.infraError ??
+      (dispatch.result && !dispatch.result.ok
+        ? { code: dispatch.result.code, message: dispatch.result.error }
+        : null),
+    failedRecipients,
+    membersWithoutEmail,
   };
-  const todayIdx = weekdayIndex[czWeekdayName];
-  const WEDNESDAY = 3;
-  // Days until the NEXT Wednesday (1..7), never 0 — always a future Wednesday.
-  const daysUntilWed = ((WEDNESDAY - todayIdx + 7) % 7) || 7;
+}
 
-  // Target CZ calendar date (YYYY-MM-DD) for that Wednesday.
-  const czTodayStr = now.toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
-  const [y, m, d] = czTodayStr.split("-").map(Number);
-  // Build at UTC noon to avoid date rollover near midnight, then add the day delta.
-  const targetMidUtc = new Date(Date.UTC(y, m - 1, d + daysUntilWed, 12, 0, 0));
-  const targetDateStr = targetMidUtc.toLocaleDateString("sv-SE", {
-    timeZone: "Europe/Prague",
-  });
-  const [ty, tm, td] = targetDateStr.split("-").map(Number);
+/**
+ * Stav schůzky PO fázi 2 pro WarningInput.meeting.
+ *
+ * Když `dispatch.result.ok === true`, stav je přímo v něm (meetingId,
+ * meetingDate, statusAfter) — žádný extra dotaz.
+ *
+ * Když guard padl (`ok:false`), `VotingDispatchResult` nese jen `code` a
+ * `error`, ne datum/stav schůzky (guard padl PŘED jakýmkoli zápisem, takže
+ * stav je nezměněný, ale tahle informace se nikam nepropsala). Nejjednodušší
+ * a nejspolehlivější je stav čerstvě dotáhnout přes `getMeetingByDate` — ta
+ * samá funkce, kterou už fáze 2 volala, nulté rozšiřování
+ * `ThursdayDispatchOutcome` (T-005, nesahat). `date` vychází vždy na
+ * `today`, protože `getMeetingByDate(today)` ve fázi 2 vrátila právě tuhle
+ * schůzku.
+ *
+ * `dispatch.infraError` (T-006r, MAJOR-1) je stejný případ jako `ok:false`
+ * — nezná datum/stav — ale navíc nemusí znát ani `meetingId` (výjimka mohla
+ * padnout uvnitř `runThursdayDispatch()` ještě dřív, než se `mtg` stihla
+ * dosadit). Proto se `getMeetingByDate` zkouší i bez `meetingId`, dokud je
+ * `infraError` nastaven — je to ta samá idempotentní funkce, žádné nové
+ * riziko, jen druhý pokus o dotaz, který mohl (transientně) selhat poprvé.
+ */
+async function resolveWarningMeeting(
+  dispatch: ThursdayDispatchOutcome,
+  today: string
+): Promise<{ id: string; date: string; status: string } | null> {
+  if (!dispatch.ranDispatch) return null; // není čtvrtek, nebo žádná schůzka na dnešek
 
-  // Treat "targetDate 23:59:59" as if it were UTC, then correct by the Prague offset
-  // so the resulting UTC instant renders as 23:59:59 wall-clock in Europe/Prague.
-  const guess = new Date(Date.UTC(ty, tm - 1, td, 23, 59, 59));
-  // Prague offset (ms) for this instant: same instant rendered in Prague minus in UTC.
-  // CEST (summer) → +2h, CET (winter) → +1h.
-  const inPrague = new Date(
-    guess.toLocaleString("en-US", { timeZone: "Europe/Prague" })
-  );
-  const inUtc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
-  const offsetMs = inPrague.getTime() - inUtc.getTime();
-  return new Date(guess.getTime() - offsetMs);
+  if (dispatch.result && dispatch.result.ok) {
+    return {
+      id: dispatch.result.meetingId,
+      date: dispatch.result.meetingDate,
+      status: dispatch.result.statusAfter,
+    };
+  }
+
+  if (!dispatch.meetingId && !dispatch.infraError) return null;
+  const row = await getMeetingByDate(today);
+  return row ? { id: row.id, date: row.date, status: row.status } : null;
+}
+
+/**
+ * `failedRecipients` a `membersWithoutEmail` z `dispatch.result.recipients`
+ * (arch 9.1) — jen když `ok:true`; při `ok:false` se nic neposílalo, takže
+ * obojí je prázdné (rule 3 v decideThursdayWarning stejně převezme dřív).
+ */
+function deriveWarningSignals(result: VotingDispatchResult | null): {
+  failedRecipients: { memberName: string; reason: string }[];
+  membersWithoutEmail: { memberName: string }[];
+} {
+  if (!result || !result.ok) {
+    return { failedRecipients: [], membersWithoutEmail: [] };
+  }
+
+  const failedRecipients = result.recipients
+    .filter((r) => r.outcome.status === "error")
+    .map((r) => ({
+      memberName: r.memberName,
+      reason: r.outcome.status === "error" ? r.outcome.reason : "",
+    }));
+
+  const membersWithoutEmail = result.recipients
+    .filter((r) => r.outcome.status === "skipped" && r.outcome.reason === "no-email")
+    .map((r) => ({ memberName: r.memberName }));
+
+  return { failedRecipients, membersWithoutEmail };
 }
 
 /**
@@ -107,15 +179,22 @@ function nextWednesday2359InPrague(now: Date): Date {
  *   Summer (CEST, UTC+2): 05:00 UTC = 07:00 local — the intended Thursday 7:00 run.
  *   Winter (CET, UTC+1):  05:00 UTC = 06:00 local — DST drift, accepted (no comments in vercel.json).
  *
- * Phase A: Morning email — DISABLED. Kept as a stub; do not re-enable without product sign-off.
- * Phase B: Thursday auto-activation — on Thursdays only, transition today's active meeting
- *          to 'voting' (votingOpenAt=now, votingClosesAt=next Wed 23:59:59 Europe/Prague,
- *          link expiresAt=votingClosesAt+24h) and email every member with an active link
- *          a voting magic link.
- *          Idempotent via WHERE status='active' guard — a second run the same day is a no-op.
- * Phase C: Close expired voting — meetings in 'voting' status past their votingClosesAt.
- *          Sends report email for each closed meeting.
- * Phase E: Renew expiring member tokens — existing logic.
+ * Pořadí fází (arch iter-026 9.1) — POŘADÍ JE ZÁVAZNÉ:
+ * Fáze 1  Zavřít vypršená hlasování.        MUSÍ BÝT PRVNÍ — uvolní guard
+ *                                            "max jedna aktivní schůzka"
+ *                                            (arch 2.5) dřív, než se cokoli
+ *                                            aktivuje. Bez tohoto pořadí by
+ *                                            27.8. hlasování ze 13.8. pořád
+ *                                            blokovalo spuštění nové schůzky.
+ * Fáze 2  Spuštění hlasování na dnešek.      Jen ve čtvrtek, deleguje na
+ *                                            runVotingDispatch (jádro sdílené
+ *                                            s tlačítkem StartVotingPanel).
+ * Fáze 3  Varování management týmu.          T-006 (nesahat, mimo scope T-005).
+ * Fáze 4  Reporty za schůzky zavřené ve fázi 1.  Schválně až za fází 2 (a
+ *                                            budoucí fází 3) — není časově
+ *                                            kritické.
+ * Fáze 5  Obnova expirujících členských tokenů (beze změny).
+ * Fáze 6  Úklid auth_throttle (beze změny).
  *
  * Protected by CRON_SECRET — Vercel sends this header automatically for cron jobs.
  */
@@ -136,18 +215,12 @@ async function handler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const today = todayInCET();
+  const today = todayInPrague();
 
   console.log(`close-voting cron: today=${today}`);
 
   try {
-    // ── Phase A: Morning emails (disabled) ──
-    const morningEmailResult = { skipped: "disabled", sent: 0 };
-
-    // ── Phase B: Thursday auto-activation ──
-    const thursdayActivationResult = await activateThursdayMeetings(today);
-
-    // ── Phase C: Close expired voting meetings ──
+    // ── Fáze 1: Zavřít vypršená hlasování — MUSÍ BÝT PRVNÍ ──
     const expiredMeetings = await getExpiredVotingMeetings();
 
     const closedIds: string[] = [];
@@ -170,7 +243,51 @@ async function handler(request: NextRequest) {
       );
     }
 
-    // ── Phase C: Send report for each newly closed meeting ──
+    // ── Fáze 2: Spuštění hlasování na dnešek (jen čtvrtek), deleguje na jádro ──
+    // Vlastní try/catch (review MAJOR-1, T-006r): `runVotingDispatch` uvnitř
+    // `runThursdayDispatch` záměrně propouští skutečnou infra chybu (DB
+    // nedostupná mimo pět guard kódů, viz voting-dispatch.ts hlavička) jako
+    // výjimku. Bez tohodle try/catch by taková výjimka spadla až do
+    // vnějšího catch celého handleru (dole) a fáze 3-6 by ten den
+    // neproběhly vůbec — přesně ta třída selhání ("cron tiše neudělá nic"),
+    // kvůli které iterace vznikla. Nesahá na voting-dispatch.ts (2.2/2.3) —
+    // jen zachycuje výjimku na úrovni cronu a syntetizuje náhradní stav, se
+    // kterým dál pracuje fáze 3 (decideThursdayWarning, pravidlo
+    // dispatch-failed).
+    let dispatch: ThursdayDispatchOutcome;
+    try {
+      dispatch = await runThursdayDispatch(today);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("close-voting cron: thursday dispatch threw (infra error):", msg);
+      dispatch = {
+        weekday: weekdayInPrague(),
+        ranDispatch: true,
+        meetingId: null,
+        result: null,
+        infraError: { code: "infra-error", message: msg },
+      };
+    }
+
+    // ── Fáze 3: Varování management týmu (arch 3.4, 7, 9.1) ──
+    // Vlastní try/catch: pád odesílání varování nesmí shodit zbytek cronu
+    // (arch 7.5), přesně jako u fáze 6 (throttle cleanup) níže.
+    let warningResult: { sent?: number; skipped?: string; error?: string };
+    try {
+      const decision = decideThursdayWarning(await buildWarningInput(dispatch, today));
+      if (decision.warn) {
+        const sendResult = await sendVotingWarningEmail(decision.subject, decision.lines);
+        warningResult = { sent: sendResult.sent, error: sendResult.error };
+      } else {
+        warningResult = { sent: 0, skipped: decision.reason };
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("close-voting cron: thursday warning failed:", msg);
+      warningResult = { sent: 0, error: msg };
+    }
+
+    // ── Fáze 4: Report pro každou nově zavřenou schůzku (z fáze 1) ──
     const reportResults: { meetingId: string; sent: number; error?: string }[] = [];
 
     for (const meetingId of closedIds) {
@@ -193,10 +310,10 @@ async function handler(request: NextRequest) {
 
     // Token expiry for meeting_member_link is enforced at verification time — no active cleanup needed.
 
-    // ── Phase E: Renew expiring tokens ──
+    // ── Fáze 5: Renew expiring tokens ──
     const tokenRenewalResult = await renewExpiringTokens();
 
-    // ── Housekeeping: stale auth_throttle row cleanup (MINOR-1, T-013) ──
+    // ── Fáze 6: stale auth_throttle row cleanup ──
     // Best-effort, sequential DELETE (no db.transaction() — LL-003). Own
     // try/catch so a failure here never fails the cron's main logic above.
     try {
@@ -207,10 +324,16 @@ async function handler(request: NextRequest) {
     }
 
     return NextResponse.json({
-      morningEmails: morningEmailResult,
-      thursdayActivation: thursdayActivationResult,
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
+      dispatch: {
+        weekday: dispatch.weekday,
+        ranDispatch: dispatch.ranDispatch,
+        meetingId: dispatch.meetingId,
+        result: dispatch.result,
+        infraError: dispatch.infraError,
+      },
+      warning: warningResult,
       reports: reportResults.length > 0 ? reportResults : undefined,
       tokenRenewal: tokenRenewalResult,
       errors: closeErrors.length > 0 ? closeErrors : undefined,
@@ -222,213 +345,6 @@ async function handler(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Phase B: On Thursdays, auto-activate today's active meeting into 'voting' and
- * email every member (with an active link) a voting magic link.
- *
- * Voting window (differs from the manual activate-voting endpoint, which stays at 48h):
- *   - votingOpenAt = now
- *   - votingClosesAt = next Wednesday 23:59:59 Europe/Prague (DST-aware UTC instant)
- *   - meeting_member_link.expiresAt = votingClosesAt + 24h
- *   - no transaction (LL-003): sequential UPDATEs, status='active' WHERE guard for idempotence.
- *
- * Idempotence: the status guard means a second run the same Thursday updates 0 rows,
- * so no emails are re-sent.
- */
-async function activateThursdayMeetings(today: string): Promise<{
-  skipped?: string;
-  activated?: number;
-  sent?: number;
-  errors?: string[];
-}> {
-  const weekday = weekdayInCET();
-  if (weekday !== "Thursday") {
-    return { skipped: "not Thursday" };
-  }
-
-  const meetings = await getActiveMeetingsForDate(today);
-  if (meetings.length === 0) {
-    return { skipped: "no active meetings today", activated: 0, sent: 0 };
-  }
-
-  let activatedCount = 0;
-  let totalSent = 0;
-  const allErrors: string[] = [];
-
-  for (const mtg of meetings) {
-    try {
-      const now = new Date();
-      const votingOpenAt = now;
-      // Voting closes at the next Wednesday 23:59:59 Europe/Prague (DST-aware UTC instant).
-      // Activation runs Thursday (CZ) → target is that Thursday + 6 days, but the day
-      // delta is derived from the CZ weekday so it never relies on a hard-coded +6.
-      const votingClosesAt = nextWednesday2359InPrague(now);
-      // Keep the +24h buffer AFTER voting closes (not after now).
-      const expiresAt = new Date(votingClosesAt.getTime() + TOKEN_EXPIRY_EXTRA_MS);
-      console.log(
-        `thursday-activation: meeting ${mtg.id} votingClosesAt=${votingClosesAt.toISOString()} ` +
-          `(expected Wed 23:59:59 Europe/Prague), expiresAt=${expiresAt.toISOString()}`
-      );
-
-      // Transition active -> voting. WHERE status='active' guard makes this idempotent:
-      // a repeat run the same day updates 0 rows and we skip emailing.
-      const updated = await getDb()
-        .update(meetingTable)
-        .set({ status: "voting", votingOpenAt, votingClosesAt })
-        .where(
-          and(
-            eq(meetingTable.id, mtg.id),
-            eq(meetingTable.status, "active")
-          )
-        )
-        .returning({ id: meetingTable.id });
-
-      if (updated.length === 0) {
-        console.log(
-          `thursday-activation: meeting ${mtg.id} already transitioned — skipping emails`
-        );
-        continue;
-      }
-
-      // Separate UPDATE: set link expiry on all member links (no transaction — LL-003).
-      await getDb()
-        .update(meetingMemberLink)
-        .set({ expiresAt })
-        .where(eq(meetingMemberLink.meetingId, mtg.id));
-
-      activatedCount++;
-      console.log(
-        `thursday-activation: meeting ${mtg.id} activated votingOpenAt=${votingOpenAt.toISOString()}`
-      );
-
-      // Email every member with an active link, regenerating a fresh token per member.
-      const links = await getActiveMeetingLinks(mtg.id);
-      for (const link of links) {
-        try {
-          if (!link.memberEmail) {
-            throw new Error(`member ${link.memberId} has no email`);
-          }
-
-          const rawToken = await regenerateMeetingToken(
-            link.meetingId,
-            link.memberId
-          );
-          if (!rawToken) {
-            throw new Error(
-              `regenerate token failed for member ${link.memberId}`
-            );
-          }
-
-          const magicUrl = buildMeetingMagicUrl(rawToken);
-
-          const emailResult = await sendMeetingMagicLinkEmail(
-            link.memberEmail,
-            magicUrl,
-            link.memberName ?? undefined,
-            mtg.date
-          );
-
-          if (!emailResult.success) {
-            throw new Error(`email send failed: ${emailResult.error}`);
-          }
-
-          totalSent++;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.error(`thursday-activation email error for meeting ${mtg.id}:`, msg);
-          allErrors.push(`meeting ${mtg.id}: ${msg}`);
-        }
-
-        // 250ms delay between sends — Resend limit is 5 req/s.
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(`thursday-activation error for meeting ${mtg.id}:`, msg);
-      allErrors.push(`meeting ${mtg.id}: ${msg}`);
-    }
-  }
-
-  return {
-    activated: activatedCount,
-    sent: totalSent,
-    errors: allErrors.length > 0 ? allErrors : undefined,
-  };
-}
-
-/**
- * Phase A: Send morning magic link emails for active meetings scheduled today.
- * Idempotent via morningEmailSentAt IS NULL check — safe to run once daily.
- * Uses Promise.allSettled to send all emails concurrently (non-blocking per member).
- */
-async function sendMorningEmails(
-  today: string
-): Promise<{ skipped?: string; meetingsProcessed?: number; sent: number; errors?: string[] }> {
-  const activeMeetings = await getActiveMeetingsForDate(today);
-  if (activeMeetings.length === 0) {
-    return { skipped: "no active meetings today", sent: 0 };
-  }
-
-  let totalSent = 0;
-  const allErrors: string[] = [];
-
-  for (const mtg of activeMeetings) {
-    const pendingLinks = await getPendingMorningEmailLinks(mtg.id);
-
-    if (pendingLinks.length === 0) {
-      console.log(`morning email: meeting ${mtg.id} — no pending links`);
-      continue;
-    }
-
-    // Send sequentially with 250ms delay to stay under Resend rate limit (5 req/s)
-    for (const link of pendingLinks) {
-      try {
-        if (!link.memberEmail) {
-          throw new Error(`member ${link.memberId} has no email`);
-        }
-
-        const rawToken = await regenerateMeetingToken(link.meetingId, link.memberId);
-        if (!rawToken) {
-          throw new Error(`regenerate token failed for member ${link.memberId}`);
-        }
-
-        const magicUrl = buildMeetingMagicUrl(rawToken);
-
-        const emailResult = await sendMeetingMagicLinkEmail(
-          link.memberEmail,
-          magicUrl,
-          link.memberName ?? undefined,
-          mtg.date
-        );
-
-        if (!emailResult.success) {
-          throw new Error(`email send failed: ${emailResult.error}`);
-        }
-
-        await markMorningEmailSent(link.linkId, new Date());
-        totalSent++;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error(`morning email error for meeting ${mtg.id}:`, msg);
-        allErrors.push(`meeting ${mtg.id}: ${msg}`);
-      }
-
-      // 250ms delay between sends — Resend limit is 5 req/s
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  }
-
-  if (totalSent > 0) {
-    console.log(`morning email: sent ${totalSent} emails`);
-  }
-
-  return {
-    meetingsProcessed: activeMeetings.length,
-    sent: totalSent,
-    errors: allErrors.length > 0 ? allErrors : undefined,
-  };
 }
 
 /**

@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { DraftMeetingBanner } from "@/components/meetings/DraftMeetingBanner";
 
 export default async function AppLayout({
   children,
@@ -91,7 +92,10 @@ export default async function AppLayout({
           />
         </header>
 
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">
+          <DraftMeetingBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

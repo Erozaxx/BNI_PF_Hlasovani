@@ -479,6 +479,14 @@ export const meetingMemberLink = pgTable(
       .defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    // Iter-026 (arch E2, sekce 15.2): sloupec beze změny, jen nový význam —
+    // "hlasovací odkaz byl tomuto členovi odeslán" (dřív: ranní e-mail
+    // vypnuté Phase A). Zapisuje ho runVotingDispatch/send-email po
+    // úspěšném odeslání (markLinkEmailSent), používá ho planVotingDispatch
+    // pro skip "already-sent" a UI popisek "Odkaz odeslán". 42 historických
+    // hodnot ze schůzek 23.4. a 7.5.2026 se před mergem jednorázově nuluje
+    // runbookem (arch 15.3, krok 1) — dělá to uživatel/orchestrátor přímo
+    // na produkční DB, ne kód v tomhle repu.
     morningEmailSentAt: timestamp("morning_email_sent_at", {
       withTimezone: true,
     }),

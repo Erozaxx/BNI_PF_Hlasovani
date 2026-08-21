@@ -21,28 +21,27 @@ interface MemberLink {
 interface MemberLinksManagerProps {
   meetingId: string;
   meetingDate: string;
-  /** rawTokens from the activate endpoint (memberId -> rawToken), passed in when available */
-  initialRawTokens?: Record<string, string>;
 }
 
+/**
+ * Výpis odkazů + operace po jednotlivcích (iter-026, arch 4.4). Hromadné
+ * spuštění/rozeslání dělá StartVotingPanel — tahle komponenta se stará jen
+ * o kopírování, regeneraci, revokaci a poslání e-mailu jednomu členovi.
+ *
+ * Klient nikdy nedrží syrový token (arch 1, bod 3): "Kopírovat" i "Poslat
+ * email" volají server, který si token vždy sám regeneruje.
+ */
 export function MemberLinksManager({
   meetingId,
   meetingDate,
-  initialRawTokens = {},
 }: MemberLinksManagerProps) {
   const { showToast } = useToast();
   const [links, setLinks] = useState<MemberLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Map of memberId -> rawToken (only available after activate or regenerate in this session)
-  const [rawTokens, setRawTokens] = useState<Record<string, string>>(initialRawTokens);
-
   // Per-member loading states
   const [memberLoading, setMemberLoading] = useState<Record<string, boolean>>({});
-
-  // Bulk send loading
-  const [sendAllLoading, setSendAllLoading] = useState(false);
 
   const fetchLinks = useCallback(async () => {
     setLoading(true);
@@ -71,21 +70,37 @@ export function MemberLinksManager({
     setMemberLoading((prev) => ({ ...prev, [memberId]: busy }));
   }
 
-  async function handleCopy(memberId: string) {
-    const rawToken = rawTokens[memberId];
-    if (!rawToken) {
-      showToast(
-        "error",
-        "Odkaz neni k dispozici. Nejdrive regenerujte token pro tohoto clena."
-      );
+  async function handleCopy(memberId: string, memberName: string) {
+    if (
+      !confirm(
+        `Zkopirovanim se odkaz pregeneruje. Dosud rozeslany odkaz clena ${memberName} prestane platit. Pokracovat?`
+      )
+    ) {
       return;
     }
-    const url = `${window.location.origin}/m/${rawToken}`;
+    setMemberBusy(memberId, true);
     try {
-      await navigator.clipboard.writeText(url);
-      showToast("success", "Odkaz zkopirovan do schranky.");
+      const res = await fetch(
+        `/api/meetings/${meetingId}/member-links/${memberId}/regenerate`,
+        { method: "POST" }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast("error", body.error ?? "Nepodarilo se regenerovat token.");
+        return;
+      }
+      const url = body.magicUrl ?? `${window.location.origin}/m/${body.rawToken}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("success", "Odkaz zkopirovan do schranky.");
+      } catch {
+        showToast("error", "Odkaz byl vygenerovan, ale nepodarilo se ho zkopirovat.");
+      }
+      await fetchLinks();
     } catch {
       showToast("error", "Nepodarilo se zkopirovat odkaz.");
+    } finally {
+      setMemberBusy(memberId, false);
     }
   }
 
@@ -101,14 +116,7 @@ export function MemberLinksManager({
         showToast("error", body.error ?? "Nepodarilo se regenerovat token.");
         return;
       }
-      // Store raw token for this session
-      if (body.rawToken) {
-        setRawTokens((prev) => ({ ...prev, [memberId]: body.rawToken }));
-        showToast(
-          "success",
-          "Token byl regenerovan. Pouzijte 'Kopirovat odkaz' pro ziskani URL."
-        );
-      }
+      showToast("success", "Token byl regenerovan. Puvodni odkaz uz neplati.");
       await fetchLinks();
     } catch {
       showToast("error", "Nepodarilo se regenerovat token.");
@@ -135,12 +143,6 @@ export function MemberLinksManager({
         return;
       }
       showToast("success", "Magic link byl revokovan.");
-      // Remove rawToken since it's now revoked
-      setRawTokens((prev) => {
-        const next = { ...prev };
-        delete next[memberId];
-        return next;
-      });
       await fetchLinks();
     } catch {
       showToast("error", "Nepodarilo se revokovat token.");
@@ -150,78 +152,23 @@ export function MemberLinksManager({
   }
 
   async function handleSendEmail(memberId: string, memberName: string) {
-    const rawToken = rawTokens[memberId];
-    if (!rawToken) {
-      showToast(
-        "error",
-        `Pro odeslani emailu clenovi ${memberName} nejdrive regenerujte token.`
-      );
-      return;
-    }
     setMemberBusy(memberId, true);
     try {
       const res = await fetch(
         `/api/meetings/${meetingId}/member-links/${memberId}/send-email`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rawToken }),
-        }
+        { method: "POST" }
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         showToast("error", body.error ?? "Nepodarilo se odeslat email.");
         return;
       }
-      showToast("success", `Email odesian clenovi ${memberName}.`);
+      showToast("success", `Email odeslan clenovi ${memberName}.`);
       await fetchLinks();
     } catch {
       showToast("error", "Nepodarilo se odeslat email.");
     } finally {
       setMemberBusy(memberId, false);
-    }
-  }
-
-  async function handleSendAll() {
-    const tokenCount = Object.keys(rawTokens).length;
-    if (tokenCount === 0) {
-      showToast(
-        "error",
-        "Zadne tokeny neni k dispozici. Nejdrive aktivujte schuzku nebo regenerujte tokeny."
-      );
-      return;
-    }
-    if (
-      !confirm(
-        `Odeslat magic link emaily vsem clenum (${tokenCount} tokenu k dispozici)? Clenove bez tokenu budou preskoceni.`
-      )
-    ) {
-      return;
-    }
-    setSendAllLoading(true);
-    try {
-      const res = await fetch(
-        `/api/meetings/${meetingId}/member-links/send-all`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rawTokens }),
-        }
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast("error", body.error ?? "Nepodarilo se odeslat emaily.");
-        return;
-      }
-      showToast(
-        "success",
-        `Emaily odeslany: ${body.sent} odeslano, ${body.skipped} preskoceno, ${body.errors} chyb.`
-      );
-      await fetchLinks();
-    } catch {
-      showToast("error", "Nepodarilo se odeslat emaily.");
-    } finally {
-      setSendAllLoading(false);
     }
   }
 
@@ -262,43 +209,16 @@ export function MemberLinksManager({
     );
   }
 
-  const availableTokenCount = Object.keys(rawTokens).length;
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-text-main">
-            Magic linky clenu
-          </h2>
-          <p className="text-sm text-text-muted mt-1">
-            Schuzka: {meetingDate} &mdash; {links.length} clenu
-            {availableTokenCount > 0 && (
-              <span className="ml-2 text-primary">
-                ({availableTokenCount} tokenu v session)
-              </span>
-            )}
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleSendAll}
-          loading={sendAllLoading}
-          disabled={availableTokenCount === 0}
-        >
-          Hromadne poslat vsem
-        </Button>
+      <div>
+        <h2 className="text-lg font-semibold text-text-main">
+          Magic linky clenu
+        </h2>
+        <p className="text-sm text-text-muted mt-1">
+          Schuzka: {meetingDate} &mdash; {links.length} clenu
+        </p>
       </div>
-
-      {availableTokenCount === 0 && (
-        <Card>
-          <p className="text-sm text-text-muted">
-            Tokeny nejsou k dispozici v teto session. Pro odeslani emailu nebo
-            kopirovani odkazu nejdrive regenerujte token jednotlivym clenum.
-          </p>
-        </Card>
-      )}
 
       {links.length === 0 ? (
         <Card>
@@ -310,7 +230,6 @@ export function MemberLinksManager({
         <div className="space-y-2">
           {links.map((link) => {
             const busy = memberLoading[link.memberId] ?? false;
-            const hasToken = !!rawTokens[link.memberId];
 
             return (
               <Card key={link.memberId}>
@@ -322,16 +241,13 @@ export function MemberLinksManager({
                         {link.memberName}
                       </p>
                       {getLinkStatusBadge(link)}
-                      {hasToken && (
-                        <Badge variant="category">Token v session</Badge>
-                      )}
                     </div>
                     <p className="text-xs text-text-muted mt-0.5">
                       {link.memberEmail}
                     </p>
                     {link.morningEmailSentAt && (
                       <p className="text-xs text-text-muted mt-0.5">
-                        Ranní email odesian:{" "}
+                        Odkaz odeslan:{" "}
                         {new Date(link.morningEmailSentAt).toLocaleDateString(
                           "cs-CZ",
                           {
@@ -361,13 +277,9 @@ export function MemberLinksManager({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => handleCopy(link.memberId)}
-                      disabled={busy || !hasToken}
-                      title={
-                        hasToken
-                          ? "Kopirovat magic link URL"
-                          : "Regenerujte token pro kopirovani"
-                      }
+                      onClick={() => handleCopy(link.memberId, link.memberName)}
+                      loading={busy}
+                      title="Regenerovat token a zkopirovat magic link URL"
                     >
                       Kopirovat
                     </Button>
@@ -376,14 +288,12 @@ export function MemberLinksManager({
                       size="sm"
                       onClick={() => handleSendEmail(link.memberId, link.memberName)}
                       loading={busy}
-                      disabled={!link.hasLink || link.isRevoked || !hasToken}
+                      disabled={!link.hasLink || link.isRevoked}
                       title={
                         !link.hasLink
                           ? "Clen nema link"
                           : link.isRevoked
                           ? "Link je revokovan"
-                          : !hasToken
-                          ? "Regenerujte token pro odeslani emailu"
                           : "Odeslat magic link email"
                       }
                     >
