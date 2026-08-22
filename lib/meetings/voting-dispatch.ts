@@ -17,7 +17,18 @@
  * volající (route handler, cron) ji zachytí ve svém vlastním try/catch —
  * stejně jako to dělá zbytek repa (LL-003 vzor: bez transakce je bezpečné
  * kdykoli přerušit a zkusit znovu, viz komentáře u jednotlivých kroků).
+ *
+ * iter-027 (T-005, arch 6.2): tělo z iter-026 je přejmenováno na
+ * `runVotingDispatchInner`; exportovaný `runVotingDispatch` je tenký wrapper,
+ * který kolem něj zapisuje historii běhu do `ops_event` (`lib/ops/`).
+ * Wrapper NEMĚNÍ chování Inner — pět guardů vrací beze změny, skutečná infra
+ * výjimka se pořád rethrowuje. Jediné tři additivní změny UVNITŘ Inner
+ * (6.3): (a) `sendMeetingMagicLinkEmail` teď vrací `resendId`, (b)
+ * `DispatchOutcome.sent` ho nese dál, (c) jeden `await logOpsEvent(...)` ve
+ * smyčce kroku 8, hned po `recipients.push(...)` — nikdy nevyhazuje (D2),
+ * takže krok 8 samotný se nemění.
  */
+import { randomUUID } from "crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
@@ -41,6 +52,9 @@ import {
 import { sendMeetingMagicLinkEmail } from "@/lib/email/resend";
 import { nextWednesday2359InPrague, votingLinkExpiry } from "@/lib/meetings/voting-window";
 import { planVotingDispatch, type DispatchMode } from "@/lib/meetings/voting-plan";
+import { logOpsEvent } from "@/lib/ops/event-log";
+import { safeDispatchOutcomeEvent, recipientEvent } from "@/lib/ops/dispatch-events";
+import type { OpsEventSource } from "@/lib/ops/types";
 
 function getDb() {
   return drizzle(getSql());
@@ -53,10 +67,22 @@ export interface DispatchOptions {
   actor: string; // memberId volajícího, nebo "cron"
   now?: Date; // injektovatelné pro testy; default new Date()
   sendDelayMs?: number; // default 250 (Resend limit 5 req/s)
+  // iter-027 (T-005, arch 6.2): jeden běh = jedno spuštění vstupního bodu.
+  // Nepovinné, proto se start-voting/route.ts nemusí měnit vůbec — wrapper
+  // si bez něj vyrobí vlastní runId. Cron (close-voting/route.ts) předává
+  // svoje runId, aby fáze 2 nebyla samostatný běh (6.1).
+  runId?: string;
+}
+
+/** Interní rozšíření pro runVotingDispatchInner — runId a čítač seq jsou
+ * vždy dodané wrapperem, nikdy volitelné uvnitř. */
+interface InnerDispatchOptions extends DispatchOptions {
+  runId: string;
+  nextSeq: () => number;
 }
 
 export type DispatchOutcome =
-  | { status: "sent" }
+  | { status: "sent"; resendId?: string }
   | { status: "skipped"; reason: "no-email" | "revoked" | "already-sent" }
   | { status: "error"; reason: string };
 
@@ -122,14 +148,16 @@ function conflictMessage(other: { date: string; votingClosesAt: Date | null }): 
 /**
  * Jádro sjednocené cesty spuštění hlasování. Nikdy nevyhazuje výjimku pro
  * žádný z pěti guardů (2.6) — viz hlavičkový komentář souboru pro chybu
- * mimo tento rámec.
+ * mimo tento rámec. iter-027: přejmenováno z `runVotingDispatch`, volá ho
+ * jen wrapper níže.
  */
-export async function runVotingDispatch(
+async function runVotingDispatchInner(
   meetingId: string,
-  opts: DispatchOptions
+  opts: InnerDispatchOptions
 ): Promise<VotingDispatchResult> {
   const now = opts.now ?? new Date();
   const sendDelayMs = opts.sendDelayMs ?? 250;
+  const source: OpsEventSource = opts.actor === "cron" ? "cron" : "gui";
 
   // Krok 1: SELECT schůzky
   const meetingRow = await getMeetingById(meetingId);
@@ -260,6 +288,19 @@ export async function runVotingDispatch(
         linkCreated: false,
         outcome: { status: "skipped", reason: row.action.reason },
       });
+      // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
+      // po recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok
+      // 8 samotný se nemění.
+      await logOpsEvent(
+        recipientEvent(recipients[recipients.length - 1], {
+          runId: opts.runId,
+          seq: opts.nextSeq(),
+          actor: opts.actor,
+          source,
+          meetingId,
+          meetingDate: meetingRow.date,
+        })
+      );
       continue;
     }
 
@@ -288,7 +329,7 @@ export async function runVotingDispatch(
           throw new Error(`email send failed: ${emailResult.error}`);
         }
         await markLinkEmailSent(meetingId, row.memberId, new Date());
-        outcome = { status: "sent" };
+        outcome = { status: "sent", resendId: emailResult.resendId };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error(
@@ -306,6 +347,21 @@ export async function runVotingDispatch(
       linkCreated,
       outcome,
     });
+
+    // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned po
+    // recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok 8
+    // samotný se nemění. Kdyby proces umřel uprostřed rozesílání, log skončí
+    // přesně tam, kde skončilo odesílání, ne s prázdnou dávkou.
+    await logOpsEvent(
+      recipientEvent(recipients[recipients.length - 1], {
+        runId: opts.runId,
+        seq: opts.nextSeq(),
+        actor: opts.actor,
+        source,
+        meetingId,
+        meetingDate: meetingRow.date,
+      })
+    );
 
     if (sendDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, sendDelayMs));
@@ -339,4 +395,80 @@ export async function runVotingDispatch(
     recipients,
     errors,
   };
+}
+
+/**
+ * runVotingDispatch — wrapper kolem runVotingDispatchInner (iter-027, T-005,
+ * arch 6.2). Obaluje jádro zápisem do ops_event, nemění jeho chování: pět
+ * guardů z Inner projde beze změny, skutečná infra výjimka se pořád
+ * rethrowuje (řádek `throw e` níže) — volající (route handler, cron) ji
+ * chytá stejně jako dřív.
+ *
+ * `meeting_id` (cizí klíč) se do `dispatch.started` NIKDY neposílá — v tomhle
+ * bodě je `meetingId` jen parametr z URL, ne ověřený řádek (krok 1 uvnitř
+ * Inner ho teprve ověří). Do terminálního záznamu se dostane jen když
+ * `result.ok || result.code !== "not-found"` — jinak jde neověřené id do
+ * `detail.requestedMeetingId` (MAJOR-1, review T-002). Logika je v
+ * dispatchOutcomeEvent (lib/ops/dispatch-events.ts).
+ */
+export async function runVotingDispatch(
+  meetingId: string,
+  opts: DispatchOptions
+): Promise<VotingDispatchResult> {
+  const runId = opts.runId ?? randomUUID();
+  const source: OpsEventSource = opts.actor === "cron" ? "cron" : "gui";
+  let seqCounter = 0;
+  const nextSeq = () => seqCounter++;
+
+  await logOpsEvent({
+    runId,
+    seq: nextSeq(),
+    source,
+    kind: "dispatch.started",
+    severity: "info",
+    actor: opts.actor,
+    meetingId: undefined, // neověřené — viz komentář funkce
+    message: `Spusteni hlasovani zahajeno (mode=${opts.mode}).`,
+    detail: { requestedMeetingId: meetingId },
+  });
+
+  let result: VotingDispatchResult;
+  try {
+    result = await runVotingDispatchInner(meetingId, { ...opts, runId, nextSeq });
+  } catch (e) {
+    // V catch nevíme, jestli se Inner ke kroku 1 (ověření existence schůzky)
+    // vůbec dostal — meetingId proto zůstává neověřené i tady.
+    const msg = e instanceof Error ? e.message : String(e);
+    await logOpsEvent({
+      runId,
+      seq: nextSeq(),
+      source,
+      kind: "dispatch.failed",
+      severity: "error",
+      actor: opts.actor,
+      meetingId: undefined,
+      code: "infra-error",
+      message: msg,
+      detail: { requestedMeetingId: meetingId },
+    });
+    throw e; // chování beze změny, jen zaznamenané
+  }
+
+  // iter-027 (T-005r, review MAJOR-1): dispatchOutcomeEvent(...) se nevolá
+  // přímo jako argument logOpsEvent — safeDispatchOutcomeEvent ji obaluje
+  // vlastním try/catch (lib/ops/dispatch-events.ts), takže z tohohle místa
+  // nemůže ven proniknout výjimka. Vrátí `null` misto vyhození; logOpsEvent
+  // se pak volá jen s reálným vstupem. `result` se dál nemění.
+  const outcomeEvent = safeDispatchOutcomeEvent(result, {
+    runId,
+    seq: nextSeq(),
+    actor: opts.actor,
+    source,
+    requestedMeetingId: meetingId,
+  });
+  if (outcomeEvent) {
+    await logOpsEvent(outcomeEvent);
+  }
+
+  return result;
 }

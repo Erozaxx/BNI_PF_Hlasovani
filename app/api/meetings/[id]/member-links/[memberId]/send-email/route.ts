@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { getMeetingById } from "@/lib/db/queries/meetings";
@@ -8,6 +9,7 @@ import {
   buildMeetingMagicUrl,
 } from "@/lib/auth/meeting-magic";
 import { sendMeetingMagicLinkEmail } from "@/lib/email/resend";
+import { logOpsEvent } from "@/lib/ops/event-log";
 
 function err(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
@@ -59,6 +61,10 @@ export async function POST(
     return err(422, "Member has no email address");
   }
 
+  // iter-027 (T-005, arch 6.5): ruční "Poslat odkaz" — jeden běh, source
+  // "manual", actor = session.memberId.
+  const runId = randomUUID();
+
   // 4. Regenerate the token server-side — returns null only if no link row
   // exists for this member/meeting yet (regenerate is UPDATE-only).
   const rawToken = await regenerateMeetingToken(meetingId, memberId);
@@ -79,6 +85,20 @@ export async function POST(
     console.error(
       `[send-email] Failed to send to ${memberData.email}: ${result.error}`
     );
+    await logOpsEvent({
+      runId,
+      seq: 0,
+      source: "manual",
+      kind: "email.failed",
+      severity: "error",
+      actor: session.memberId,
+      meetingId,
+      meetingDate: meetingData.date,
+      memberId,
+      memberName: memberData.name,
+      email: memberData.email,
+      message: `Odeslani selhalo: ${memberData.name} - ${result.error}`,
+    });
     return NextResponse.json(
       { success: false, error: result.error },
       { status: 502 }
@@ -87,6 +107,22 @@ export async function POST(
 
   // 6. Mark sent — after the email actually went out (LL-003 idempotency vzor).
   await markLinkEmailSent(meetingId, memberId, new Date());
+
+  await logOpsEvent({
+    runId,
+    seq: 0,
+    source: "manual",
+    kind: "email.sent",
+    severity: "info",
+    actor: session.memberId,
+    meetingId,
+    meetingDate: meetingData.date,
+    memberId,
+    memberName: memberData.name,
+    email: memberData.email,
+    message: `Hlasovaci odkaz odeslan: ${memberData.name}.`,
+    resendEmailId: result.resendId,
+  });
 
   console.info(
     `[send-email] meetingId=${meetingId} memberId=${memberId} email=${memberData.email} by=${session.memberId}`

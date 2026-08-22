@@ -13,6 +13,8 @@
     "test:draft-warning": "tsx scripts/test-draft-warning.ts",
     "test:warning-plan": "tsx scripts/test-warning-plan.ts",
     "test:iter-026": "npm run test:voting-window && npm run test:voting-plan && npm run test:draft-warning && npm run test:warning-plan",
+    "test:ops-events": "tsx scripts/test-ops-events.ts",
+    "test:iter-027": "npm run test:ops-events",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "seed": "tsx scripts/seed-admin.ts"

@@ -6,6 +6,7 @@ import {
   boolean,
   integer,
   date,
+  jsonb,
   primaryKey,
   unique,
   check,
@@ -716,3 +717,64 @@ export const authThrottle = pgTable("auth_throttle", {
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
   count: integer("count").notNull().default(0),
 });
+
+// ============================================================
+// OPS_EVENT — iter-027, historie běhů (cron/dispatch/e-maily). "ops_" prefix
+// aby se nekolidovalo se stávající "event" (společenská akce, lib/events/).
+// meeting_id/member_id: ON DELETE SET NULL, proto snapshoty meeting_date /
+// member_name / email — odpověď "proč tenhle člověk nedostal mail" se hledá
+// týdny zpátky, JOIN by ukázal dnešní (třeba opravenou) adresu.
+// severity má CHECK (jen 3 hodnoty, viz níže); kind NEMÁ CHECK — autoritou
+// je TS union OpsEventKind (lib/ops/types.ts), bude přibývat bez migrace.
+// Skutečné DDL (vč. pořadí kroků, lock_timeout) je v
+// lib/db/migrations/iter-027-ops-event.sql — tahle definice je typová
+// reference pro dotazy, ne zdroj pravdy pro strukturu DB (stejná konvence
+// jako u interview_question_snapshot, partial index výše).
+// ============================================================
+export const opsEvent = pgTable(
+  "ops_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull(),
+    seq: integer("seq").notNull().default(0),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    source: text("source").notNull(),
+    kind: text("kind").notNull(),
+    severity: text("severity").notNull(),
+    actor: text("actor"),
+    meetingId: uuid("meeting_id").references(() => meeting.id, {
+      onDelete: "set null",
+    }),
+    meetingDate: date("meeting_date"),
+    memberId: uuid("member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    memberName: text("member_name"),
+    email: text("email"),
+    code: text("code"),
+    message: text("message").notNull(),
+    detail: jsonb("detail"),
+    resendEmailId: text("resend_email_id"),
+    resendMessageId: text("resend_message_id"),
+    deliveryStatus: text("delivery_status"),
+    deliveryCheckedAt: timestamp("delivery_checked_at", { withTimezone: true }),
+  },
+  (table) => ({
+    severityCheck: check(
+      "ops_event_severity_check",
+      sql`${table.severity} IN ('info', 'warn', 'error')`
+    ),
+    occurredAtIdx: index("idx_ops_event_occurred_at").on(table.occurredAt),
+    runIdIdx: index("idx_ops_event_run_id").on(table.runId, table.seq),
+    memberIdIdx: index("idx_ops_event_member_id").on(
+      table.memberId,
+      table.occurredAt
+    ),
+    meetingIdIdx: index("idx_ops_event_meeting_id").on(
+      table.meetingId,
+      table.occurredAt
+    ),
+  })
+);
