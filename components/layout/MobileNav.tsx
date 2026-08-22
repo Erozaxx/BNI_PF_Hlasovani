@@ -99,6 +99,15 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             Pohovory
           </Link>
         )}
+        {isManagement && (
+          <Link
+            href="/status"
+            className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+            onClick={() => setOpen(false)}
+          >
+            Provoz
+          </Link>
+        )}
         <Link
           href="/archive"
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"

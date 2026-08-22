@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getExpiredVotingMeetings } from "@/lib/db/queries/votes";
 import { getMeetingByDate, updateMeetingStatus } from "@/lib/db/queries/meetings";
@@ -8,6 +9,9 @@ import { weekdayInPrague, todayInPrague } from "@/lib/meetings/voting-window";
 import { runVotingDispatch, type VotingDispatchResult } from "@/lib/meetings/voting-dispatch";
 import { decideThursdayWarning, type WarningInput } from "@/lib/meetings/warning-plan";
 import { cleanupStaleThrottleRows } from "@/lib/auth/throttle";
+import { logOpsEvent } from "@/lib/ops/event-log";
+import { retentionCutoff } from "@/lib/ops/retention";
+import { purgeOldOpsEvents } from "@/lib/db/queries/ops-events";
 
 // Fáze 2 (dispatch) je při 27 členech ~15s (regenerate + Resend + 250ms pauza
 // na člena, arch iter-026 9.2). Vercel Hobby default limit funkce (10s) by to
@@ -45,7 +49,10 @@ export interface ThursdayDispatchOutcome {
   infraError?: { code: "infra-error"; message: string };
 }
 
-async function runThursdayDispatch(today: string): Promise<ThursdayDispatchOutcome> {
+async function runThursdayDispatch(
+  today: string,
+  runId: string
+): Promise<ThursdayDispatchOutcome> {
   const weekday = weekdayInPrague();
   if (weekday !== "Thursday") {
     return { weekday, ranDispatch: false, meetingId: null, result: null };
@@ -56,7 +63,9 @@ async function runThursdayDispatch(today: string): Promise<ThursdayDispatchOutco
     return { weekday, ranDispatch: false, meetingId: null, result: null };
   }
 
-  const result = await runVotingDispatch(mtg.id, { mode: "start", actor: "cron" });
+  // iter-027 (T-005, arch 6.1): cron předává svoje runId, aby fáze 2 nebyla
+  // samostatný běh — všechny události dispatche sdílejí runId s cron.started.
+  const result = await runVotingDispatch(mtg.id, { mode: "start", actor: "cron", runId });
 
   if (result.ok) {
     console.log(
@@ -195,6 +204,16 @@ function deriveWarningSignals(result: VotingDispatchResult | null): {
  *                                            kritické.
  * Fáze 5  Obnova expirujících členských tokenů (beze změny).
  * Fáze 6  Úklid auth_throttle (beze změny).
+ * Fáze 7  Retence ops_event (nová, iter-027 T-005, arch 10). Vlastní
+ *                                            try/catch — stejný vzor jako
+ *                                            fáze 6, pád retence nesmí
+ *                                            shodit zbytek cronu.
+ *
+ * iter-027 (T-005, arch 6.4): `runId = randomUUID()` sdílí jeden běh napříč
+ * všemi fázemi (fáze 2 dostává stejné runId, viz runThursdayDispatch).
+ * Zápisy do ops_event jsou samostatné řádky vedle existujícího `console.*` —
+ * žádná podmínka, žádný `return`, žádné pořadí fází se nemění (logOpsEvent
+ * nikdy nevyhazuje, D2).
  *
  * Protected by CRON_SECRET — Vercel sends this header automatically for cron jobs.
  */
@@ -215,9 +234,25 @@ async function handler(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // iter-027 (T-005, arch 6.1, 6.4): jeden běh = jedno spuštění cronu; runId
+  // se předává i do fáze 2 (dispatch), aby nebyla samostatný běh.
+  const runId = randomUUID();
+  let seq = 0;
+  const nextSeq = () => seq++;
+
   const today = todayInPrague();
 
   console.log(`close-voting cron: today=${today}`);
+
+  await logOpsEvent({
+    runId,
+    seq: nextSeq(),
+    source: "cron",
+    kind: "cron.started",
+    severity: "info",
+    actor: "cron",
+    message: `Cron close-voting spusten (today=${today}).`,
+  });
 
   try {
     // ── Fáze 1: Zavřít vypršená hlasování — MUSÍ BÝT PRVNÍ ──
@@ -230,10 +265,33 @@ async function handler(request: NextRequest) {
       try {
         await updateMeetingStatus(mtg.id, { status: "closed" });
         closedIds.push(mtg.id);
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: "meeting.closed",
+          severity: "info",
+          actor: "cron",
+          meetingId: mtg.id,
+          meetingDate: mtg.date,
+          message: `Schuzka ${mtg.date} uzavrena (vyprsele hlasovani).`,
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error(`Failed to close meeting ${mtg.id}:`, msg);
         closeErrors.push(`close ${mtg.id}: ${msg}`);
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: "cron.phase-failed",
+          severity: "error",
+          actor: "cron",
+          meetingId: mtg.id,
+          meetingDate: mtg.date,
+          code: "phase-1-close",
+          message: msg,
+        });
       }
     }
 
@@ -256,7 +314,7 @@ async function handler(request: NextRequest) {
     // dispatch-failed).
     let dispatch: ThursdayDispatchOutcome;
     try {
-      dispatch = await runThursdayDispatch(today);
+      dispatch = await runThursdayDispatch(today, runId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error("close-voting cron: thursday dispatch threw (infra error):", msg);
@@ -278,6 +336,18 @@ async function handler(request: NextRequest) {
       if (decision.warn) {
         const sendResult = await sendVotingWarningEmail(decision.subject, decision.lines);
         warningResult = { sent: sendResult.sent, error: sendResult.error };
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: sendResult.error ? "warning.failed" : "warning.sent",
+          severity: sendResult.error ? "error" : "info",
+          actor: "cron",
+          message: sendResult.error
+            ? `Varovny mail selhal: ${sendResult.error}`
+            : `Varovny mail odeslan (${sendResult.sent} prijemcu).`,
+          detail: { sent: sendResult.sent, recipients: sendResult.recipients.length },
+        });
       } else {
         warningResult = { sent: 0, skipped: decision.reason };
       }
@@ -285,6 +355,15 @@ async function handler(request: NextRequest) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error("close-voting cron: thursday warning failed:", msg);
       warningResult = { sent: 0, error: msg };
+      await logOpsEvent({
+        runId,
+        seq: nextSeq(),
+        source: "cron",
+        kind: "warning.failed",
+        severity: "error",
+        actor: "cron",
+        message: msg,
+      });
     }
 
     // ── Fáze 4: Report pro každou nově zavřenou schůzku (z fáze 1) ──
@@ -301,10 +380,32 @@ async function handler(request: NextRequest) {
         if (result.error) {
           console.error(`Report for meeting ${meetingId} failed:`, result.error);
         }
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: result.error ? "report.failed" : "report.sent",
+          severity: result.error ? "error" : "info",
+          actor: "cron",
+          meetingId,
+          message: result.error
+            ? `Report selhal: ${result.error}`
+            : `Report odeslan (${result.sent} prijemcu).`,
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         console.error(`Report for meeting ${meetingId} error:`, msg);
         reportResults.push({ meetingId, sent: 0, error: msg });
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: "report.failed",
+          severity: "error",
+          actor: "cron",
+          meetingId,
+          message: msg,
+        });
       }
     }
 
@@ -323,6 +424,58 @@ async function handler(request: NextRequest) {
       console.error("close-voting cron: throttle cleanup failed:", msg);
     }
 
+    // ── Fáze 7 (nová, iter-027 T-005, arch 10): retence ops_event ──
+    // Vlastní try/catch, stejný vzor jako fáze 6 — pád úklidu nesmí shodit
+    // zbytek cronu. Nula smazaných se nezapisuje (10.2), ať stránka
+    // nezarůstá šumem.
+    let retentionResult: { purged: number; error?: string } = { purged: 0 };
+    try {
+      const purged = await purgeOldOpsEvents(retentionCutoff(new Date()));
+      retentionResult = { purged };
+      if (purged > 0) {
+        await logOpsEvent({
+          runId,
+          seq: nextSeq(),
+          source: "cron",
+          kind: "retention.purged",
+          severity: "info",
+          actor: "cron",
+          message: `Retence: smazano ${purged} starych zaznamu z ops_event.`,
+          detail: { purged },
+        });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("close-voting cron: ops_event retention failed:", msg);
+      retentionResult = { purged: 0, error: msg };
+    }
+
+    const anyPhaseError =
+      closeErrors.length > 0 ||
+      !!dispatch.infraError ||
+      (dispatch.result !== null && !dispatch.result.ok) ||
+      !!warningResult.error ||
+      reportResults.some((r) => !!r.error) ||
+      !!(tokenRenewalResult.errors && tokenRenewalResult.errors.length > 0) ||
+      !!retentionResult.error;
+
+    await logOpsEvent({
+      runId,
+      seq: nextSeq(),
+      source: "cron",
+      kind: "cron.finished",
+      severity: anyPhaseError ? "warn" : "info",
+      actor: "cron",
+      message: "Cron close-voting dokoncen.",
+      detail: {
+        closed: closedIds.length,
+        dispatchRan: dispatch.ranDispatch,
+        warningSent: warningResult.sent ?? 0,
+        reportsSent: reportResults.length,
+        retentionPurged: retentionResult.purged,
+      },
+    });
+
     return NextResponse.json({
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
@@ -336,10 +489,21 @@ async function handler(request: NextRequest) {
       warning: warningResult,
       reports: reportResults.length > 0 ? reportResults : undefined,
       tokenRenewal: tokenRenewalResult,
+      retention: retentionResult,
       errors: closeErrors.length > 0 ? closeErrors : undefined,
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error("close-voting cron error:", error);
+    await logOpsEvent({
+      runId,
+      seq: nextSeq(),
+      source: "cron",
+      kind: "cron.failed",
+      severity: "error",
+      actor: "cron",
+      message: msg,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

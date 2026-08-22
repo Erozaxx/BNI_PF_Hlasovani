@@ -246,12 +246,15 @@ export async function sendMeetingMagicLinkEmail(
   magicLink: string,
   memberName?: string,
   meetingDate?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; resendId?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
   const fromField = `BNI Hlasovani <${fromEmail}>`;
 
-  console.info(`[sendMeetingMagicLinkEmail] to=${email} from=${fromField} apiKey=${apiKey ? apiKey.slice(0, 8) + "..." : "MISSING"} keyLength=${apiKey?.length ?? 0}`);
+  // iter-027 (T-005, arch 2.2): prefix klíče (apiKey.slice(0, 8) + "...")
+  // odstraněn z výpisu — diagnostickou hodnotu nesou keyLength a rozlišení
+  // set/MISSING, obojí zůstává na tomtéž řádku.
+  console.info(`[sendMeetingMagicLinkEmail] to=${email} from=${fromField} apiKey=${apiKey ? "set" : "MISSING"} keyLength=${apiKey?.length ?? 0}`);
 
   if (!apiKey) {
     console.warn("RESEND_API_KEY not configured, logging meeting magic link to console");
@@ -291,7 +294,7 @@ export async function sendMeetingMagicLinkEmail(
     }
 
     console.info(`[sendMeetingMagicLinkEmail] success: to=${email} id=${data?.id}`);
-    return { success: true };
+    return { success: true, resendId: data?.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(`[sendMeetingMagicLinkEmail] exception: to=${email} from=${fromField} error=${msg}`);
