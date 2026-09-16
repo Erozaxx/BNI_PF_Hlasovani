@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   integer,
+  smallint,
   date,
   jsonb,
   primaryKey,
@@ -776,5 +777,58 @@ export const opsEvent = pgTable(
       table.meetingId,
       table.occurredAt
     ),
+  })
+);
+
+// ============================================================
+// MEETING_MEMBER_REMINDER — iter-028, evidence připomínkových kol (T-006,
+// arch 6.1, 6.2). Vlastní tabulka místo sloupců v meeting_member_link: kdyby
+// se sloupce přidaly do meeting_member_link a kód nasadil dřív než migrace,
+// Drizzle skládá INSERT ze VŠECH sloupců schema.ts — generateMeetingToken i
+// getMeetingMemberLink by padaly na 42703 undefined_column a rozbily by i
+// spuštění hlasování, ne jen připomínky. ops_event nepřipadá v úvahu — je to
+// best-effort log s retencí, ztracený zápis by znamenal druhou připomínku.
+//
+// UNIQUE(meeting_id, member_id, round): nejvýš jedno kolo na člena — hlavní
+// záruka "nejvýš jednou" (4.3), zabraňuje zapsat spolu s ON CONFLICT DO
+// NOTHING v claimReminder.
+// UNIQUE(token_hash): slouží zároveň jako index pro alias ověření tokenu
+// (D4 C, 4.5) — víc řádků s NULL (u variant bez vlastního tokenu) Postgres
+// v UNIQUE připouští.
+// token_hash / link_token_hash: hash tokenu z připomínky (D4 C, jinak NULL) a
+// hash meeting_member_link.token_hash v okamžiku zabrání — dvojice, kterou
+// ověření tokenu (lib/auth/meeting-token-access.ts) porovná proti aktuálnímu
+// řádku odkazu, aby revokace/přegenerování alias nikdy neobešly.
+// ============================================================
+export const meetingMemberReminder = pgTable(
+  "meeting_member_reminder",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meeting.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    round: smallint("round").notNull(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    tokenHash: text("token_hash"),
+    linkTokenHash: text("link_token_hash"),
+  },
+  (table) => ({
+    roundCheck: check(
+      "mmr_round_check",
+      sql`${table.round} BETWEEN 1 AND 3`
+    ),
+    meetingMemberRoundUnique: unique("mmr_meeting_member_round_unique").on(
+      table.meetingId,
+      table.memberId,
+      table.round
+    ),
+    tokenHashUnique: unique("mmr_token_hash_unique").on(table.tokenHash),
+    memberIdIdx: index("idx_mmr_member_id").on(table.memberId),
   })
 );

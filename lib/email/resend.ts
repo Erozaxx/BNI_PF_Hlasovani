@@ -494,3 +494,51 @@ export async function sendVotingWarningEmail(
     return { sent: 0, recipients: emails, error: msg };
   }
 }
+
+/**
+ * Odešle připomínkový mail jednomu členovi (iter-028, T-006, arch 4.4 krok
+ * d, 7). `subject`/`html` přicházejí hotové z `buildReminderEmail`
+ * (lib/email/reminder-template.ts) — tahle funkce nic nerozhoduje ani
+ * neformátuje, jen odešle a zaloguje výsledek, stejně jako
+ * `sendMeetingMagicLinkEmail`.
+ *
+ * Na rozdíl od `sendMeetingMagicLinkEmail` (N-4) NIKDY nevypisuje odkaz do
+ * konzole — bez `RESEND_API_KEY` zaloguje jen adresáta a předmět. `html`
+ * (které odkaz obsahuje) se do žádného logu nedostane.
+ */
+export async function sendVotingReminderEmail(
+  email: string,
+  subject: string,
+  html: string
+): Promise<{ success: boolean; error?: string; resendId?: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const fromField = `BNI Hlasovani <${fromEmail}>`;
+
+  if (!apiKey) {
+    console.warn("RESEND_API_KEY not configured, skipping voting reminder email");
+    console.log(`[VOTING REMINDER] to=${email} subject=${subject}`);
+    return { success: true };
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: fromField,
+      to: [email],
+      subject,
+      html,
+    });
+
+    if (error) {
+      console.error(`[sendVotingReminderEmail] resend error: to=${email} error=`, error);
+      return { success: false, error: error.message };
+    }
+
+    console.info(`[sendVotingReminderEmail] success: to=${email} id=${data?.id}`);
+    return { success: true, resendId: data?.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[sendVotingReminderEmail] exception: to=${email} error=${msg}`);
+    return { success: false, error: msg };
+  }
+}

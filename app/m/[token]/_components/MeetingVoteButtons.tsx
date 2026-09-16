@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Textarea } from "@/components/ui/Textarea";
 import type { MyVote } from "./GuestCardMeeting";
+import {
+  tokenErrorText,
+  meetingTokenActionError,
+} from "@/lib/meetings/token-error-text";
 
 interface MeetingVoteButtonsProps {
   token: string;
@@ -86,10 +90,16 @@ export function MeetingVoteButtons({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        // iter-028 (T-006, arch 4.7): 401 dostane srozumitelnou ceskou vetu
+        // podle duvodu (invalid/revoked/expired); jiny stav se chova jako
+        // dnes (holy text z API, pokud existuje).
+        const tokenError = tokenErrorText(res.status, data.error);
         setError(
-          typeof data.error === "string"
-            ? data.error
-            : "Nepodarilo se odeslat hlas."
+          tokenError
+            ? meetingTokenActionError(tokenError.reason, "vote")
+            : typeof data.error === "string"
+              ? data.error
+              : "Nepodarilo se odeslat hlas."
         );
         return;
       }

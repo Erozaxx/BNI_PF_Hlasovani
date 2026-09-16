@@ -226,6 +226,7 @@ export default async function MeetingDetailPage({
             meetingId={id}
             status={meeting.status}
             hasGuests={hasGuests}
+            meetingDate={meeting.date}
             initialLinkEmailSentCount={initialLinkEmailSentCount}
             membersWithEmailCount={membersWithEmailCount}
           />

@@ -66,6 +66,22 @@ export function recipientEvent(
     };
   }
 
+  // iter-028 (T-005, arch 3.3): "scheduled" nastává jen při deliver:"defer",
+  // kde se recipientEvent vůbec nevolá (voting-dispatch.ts krok 8 přeskočí
+  // logOpsEvent pro celý řádek) — sem se v provozu nikdy nedostane. Větev tu
+  // je jen pro vyčerpávající typování DispatchOutcome; kdyby ji volající
+  // přesto zavolal, ať zůstane dohledatelná, ne že spadne na `.reason`
+  // z varianty, která ho nemá.
+  if (outcome.status === "scheduled") {
+    return {
+      ...base,
+      kind: "email.skipped",
+      severity: "info",
+      code: "scheduled",
+      message: `${recipient.memberName}: odeslani odlozeno na ranni rozeslani.`,
+    };
+  }
+
   return {
     ...base,
     kind: "email.failed",
@@ -109,8 +125,26 @@ export function dispatchOutcomeEvent(
   };
 
   if (result.ok) {
-    const { sent, skipped, error } = result.counts;
+    const { sent, skipped, error, scheduled } = result.counts;
     const total = result.totalMembers;
+
+    // iter-028 (T-005, arch 7): deliver:"defer" nikdy neposlal jediný mail —
+    // vlastní text a vždy severity:"info" (žádný pokus, žádná chyba k
+    // hlášení). `dispatchOutcomeEvent` je jediné místo, kde tenhle běh
+    // (ruční "Spustit hlasovani") vůbec zanechá stopu — krok 8 sám
+    // e-mail.* nezapisuje (voting-dispatch.ts).
+    if (result.deliver === "defer") {
+      return {
+        ...base,
+        kind: "dispatch.finished",
+        severity: "info",
+        meetingId: result.meetingId,
+        meetingDate: result.meetingDate,
+        message: `Hlasovani spusteno, odkazy odejdou rano: ${scheduled} clenu, ${skipped} preskoceno.`,
+        detail: { sent: 0, scheduled, skipped, error: 0, totalMembers: total, deliver: "defer" },
+      };
+    }
+
     const severity: OpsEventSeverity = error > 0 ? "warn" : "info";
     const message =
       error > 0
@@ -124,7 +158,7 @@ export function dispatchOutcomeEvent(
       meetingId: result.meetingId,
       meetingDate: result.meetingDate,
       message,
-      detail: { sent, skipped, error, totalMembers: total },
+      detail: { sent, skipped, error, totalMembers: total, deliver: "now" },
     };
   }
 

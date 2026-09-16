@@ -36,7 +36,13 @@ export type OpsEventKind =
   | "report.sent"
   | "report.failed"
   | "retention.purged"
-  | "migration.applied";
+  | "migration.applied"
+  // iter-028 (T-006, arch 7): připomínky (fáze 8). "reminder.round" NENÍ
+  // v TERMINAL_KINDS — je to souhrn kola, ne konec běhu, jinak by přebil
+  // pozdější `cron.finished` v `deriveRunStatus` (7).
+  | "reminder.sent"
+  | "reminder.failed"
+  | "reminder.round";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).

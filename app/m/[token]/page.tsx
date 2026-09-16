@@ -3,6 +3,10 @@ import { MeetingWaiting } from "./_components/MeetingWaiting";
 import { GuestCardMeeting } from "./_components/GuestCardMeeting";
 import { Badge } from "@/components/ui/Badge";
 import type { VoteDetailItem } from "./_components/MeetingResultsView";
+import {
+  tokenErrorText,
+  type MeetingTokenErrorReason,
+} from "@/lib/meetings/token-error-text";
 
 interface NoteShape {
   id: string;
@@ -51,7 +55,12 @@ interface NotVotingData {
   memberName: string | null;
 }
 
-type FetchResult = MeetingData | NotVotingData | "expired" | null;
+interface ExpiredResult {
+  kind: "expired";
+  reason: MeetingTokenErrorReason | null;
+}
+
+type FetchResult = MeetingData | NotVotingData | ExpiredResult | null;
 
 async function fetchMeetingData(token: string): Promise<FetchResult> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -66,7 +75,16 @@ async function fetchMeetingData(token: string): Promise<FetchResult> {
   }
 
   if (res.status === 401) {
-    return "expired";
+    // iter-028 (T-006, arch 4.7): důvod z těla odpovědi (401 "Invalid
+    // token"/"Token revoked"/"Token expired") -> česká hláška na strance.
+    let apiError: unknown = null;
+    try {
+      const body = await res.json();
+      apiError = (body as { error?: unknown })?.error;
+    } catch {
+      // beze změny — chybějící/nečitelné tělo znamená obecný důvod
+    }
+    return { kind: "expired", reason: tokenErrorText(401, apiError)?.reason ?? null };
   }
 
   if (!res.ok) {
@@ -103,8 +121,12 @@ export default async function MemberMeetingPage({
   const { token } = await params;
   const data = await fetchMeetingData(token);
 
-  if (data === "expired" || data === null) {
+  if (data === null) {
     return <MeetingExpired />;
+  }
+
+  if ("kind" in data) {
+    return <MeetingExpired reason={data.reason} />;
   }
 
   // Early return for not_voting — MUST be before guests destructuring (MeetingData only)

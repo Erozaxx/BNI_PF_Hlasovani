@@ -45,6 +45,10 @@ export const KIND_LABELS: Record<string, string> = {
   "report.failed": "Report selhal",
   "retention.purged": "Retence",
   "migration.applied": "Migrace",
+  // iter-028 (T-006, arch 7)
+  "reminder.sent": "Pripominka odeslana",
+  "reminder.failed": "Pripominka selhala",
+  "reminder.round": "Kolo pripominek",
 };
 
 export function kindLabel(kind: string): string {

@@ -1,5 +1,6 @@
 /**
- * Testy pro lib/meetings/warning-plan.ts (iter-026, T-006).
+ * Testy pro lib/meetings/warning-plan.ts (iter-026, T-006; rozšířeno
+ * iter-028, T-005).
  *
  * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-voting-plan.ts
  * (iter-026, T-005). Spuštění: npm run test:warning-plan
@@ -15,6 +16,11 @@
  * cronem při zachycené výjimce z fáze 2, mimo scope tohoto souboru) prochází
  * pravidlem `dispatch-failed` beze změny v `decideThursdayWarning` — jediná
  * změna byla vlastní text v `dispatchFailureAction()`.
+ *
+ * Případy 14 až 18 jsou nové (iter-028, T-005, arch 8.2 P14/P15):
+ * `deferredFirstDispatch` (D8, varování i mimo čtvrtek při prvním rozeslání,
+ * ne při každodenním dosílání — R10) a věta o „Rozeslat hned" u výzev, které
+ * po odloženém rozeslání už samy o sobě nic nepošlou (arch 3.7).
  */
 import assert from "node:assert/strict";
 import {
@@ -31,6 +37,7 @@ function baseInput(overrides: Partial<WarningInput>): WarningInput {
     dispatchFailure: null,
     failedRecipients: [],
     membersWithoutEmail: [],
+    deferredFirstDispatch: null,
     ...overrides,
   };
 }
@@ -208,6 +215,78 @@ const cases: TestCase[] = [
       assert.match(text, /Connection to database failed/);
       assert.match(text, /výpadek infrastruktury/);
       assert.doesNotMatch(text, /doplňte hosty/);
+    },
+  },
+  {
+    name: "14. P14a: patek, deferredFirstDispatch se 2 selhanimi -> warn:true, partial-send",
+    run: () => {
+      const result = decideThursdayWarning(
+        baseInput({
+          weekdayPrague: "Friday",
+          deferredFirstDispatch: {
+            meeting: meeting("voting", "2026-08-28"),
+            dispatchFailure: null,
+            failedRecipients: [
+              { memberName: "Jan Novak", reason: "email send failed" },
+              { memberName: "Petr Svoboda", reason: "regenerate token failed" },
+            ],
+          },
+        })
+      );
+      assert.equal(result.warn, true);
+      assert.equal(result.warn && result.kind, "partial-send");
+    },
+  },
+  {
+    name: "15. P14b: patek, deferredFirstDispatch null -> warn:false, not-thursday (zadny cil dnes, nebo dosilani)",
+    run: () => {
+      const result = decideThursdayWarning(
+        baseInput({ weekdayPrague: "Friday", deferredFirstDispatch: null })
+      );
+      assert.deepEqual(result, { warn: false, reason: "not-thursday" });
+    },
+  },
+  {
+    name: "16. P14c: patek, deferredFirstDispatch s dispatchFailure infra-error -> warn:true, dispatch-failed",
+    run: () => {
+      const result = decideThursdayWarning(
+        baseInput({
+          weekdayPrague: "Friday",
+          deferredFirstDispatch: {
+            meeting: meeting("voting", "2026-08-28"),
+            dispatchFailure: { code: "infra-error", message: "Connection to database failed" },
+            failedRecipients: [],
+          },
+        })
+      );
+      assert.equal(result.warn, true);
+      assert.equal(result.warn && result.kind, "dispatch-failed");
+    },
+  },
+  {
+    name: "17. P15a: ctvrtek, not-voting -> radek vyzvy obsahuje 'Rozeslat hned'",
+    run: () => {
+      const result = decideThursdayWarning(baseInput({ meeting: meeting("draft") }));
+      assert.equal(result.warn, true);
+      const text = (result.warn && result.lines.join("\n")) || "";
+      assert.match(text, /Rozeslat hned/);
+    },
+  },
+  {
+    name: "18. P15b: ctvrtek, dispatch-failed no-guests -> radek vyzvy obsahuje 'Rozeslat hned'",
+    run: () => {
+      const result = decideThursdayWarning(
+        baseInput({
+          meeting: meeting("draft"),
+          dispatchFailure: {
+            code: "no-guests",
+            message: "Hlasovani nelze spustit, schuzka nema zadneho hosta.",
+          },
+        })
+      );
+      assert.equal(result.warn, true);
+      const text = (result.warn && result.lines.join("\n")) || "";
+      assert.match(text, /Rozeslat hned/);
     },
   },
 ];

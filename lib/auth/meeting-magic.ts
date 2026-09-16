@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "crypto";
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { meetingMemberLink, meeting } from "@/lib/db/schema";
+import { meetingMemberLink, meetingMemberReminder, meeting } from "@/lib/db/schema";
+import { decideMeetingTokenAccess } from "./meeting-token-access";
 
 function getDb() {
   return drizzle(getSql());
@@ -29,17 +30,26 @@ export type VerifyMeetingTokenResult =
  *
  * Returns { status: "ok", memberId, meetingId, linkId } on success.
  * Returns appropriate error status otherwise.
+ *
+ * iter-028 (T-006, arch 4.5, D4 C): hlavní cesta (dotaz do
+ * `meeting_member_link`) je beze změny — ani o dotaz navíc. Když tenhle
+ * dotaz nic nenajde, teprve pak běží druhý dotaz do `meeting_member_reminder`
+ * (alias tokenu z připomínky, D4 C) — nikdy naopak a nikdy zároveň. Obě
+ * větve rozhoduje stejná čistá funkce `decideMeetingTokenAccess`, aby
+ * revoked/expired/ok fungovaly na obou cestách identicky (V1 až V3).
  */
 export async function verifyMeetingToken(
   rawToken: string
 ): Promise<VerifyMeetingTokenResult> {
   const tokenHash = hashMeetingToken(rawToken);
+  const now = new Date();
 
   const rows = await getDb()
     .select({
       id: meetingMemberLink.id,
       meetingId: meetingMemberLink.meetingId,
       memberId: meetingMemberLink.memberId,
+      tokenHash: meetingMemberLink.tokenHash,
       expiresAt: meetingMemberLink.expiresAt,
       revokedAt: meetingMemberLink.revokedAt,
     })
@@ -47,26 +57,53 @@ export async function verifyMeetingToken(
     .where(eq(meetingMemberLink.tokenHash, tokenHash))
     .limit(1);
 
-  if (rows.length === 0) {
-    return { status: "invalid" };
+  if (rows.length > 0) {
+    return decideMeetingTokenAccess({ source: { kind: "link" }, now, link: rows[0] });
   }
 
-  const link = rows[0];
+  // Nenalezeno v meeting_member_link — může jít o alias z připomínky (D4 C).
+  // 42P01 (tabulka meeting_member_reminder chybí, merge před migrací nebo
+  // rollback, arch 6.5) se překládá na "invalid" — jiné chyby jdou dál jako
+  // dnes.
+  try {
+    const reminderRows = await getDb()
+      .select({
+        linkTokenHash: meetingMemberReminder.linkTokenHash,
+        id: meetingMemberLink.id,
+        meetingId: meetingMemberLink.meetingId,
+        memberId: meetingMemberLink.memberId,
+        tokenHash: meetingMemberLink.tokenHash,
+        revokedAt: meetingMemberLink.revokedAt,
+        expiresAt: meetingMemberLink.expiresAt,
+      })
+      .from(meetingMemberReminder)
+      .innerJoin(
+        meetingMemberLink,
+        and(
+          eq(meetingMemberLink.meetingId, meetingMemberReminder.meetingId),
+          eq(meetingMemberLink.memberId, meetingMemberReminder.memberId)
+        )
+      )
+      .where(eq(meetingMemberReminder.tokenHash, tokenHash))
+      .limit(1);
 
-  if (link.revokedAt !== null) {
-    return { status: "revoked" };
+    if (reminderRows.length === 0) {
+      return { status: "invalid" };
+    }
+
+    const row = reminderRows[0];
+    return decideMeetingTokenAccess({
+      source: { kind: "reminder", linkTokenHash: row.linkTokenHash },
+      now,
+      link: row,
+    });
+  } catch (err) {
+    const code = (err as { code?: string } | null | undefined)?.code;
+    if (code === "42P01") {
+      return { status: "invalid" };
+    }
+    throw err;
   }
-
-  if (link.expiresAt !== null && link.expiresAt < new Date()) {
-    return { status: "expired" };
-  }
-
-  return {
-    status: "ok",
-    memberId: link.memberId,
-    meetingId: link.meetingId,
-    linkId: link.id,
-  };
 }
 
 /**

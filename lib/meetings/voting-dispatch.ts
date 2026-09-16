@@ -27,6 +27,16 @@
  * `DispatchOutcome.sent` ho nese dál, (c) jeden `await logOpsEvent(...)` ve
  * smyčce kroku 8, hned po `recipients.push(...)` — nikdy nevyhazuje (D2),
  * takže krok 8 samotný se nemění.
+ *
+ * iter-028 (T-005, arch 3.3): `deliver: "now" | "defer"` je POVINNÝ — žádný
+ * volající si ho neodvozuje z `mode` (13. 8. — ruční spuštění poslalo mail
+ * nikým nechtěně). Nový guard `not-due` (deliver:"now" mimo den schůzky
+ * nebo později) se vyhodnotí hned za guardem `meeting-closed`, před prvním
+ * zápisem. Krok 3 počítá uzávěrku nové schůzky přes `votingClosesAtFor`
+ * (datum schůzky, ne okamžik kliknutí — D2). Krok 8 při `deliver:"defer"`
+ * negeneruje token, neposílá mail, nezapisuje značku ani žádný `email.*`
+ * záznam do ops_event — řádky s akcí "send" dostanou `{status:"scheduled"}`
+ * a doženou je až ranní cron (`lib/meetings/morning-dispatch.ts`).
  */
 import { randomUUID } from "crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -50,7 +60,11 @@ import {
   buildMeetingMagicUrl,
 } from "@/lib/auth/meeting-magic";
 import { sendMeetingMagicLinkEmail } from "@/lib/email/resend";
-import { nextWednesday2359InPrague, votingLinkExpiry } from "@/lib/meetings/voting-window";
+import {
+  votingClosesAtFor,
+  votingLinkExpiry,
+  isDeliveryDue,
+} from "@/lib/meetings/voting-window";
 import { planVotingDispatch, type DispatchMode } from "@/lib/meetings/voting-plan";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import { safeDispatchOutcomeEvent, recipientEvent } from "@/lib/ops/dispatch-events";
@@ -64,6 +78,11 @@ export type { DispatchMode };
 
 export interface DispatchOptions {
   mode: DispatchMode;
+  // iter-028 (T-005, arch 3.3): POVINNÉ — žádný výchozí odvozený z `mode`.
+  // "now" pošle maily hned (čtvrteční autostart, ranní dosílání, ruční
+  // "Rozeslat hned"). "defer" založí odkazy a schůzku převede na 'voting',
+  // ale nepošle jediný mail — pošle je až ranní cron (arch 3.1).
+  deliver: "now" | "defer";
   actor: string; // memberId volajícího, nebo "cron"
   now?: Date; // injektovatelné pro testy; default new Date()
   sendDelayMs?: number; // default 250 (Resend limit 5 req/s)
@@ -83,6 +102,10 @@ interface InnerDispatchOptions extends DispatchOptions {
 
 export type DispatchOutcome =
   | { status: "sent"; resendId?: string }
+  // iter-028 (T-005, arch 3.3): deliver:"defer" — řádek s akcí "send", pro
+  // kterého se nic neudělalo (žádný token, žádný mail, žádná značka).
+  // Doženě ho ranní cron.
+  | { status: "scheduled" }
   | { status: "skipped"; reason: "no-email" | "revoked" | "already-sent" }
   | { status: "error"; reason: string };
 
@@ -97,7 +120,15 @@ export interface DispatchRecipient {
 export type VotingDispatchResult =
   | {
       ok: false;
-      code: "not-found" | "meeting-closed" | "conflict" | "no-guests" | "no-recipients";
+      code:
+        | "not-found"
+        | "meeting-closed"
+        | "conflict"
+        | "no-guests"
+        | "no-recipients"
+        // iter-028 (T-005, arch 3.3): deliver:"now" mimo den schůzky nebo
+        // dřív (guard hned za meeting-closed, před prvním zápisem).
+        | "not-due";
       error: string;
     }
   | {
@@ -105,6 +136,8 @@ export type VotingDispatchResult =
       meetingId: string;
       meetingDate: string; // "YYYY-MM-DD"
       mode: DispatchMode;
+      // iter-028 (T-005, arch 3.3): jaké doručení tenhle běh skutečně provedl.
+      deliver: "now" | "defer";
       statusBefore: string;
       statusAfter: string;
       transitioned: boolean; // krok 6 opravdu změnil řádek
@@ -112,7 +145,7 @@ export type VotingDispatchResult =
       linkExpiresAt: string; // ISO
       totalMembers: number; // VŠICHNI členové v systému
       linksCreated: number;
-      counts: { sent: number; skipped: number; error: number };
+      counts: { sent: number; skipped: number; error: number; scheduled: number };
       recipients: DispatchRecipient[]; // VŠICHNI členové, nikdy zkrácené
       errors: string[]; // selhání mimo úroveň jednotlivce
     };
@@ -174,6 +207,18 @@ async function runVotingDispatchInner(
     };
   }
 
+  // iter-028 (T-005, arch 3.3, 3.1): guard not-due, HNED za meeting-closed,
+  // PŘED prvním zápisem — odkazy smí odejít hned jen v den schůzky nebo
+  // později, nikdy dřív. Nezávisí na `mode`: platí stejně pro "start" i
+  // "resend", protože obojí může dostat deliver:"now" (ruční "Rozeslat hned").
+  if (opts.deliver === "now" && !isDeliveryDue(meetingRow.date, now)) {
+    return {
+      ok: false,
+      code: "not-due",
+      error: "Odkazy nelze poslat hned, den schuzky jeste nenastal.",
+    };
+  }
+
   const checkConflict = opts.mode === "start" && meetingRow.status !== "voting";
   if (checkConflict && (await hasActiveOrVotingMeeting(meetingId))) {
     const other = await getConflictingMeeting(meetingId);
@@ -207,11 +252,15 @@ async function runVotingDispatchInner(
 
   // Krok 3: votingClosesAt — u běžícího hlasování se ČTE z DB, nikdy se
   // nepřepočítává (jediné místo, kde by chybná implementace posunula
-  // uzávěrku živého hlasování — arch 2.3, pseudokód doslova).
+  // uzávěrku živého hlasování — arch 2.3, pseudokód doslova). U NOVÉHO
+  // hlasování se počítá od data schůzky (iter-028, arch 3.2, D2), ne od
+  // okamžiku kliknutí — jinak by spuštění předem (např. úterý pro čtvrteční
+  // schůzku) skončilo uzávěrkou, kterou by čtvrteční cron zavřel dřív, než
+  // by stihl odeslat jediný odkaz.
   const votingClosesAt =
     meetingRow.status === "voting" && meetingRow.votingClosesAt !== null
       ? meetingRow.votingClosesAt
-      : nextWednesday2359InPrague(now);
+      : votingClosesAtFor(meetingRow.date, now);
   const linkExpiresAt = votingLinkExpiry(votingClosesAt);
 
   // Krok 4: SELECT členů + existujících odkazů, čistá funkce planVotingDispatch
@@ -276,35 +325,57 @@ async function runVotingDispatchInner(
   // značku AŽ PO úspěšném odeslání. Regeneruje se i pro odkaz založený v
   // kroku 5 — generateMeetingToken vrací syrový token i při ON CONFLICT DO
   // NOTHING, takže by neodpovídal uloženému hashi (R7).
+  //
+  // iter-028 (T-005, arch 3.3): při deliver:"defer" se pro ŽÁDNÝ řádek
+  // (skip i send) neposílá mail, negeneruje token, nezapisuje značka ani
+  // žádný `email.*` záznam do ops_event — jen jeden souhrnný
+  // `dispatch.finished` napíše wrapper (dispatchOutcomeEvent). Řádky
+  // s akcí "send" dostanou `{status:"scheduled"}`, doženou je až ranní cron.
+  const isDefer = opts.deliver === "defer";
   const recipients: DispatchRecipient[] = [];
   const errors: string[] = [];
 
   for (const row of plan.rows) {
     if (row.action.kind === "skip") {
-      recipients.push({
+      const recipient: DispatchRecipient = {
         memberId: row.memberId,
         memberName: row.memberName,
         memberEmail: row.memberEmail,
         linkCreated: false,
         outcome: { status: "skipped", reason: row.action.reason },
-      });
-      // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
-      // po recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok
-      // 8 samotný se nemění.
-      await logOpsEvent(
-        recipientEvent(recipients[recipients.length - 1], {
-          runId: opts.runId,
-          seq: opts.nextSeq(),
-          actor: opts.actor,
-          source,
-          meetingId,
-          meetingDate: meetingRow.date,
-        })
-      );
+      };
+      recipients.push(recipient);
+      if (!isDefer) {
+        // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
+        // po recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok
+        // 8 samotný se nemění.
+        await logOpsEvent(
+          recipientEvent(recipient, {
+            runId: opts.runId,
+            seq: opts.nextSeq(),
+            actor: opts.actor,
+            source,
+            meetingId,
+            meetingDate: meetingRow.date,
+          })
+        );
+      }
       continue;
     }
 
     const linkCreated = row.action.createLink;
+
+    if (isDefer) {
+      recipients.push({
+        memberId: row.memberId,
+        memberName: row.memberName,
+        memberEmail: row.memberEmail,
+        linkCreated,
+        outcome: { status: "scheduled" },
+      });
+      continue;
+    }
+
     let outcome: DispatchOutcome;
 
     if (!row.memberEmail) {
@@ -340,20 +411,21 @@ async function runVotingDispatchInner(
       }
     }
 
-    recipients.push({
+    const recipient: DispatchRecipient = {
       memberId: row.memberId,
       memberName: row.memberName,
       memberEmail: row.memberEmail,
       linkCreated,
       outcome,
-    });
+    };
+    recipients.push(recipient);
 
     // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned po
     // recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok 8
     // samotný se nemění. Kdyby proces umřel uprostřed rozesílání, log skončí
     // přesně tam, kde skončilo odesílání, ne s prázdnou dávkou.
     await logOpsEvent(
-      recipientEvent(recipients[recipients.length - 1], {
+      recipientEvent(recipient, {
         runId: opts.runId,
         seq: opts.nextSeq(),
         actor: opts.actor,
@@ -369,14 +441,15 @@ async function runVotingDispatchInner(
   }
 
   const sent = recipients.filter((r) => r.outcome.status === "sent").length;
+  const scheduled = recipients.filter((r) => r.outcome.status === "scheduled").length;
   const skipped = recipients.filter((r) => r.outcome.status === "skipped").length;
   const errorCount = recipients.filter((r) => r.outcome.status === "error").length;
   const statusAfter = transitioned ? "voting" : statusBefore;
 
   console.info(
-    `[voting-dispatch] meeting=${meetingId} mode=${opts.mode} actor=${opts.actor} ` +
+    `[voting-dispatch] meeting=${meetingId} mode=${opts.mode} deliver=${opts.deliver} actor=${opts.actor} ` +
       `statusBefore=${statusBefore} statusAfter=${statusAfter} transitioned=${transitioned} ` +
-      `sent=${sent} skipped=${skipped} errors=${errorCount} linksCreated=${plan.linksToCreate.length}`
+      `sent=${sent} scheduled=${scheduled} skipped=${skipped} errors=${errorCount} linksCreated=${plan.linksToCreate.length}`
   );
 
   return {
@@ -384,6 +457,7 @@ async function runVotingDispatchInner(
     meetingId,
     meetingDate: meetingRow.date,
     mode: opts.mode,
+    deliver: opts.deliver,
     statusBefore,
     statusAfter,
     transitioned,
@@ -391,7 +465,7 @@ async function runVotingDispatchInner(
     linkExpiresAt: linkExpiresAt.toISOString(),
     totalMembers: plan.counts.totalMembers,
     linksCreated: plan.linksToCreate.length,
-    counts: { sent, skipped, error: errorCount },
+    counts: { sent, skipped, error: errorCount, scheduled },
     recipients,
     errors,
   };
@@ -428,7 +502,7 @@ export async function runVotingDispatch(
     severity: "info",
     actor: opts.actor,
     meetingId: undefined, // neověřené — viz komentář funkce
-    message: `Spusteni hlasovani zahajeno (mode=${opts.mode}).`,
+    message: `Spusteni hlasovani zahajeno (mode=${opts.mode}, deliver=${opts.deliver}).`,
     detail: { requestedMeetingId: meetingId },
   });
 
