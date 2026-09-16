@@ -15,6 +15,11 @@
     "test:iter-026": "npm run test:voting-window && npm run test:voting-plan && npm run test:draft-warning && npm run test:warning-plan",
     "test:ops-events": "tsx scripts/test-ops-events.ts",
     "test:iter-027": "npm run test:ops-events",
+    "test:morning-dispatch": "tsx scripts/test-morning-dispatch.ts",
+    "test:reminder-plan": "tsx scripts/test-reminder-plan.ts",
+    "test:reminder-template": "tsx scripts/test-reminder-template.ts",
+    "test:meeting-token": "tsx scripts/test-meeting-token.ts",
+    "test:iter-028": "npm run test:voting-window && npm run test:warning-plan && npm run test:morning-dispatch && npm run test:ops-events && npm run test:reminder-plan && npm run test:reminder-template && npm run test:meeting-token",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "seed": "tsx scripts/seed-admin.ts"

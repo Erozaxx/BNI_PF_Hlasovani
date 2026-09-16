@@ -54,6 +54,11 @@ interface DispatchFinishedDetail {
   sent: number;
   error: number;
   totalMembers: number;
+  // iter-028 (T-005, arch 7): jen u deliver:"defer" ("Spustit hlasovani",
+  // odkazy jeste nikam neodesly) — nepovinné, starší záznamy (iter-027) ho
+  // nemají.
+  scheduled?: number;
+  deliver?: "now" | "defer";
 }
 
 function isDispatchFinishedDetail(detail: unknown): detail is DispatchFinishedDetail {
@@ -90,22 +95,58 @@ export function deriveRunStatus(events: RunStatusEvent[], now: Date): RunStatus 
     // "partial" pozná podle PŘÍTOMNOSTI aspoň jednoho email.failed (7.2
     // doslova), ne podle severity terminálu — obě cesty spolu souhlasí
     // (dispatchOutcomeEvent dává severity=warn právě tehdy, kdyz error>0),
-    // ale text tabulky 7.2 je závazný.
-    const hasFailedRecipient = events.some((e) => e.kind === "email.failed");
+    // ale text tabulky 7.2 je závazný. iter-028 (T-006, arch 7): rozšířeno
+    // o reminder.failed — jednotlivé selhání odeslání připomínky je stejná
+    // třída chyby jako email.failed.
+    const hasFailedRecipient = events.some(
+      (e) => e.kind === "email.failed" || e.kind === "reminder.failed"
+    );
+    // iter-028 (T-006, arch 7.1, F2): pád CELÉ fáze cronu (typicky fáze 8,
+    // chybějící migrace, 6.5 "merge, pak migrace") se jinak ztratí, když je
+    // terminálem dřívější dispatch.finished/cron.finished ve stejném běhu —
+    // `deriveRunStatus` bere PRVNÍ terminál a `severity` vůbec nečte. Hledá
+    // se přes CELÉ pole událostí, ne jen do terminálu (stejně jako
+    // hasFailedRecipient výše).
+    const hasPhaseFailure = events.some((e) => e.kind === "cron.phase-failed");
+
     if (isDispatchFinishedDetail(terminal.detail)) {
-      const { sent, error, totalMembers } = terminal.detail;
+      const { sent, error, totalMembers, scheduled, deliver } = terminal.detail;
+      // iter-028 (T-005, arch 7): deliver:"defer" nikdy neposlal mail, takže
+      // "Rozeslano 0 z X" by lhalo — vlastní popisek, vždy "ok" (žádný pokus
+      // se nepovedl ani nepovedl, prostě ještě neproběhl).
+      if (deliver === "defer") {
+        return {
+          state: "ok",
+          label: `Spusteno, odkazy odejdou rano (${scheduled ?? 0} z ${totalMembers})`,
+        };
+      }
       if (hasFailedRecipient || error > 0) {
         return {
           state: "partial",
           label: `Rozeslano ${sent} z ${totalMembers}, ${error} chyb`,
         };
       }
+      // iter-028 (T-006, arch 7.1, F2): dispatch samotný uspěl (0 chyb na
+      // příjemci), ale jiná fáze téhož běhu (typicky fáze 8) selhala celá —
+      // "Rozeslano X z Y" by bez tyhle podmínky lhalo o zdraví celého běhu.
+      if (hasPhaseFailure) {
+        return {
+          state: "partial",
+          label: `Rozeslano ${sent} z ${totalMembers}, selhala jina faze cronu`,
+        };
+      }
       return { state: "ok", label: `Rozeslano ${sent} z ${totalMembers}` };
     }
 
-    return hasFailedRecipient
-      ? { state: "partial", label: "Beh dokoncen, nekterym prijemcum se neodeslalo" }
-      : { state: "ok", label: "Beh dokoncen" };
+    if (hasFailedRecipient) {
+      return { state: "partial", label: "Beh dokoncen, nekterym prijemcum se neodeslalo" };
+    }
+    // iter-028 (T-006, arch 7.1, F2): terminál bez dispatch detailu (typicky
+    // holé cron.finished, dny bez rozeslání) — stejná oprava jako výše.
+    if (hasPhaseFailure) {
+      return { state: "partial", label: "Beh dokoncen, nektera faze selhala" };
+    }
+    return { state: "ok", label: "Beh dokoncen" };
   }
 
   // Žádný terminální záznam — running vs. stalled podle stáří NEJSTARŠÍ

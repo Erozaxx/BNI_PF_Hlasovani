@@ -1,4 +1,4 @@
-import { eq, asc, desc, and, ne, isNull, max, inArray, sql } from "drizzle-orm";
+import { eq, asc, desc, and, or, ne, isNull, max, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meeting, meetingGuest, guest, category } from "@/lib/db/schema";
@@ -121,6 +121,32 @@ export async function getMeetingsForDates(dates: string[]) {
     .select({ id: meeting.id, date: meeting.date, status: meeting.status })
     .from(meeting)
     .where(inArray(meeting.date, dates));
+}
+
+/**
+ * Kandidáti pro ranní rozeslání (iter-028, arch 3.4): schůzka s dnešním
+ * datem (libovolný stav — čtvrteční autostart smí aktivovat i schůzku, kterou
+ * nikdo nepřipravil, E1), NEBO běžící hlasování, jehož schůzka má datum
+ * dnes nebo dřív (doslání odkazů). `planMorningDispatch`
+ * (lib/meetings/morning-dispatch.ts) z těchhle řádků rozhodne, kterou akci
+ * (thursday-autostart / deferred-send / nic) má cron dnes provést — filtr
+ * tady je záměrně širší než výsledný cíl.
+ */
+export async function getMorningDispatchCandidates(today: string) {
+  return getDb()
+    .select({
+      id: meeting.id,
+      date: meeting.date,
+      status: meeting.status,
+      votingClosesAt: meeting.votingClosesAt,
+    })
+    .from(meeting)
+    .where(
+      or(
+        eq(meeting.date, today),
+        and(eq(meeting.status, "voting"), sql`${meeting.date} <= ${today}`)
+      )
+    );
 }
 
 /**

@@ -1,5 +1,6 @@
 /**
- * Testy pro lib/meetings/voting-window.ts (iter-026, T-005).
+ * Testy pro lib/meetings/voting-window.ts (iter-026, T-005; rozšířeno
+ * iter-028, T-005).
  *
  * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-dedup-guests.ts
  * (iter-025). Spuštění: npm run test:voting-window
@@ -11,11 +12,18 @@
  * středy 23:59:59. Assert je proto na řetězec v Praze (přes
  * toLocaleString("sv-SE", {timeZone:"Europe/Prague"})), ne na UTC — LL-006
  * bod 2: test musí ověřovat přesně ten tvar, na kterém to spadlo.
+ *
+ * Případy 9 až 13 jsou nové (iter-028, T-005, arch 8.2 W9-W13):
+ * `votingClosesAtFor` (uzávěrka od data schůzky, D2 — oprava chyby, kvůli
+ * které by spuštění hlasování předem s odloženým rozesláním nedoručilo
+ * odkaz nikomu) a `isDeliveryDue`.
  */
 import assert from "node:assert/strict";
 import {
   nextWednesday2359InPrague,
   votingLinkExpiry,
+  votingClosesAtFor,
+  isDeliveryDue,
 } from "../lib/meetings/voting-window";
 
 type TestCase = {
@@ -89,6 +97,43 @@ const cases: TestCase[] = [
       const closesAt = new Date("2026-09-02T21:59:59Z");
       const result = votingLinkExpiry(closesAt);
       assert.equal(result.toISOString(), "2026-09-03T21:59:59.000Z");
+    },
+  },
+  {
+    name: "9. votingClosesAtFor: spusteni predem (ut vecer) i cronem v den schuzky (ct rano) davaji stejnou uzaverku",
+    run: () => {
+      const early = votingClosesAtFor("2026-09-24", new Date("2026-09-22T18:00:00Z"));
+      assert.equal(early.toISOString(), "2026-09-30T21:59:59.000Z");
+      const onDay = votingClosesAtFor("2026-09-24", new Date("2026-09-24T05:30:00Z"));
+      assert.equal(onDay.toISOString(), "2026-09-30T21:59:59.000Z");
+    },
+  },
+  {
+    name: "10. votingClosesAtFor: schuzka v minulosti -> referenci je now, ne datum schuzky",
+    run: () => {
+      const result = votingClosesAtFor("2026-09-10", new Date("2026-09-16T18:00:00Z"));
+      assert.equal(result.toISOString(), "2026-09-23T21:59:59.000Z");
+    },
+  },
+  {
+    name: "11. votingClosesAtFor: posun casu (CEST->CET) mezi spustenim predem a dnem schuzky",
+    run: () => {
+      const result = votingClosesAtFor("2026-10-22", new Date("2026-10-20T18:00:00Z"));
+      assert.equal(result.toISOString(), "2026-10-28T22:59:59.000Z");
+    },
+  },
+  {
+    name: "12. votingClosesAtFor: schuzka sama ve stredu -> uzaverka o tyden pozdeji, ne tentyz den",
+    run: () => {
+      const result = votingClosesAtFor("2026-09-23", new Date("2026-09-21T08:00:00Z"));
+      assert.equal(result.toISOString(), "2026-09-30T21:59:59.000Z");
+    },
+  },
+  {
+    name: "13. isDeliveryDue: hranice pulnoci v Praze, ne v UTC",
+    run: () => {
+      assert.equal(isDeliveryDue("2026-09-24", new Date("2026-09-23T21:59:59Z")), false);
+      assert.equal(isDeliveryDue("2026-09-24", new Date("2026-09-23T22:00:00Z")), true);
     },
   },
 ];

@@ -98,3 +98,40 @@ export function nextWednesday2359InPrague(now: Date): Date {
 export function votingLinkExpiry(votingClosesAt: Date): Date {
   return new Date(votingClosesAt.getTime() + TOKEN_EXPIRY_EXTRA_MS);
 }
+
+/**
+ * Uzávěrka hlasování počítaná od DATA SCHŮZKY, ne od okamžiku kliknutí (arch
+ * iter-028 T-001, sekce 3.2, D2). Oprava chyby nalezené architektem: dnešní
+ * `nextWednesday2359InPrague(now)` u spuštění PŘEDEM (např. úterý pro
+ * čtvrteční schůzku) počítala uzávěrku od úterý, tedy o týden dřív, než měla
+ * — s odloženým rozesláním by takovou uzávěrku čtvrteční cron zavřel dřív,
+ * než by stihl poslat jediný odkaz.
+ *
+ * Když je `meetingDate` v budoucnu (spuštění předem), referenčním okamžikem
+ * pro výpočet "příští středy" je poledne toho dne v UTC — nejde o skutečný
+ * čas, jen o vstup pro `nextWednesday2359InPrague`, které potřebuje jen
+ * DEN V TÝDNU schůzky, ne její přesný čas. Poledne bezpečně sedí do
+ * pražského kalendářního dne bez ohledu na letní/zimní čas. Když
+ * `meetingDate` už nastal nebo je dnes (pozdní start), referencí zůstává
+ * `now` — beze změny proti dnešnímu chování.
+ *
+ * Pro BĚŽÍCÍ hlasování (status 'voting') se uzávěrka nikdy nepřepočítává —
+ * volající (voting-dispatch.ts krok 3) čte hodnotu z DB, tahle funkce se
+ * volá jen při zakládání NOVÉHO hlasování.
+ */
+export function votingClosesAtFor(meetingDate: string, now: Date): Date {
+  const ref =
+    meetingDate > todayInPrague(now)
+      ? new Date(`${meetingDate}T10:00:00Z`) // poledne v Praze, jen kvuli dni v tydnu
+      : now;
+  return nextWednesday2359InPrague(ref);
+}
+
+/**
+ * Je den schůzky dnes, nebo už proběhl (Europe/Prague)? Řídí, jestli
+ * `deliver:"now"` smí odeslat maily hned (arch 3.1, 3.3, 3.5) — odkazy smí
+ * rozeslat jen ranní cron v den schůzky nebo později, nikdy dřív.
+ */
+export function isDeliveryDue(meetingDate: string, now: Date): boolean {
+  return meetingDate <= todayInPrague(now);
+}

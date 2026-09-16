@@ -4,6 +4,10 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import type { GuestNote } from "./GuestCardMeeting";
+import {
+  tokenErrorText,
+  meetingTokenActionError,
+} from "@/lib/meetings/token-error-text";
 
 interface MeetingNoteFormProps {
   token: string;
@@ -50,10 +54,16 @@ export function MeetingNoteForm({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        // iter-028 (T-006, arch 4.7): 401 dostane srozumitelnou ceskou vetu
+        // podle duvodu (invalid/revoked/expired); jiny stav se chova jako
+        // dnes (holy text z API, pokud existuje).
+        const tokenError = tokenErrorText(res.status, data.error);
         setError(
-          typeof data.error === "string"
-            ? data.error
-            : "Nepodarilo se ulozit poznamku."
+          tokenError
+            ? meetingTokenActionError(tokenError.reason, "note")
+            : typeof data.error === "string"
+              ? data.error
+              : "Nepodarilo se ulozit poznamku."
         );
         return;
       }

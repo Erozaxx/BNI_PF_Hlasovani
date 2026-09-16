@@ -1,15 +1,18 @@
 /**
- * Testy pro lib/ops/* (iter-027, T-005 + T-006 + T-005r) — arch iter-027
- * T-001, sekce 12.
+ * Testy pro lib/ops/* (iter-027, T-005 + T-006 + T-005r; rozšířeno iter-028,
+ * T-005) — arch iter-027 T-001, sekce 12; arch iter-028 T-001, sekce 8.2.
  *
  * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-warning-plan.ts.
  * Spuštění: npm run test:ops-events
  *
  * Pokrývá VŠECH 24 případů ze sekce 12 (NIT-2, souvislé číslování) plus 2
- * případy 25-26 (T-005r, review T-007 MAJOR-1, `safeDispatchOutcomeEvent`).
+ * případy 25-26 (T-005r, review T-007 MAJOR-1, `safeDispatchOutcomeEvent`)
+ * a 2 případy 27-28 (iter-028, T-005: `deliver:"defer"` v
+ * `dispatchOutcomeEvent`/`deriveRunStatus` a guard `not-due`).
  * 1 až 12 a 22 až 24 napsal T-005; 13 až 21 (`deriveRunStatus`,
  * `mapResendStatus`) doplnil T-006, jakmile moduly, na kterých stojí,
- * existovaly; 25-26 doplnil T-005r po code review.
+ * existovaly; 25-26 doplnil T-005r po code review; 27-28 doplnil T-005
+ * (iter-028).
  *
  * Ověření "bez DB": tenhle skript NEVOLÁ `dotenv.config()` a `DATABASE_URL`
  * není v prostředí nastavené (ověřeno při psaní testu) — přesto proběhne
@@ -36,6 +39,12 @@ import {
 import { retentionCutoff, OPS_EVENT_RETENTION_DAYS } from "../lib/ops/retention";
 import { deriveRunStatus, type RunStatusEvent } from "../lib/ops/run-status";
 import { mapResendStatus } from "../lib/ops/resend-status";
+import { TERMINAL_KINDS } from "../lib/ops/types";
+import {
+  safeReminderEvent,
+  type ReminderEventContext,
+  type ReminderOutcome,
+} from "../lib/ops/reminder-events";
 import type {
   DispatchRecipient,
   VotingDispatchResult,
@@ -65,14 +74,18 @@ const dispatchCtx = {
 };
 
 function okResult(
-  counts: { sent: number; skipped: number; error: number },
-  totalMembers: number
+  counts: { sent: number; skipped: number; error: number; scheduled?: number },
+  totalMembers: number,
+  // iter-028 (T-005): deliver default "now" — beze změny pro existující
+  // volání (case 10, 11, 25, 26), které deliver nezmiňují.
+  deliver: "now" | "defer" = "now"
 ): VotingDispatchResult {
   return {
     ok: true,
     meetingId: "meeting-1",
     meetingDate: "2026-08-27",
     mode: "start",
+    deliver,
     statusBefore: "active",
     statusAfter: "voting",
     transitioned: true,
@@ -80,14 +93,20 @@ function okResult(
     linkExpiresAt: new Date().toISOString(),
     totalMembers,
     linksCreated: 0,
-    counts,
+    counts: { scheduled: 0, ...counts },
     recipients: [],
     errors: [],
   };
 }
 
 function failResult(
-  code: "not-found" | "meeting-closed" | "conflict" | "no-guests" | "no-recipients",
+  code:
+    | "not-found"
+    | "meeting-closed"
+    | "conflict"
+    | "no-guests"
+    | "no-recipients"
+    | "not-due",
   error: string
 ): VotingDispatchResult {
   return { ok: false, code, error };
@@ -503,6 +522,194 @@ const cases: TestCase[] = [
       assert.throws(() => dispatchOutcomeEvent(malformed, ctx));
       assert.doesNotThrow(() => safeDispatchOutcomeEvent(malformed, ctx));
       assert.equal(safeDispatchOutcomeEvent(malformed, ctx), null);
+    },
+  },
+  {
+    name: "27. dispatchOutcomeEvent deliver:defer -> info, 'odejdou rano', detail.deliver; deriveRunStatus -> ok, presny popisek (ne 'Rozeslano 0 z 27')",
+    run: () => {
+      const result = okResult({ sent: 0, skipped: 0, error: 0, scheduled: 27 }, 27, "defer");
+      const row = dispatchOutcomeEvent(result, {
+        runId: "run-2",
+        seq: 1,
+        actor: "member-1",
+        source: "gui",
+        requestedMeetingId: "meeting-1",
+      });
+      assert.equal(row.severity, "info");
+      assert.match(row.message, /odejdou rano/);
+      assert.equal((row.detail as Record<string, unknown>).deliver, "defer");
+
+      const start = new Date("2026-09-16T08:00:00Z");
+      const events: RunStatusEvent[] = [
+        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: row.kind, message: row.message, detail: row.detail, occurredAt: new Date(start.getTime() + 1000) },
+      ];
+      const status = deriveRunStatus(events, new Date(start.getTime() + 2000));
+      assert.equal(status.state, "ok");
+      assert.equal(status.label, "Spusteno, odkazy odejdou rano (27 z 27)");
+      assert.notEqual(status.label, "Rozeslano 0 z 27");
+    },
+  },
+  {
+    name: "28. dispatchOutcomeEvent {ok:false, code:not-due} -> meetingId vyplnen (na rozdil od not-found, ztrata vazby na schuzku)",
+    run: () => {
+      const row = dispatchOutcomeEvent(
+        failResult("not-due", "Odkazy nelze poslat hned, den schuzky jeste nenastal."),
+        { runId: "run-2", seq: 2, actor: "member-1", source: "gui", requestedMeetingId: "meeting-1" }
+      );
+      assert.equal(row.meetingId, "meeting-1");
+      assert.equal(row.code, "not-due");
+    },
+  },
+  {
+    name: "29. safeReminderEvent se vstupem, jehoz getter hazi -> null, bez vyjimky (LL-011)",
+    run: () => {
+      const ctx: ReminderEventContext = {
+        runId: "run-3",
+        seq: 0,
+        actor: "cron",
+        meetingId: "meeting-1",
+        meetingDate: "2026-09-24",
+        memberId: "member-1",
+        memberName: "Jan Novak",
+        email: "jan@example.com",
+        round: 1,
+      };
+      const throwing: ReminderOutcome = {
+        status: "failed",
+        get reason(): string {
+          throw new Error("boom");
+        },
+      };
+      assert.doesNotThrow(() => safeReminderEvent(ctx, throwing));
+      assert.equal(safeReminderEvent(ctx, throwing), null);
+    },
+  },
+  {
+    name: "30. TERMINAL_KINDS neobsahuje zadny reminder.*",
+    run: () => {
+      assert.ok(!TERMINAL_KINDS.some((k) => k.startsWith("reminder.")));
+    },
+  },
+  {
+    name: "31. deriveRunStatus: cron.finished + 1x reminder.failed -> partial",
+    run: () => {
+      const start = new Date("2026-09-26T05:00:00Z");
+      const events: RunStatusEvent[] = [
+        { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
+        {
+          kind: "reminder.failed",
+          message: "Pripominka (kolo 1) selhala: Jan Novak - 422",
+          detail: { round: 1 },
+          occurredAt: new Date(start.getTime() + 5_000),
+        },
+        {
+          kind: "cron.finished",
+          message: "Cron close-voting dokoncen.",
+          detail: {},
+          occurredAt: new Date(start.getTime() + 10_000),
+        },
+      ];
+      const status = deriveRunStatus(events, new Date(start.getTime() + 20_000));
+      assert.equal(status.state, "partial");
+    },
+  },
+  {
+    name: "32. deriveRunStatus: dispatch.finished (27/0/27) + cron.phase-failed phase-8-reminders -> partial, '27 z 27' i 'selhala'",
+    run: () => {
+      const start = new Date("2026-09-24T05:00:00Z");
+      const events: RunStatusEvent[] = [
+        { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
+        {
+          kind: "dispatch.finished",
+          message: "Hlasovaci odkazy rozeslany vsem 27 clenum.",
+          detail: { sent: 27, skipped: 0, error: 0, totalMembers: 27 },
+          occurredAt: new Date(start.getTime() + 20_000),
+        },
+        {
+          kind: "cron.phase-failed",
+          message: "relation \"meeting_member_reminder\" does not exist",
+          detail: { code: "phase-8-reminders" },
+          occurredAt: new Date(start.getTime() + 21_000),
+        },
+        {
+          kind: "cron.finished",
+          message: "Cron close-voting dokoncen.",
+          detail: {},
+          occurredAt: new Date(start.getTime() + 22_000),
+        },
+      ];
+      const status = deriveRunStatus(events, new Date(start.getTime() + 30_000));
+      assert.equal(status.state, "partial");
+      assert.match(status.label, /27 z 27/);
+      assert.match(status.label, /selhala/);
+    },
+  },
+  {
+    name: "33. deriveRunStatus: totez bez dispatch.finished -> partial, 'Beh dokoncen, nektera faze selhala'",
+    run: () => {
+      const start = new Date("2026-09-25T05:00:00Z");
+      const events: RunStatusEvent[] = [
+        { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
+        {
+          kind: "cron.phase-failed",
+          message: "relation \"meeting_member_reminder\" does not exist",
+          detail: { code: "phase-8-reminders" },
+          occurredAt: new Date(start.getTime() + 1_000),
+        },
+        {
+          kind: "cron.finished",
+          message: "Cron close-voting dokoncen.",
+          detail: {},
+          occurredAt: new Date(start.getTime() + 2_000),
+        },
+      ];
+      const status = deriveRunStatus(events, new Date(start.getTime() + 10_000));
+      assert.equal(status.state, "partial");
+      assert.equal(status.label, "Beh dokoncen, nektera faze selhala");
+    },
+  },
+  {
+    name: "34. deriveRunStatus: bez cron.phase-failed -> popisky beze zmeny ('Rozeslano 27 z 27', 'Beh dokoncen')",
+    run: () => {
+      const start = new Date("2026-09-26T05:00:00Z");
+      const withDispatch: RunStatusEvent[] = [
+        { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
+        {
+          kind: "dispatch.finished",
+          message: "Hlasovaci odkazy rozeslany vsem 27 clenum.",
+          detail: { sent: 27, skipped: 0, error: 0, totalMembers: 27 },
+          occurredAt: new Date(start.getTime() + 20_000),
+        },
+        {
+          kind: "reminder.round",
+          message: "Kolo pripominek 1: 0 odeslano, 0 chyb, 0 melo dostat.",
+          detail: { round: 1 },
+          occurredAt: new Date(start.getTime() + 21_000),
+        },
+        {
+          kind: "cron.finished",
+          message: "Cron close-voting dokoncen.",
+          detail: {},
+          occurredAt: new Date(start.getTime() + 22_000),
+        },
+      ];
+      const statusWithDispatch = deriveRunStatus(withDispatch, new Date(start.getTime() + 30_000));
+      assert.equal(statusWithDispatch.state, "ok");
+      assert.equal(statusWithDispatch.label, "Rozeslano 27 z 27");
+
+      const bare: RunStatusEvent[] = [
+        { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
+        {
+          kind: "cron.finished",
+          message: "Cron close-voting dokoncen.",
+          detail: {},
+          occurredAt: new Date(start.getTime() + 1_000),
+        },
+      ];
+      const statusBare = deriveRunStatus(bare, new Date(start.getTime() + 5_000));
+      assert.equal(statusBare.state, "ok");
+      assert.equal(statusBare.label, "Beh dokoncen");
     },
   },
 ];

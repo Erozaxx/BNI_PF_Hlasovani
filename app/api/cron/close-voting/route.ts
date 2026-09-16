@@ -1,14 +1,26 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getExpiredVotingMeetings } from "@/lib/db/queries/votes";
-import { getMeetingByDate, updateMeetingStatus } from "@/lib/db/queries/meetings";
+import {
+  getMeetingByDate,
+  getMorningDispatchCandidates,
+  updateMeetingStatus,
+} from "@/lib/db/queries/meetings";
 import { sendReport, sendMagicLinkEmail, sendVotingWarningEmail } from "@/lib/email/resend";
 import { getMembers } from "@/lib/db/queries/members";
+import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { generateMagicToken } from "@/lib/auth/magic";
-import { weekdayInPrague, todayInPrague } from "@/lib/meetings/voting-window";
+import { todayInPrague, weekdayInPrague } from "@/lib/meetings/voting-window";
 import { runVotingDispatch, type VotingDispatchResult } from "@/lib/meetings/voting-dispatch";
+import { planVotingDispatch, type DispatchPlan } from "@/lib/meetings/voting-plan";
+import {
+  planMorningDispatch,
+  isFirstDispatch,
+  type MorningReason,
+} from "@/lib/meetings/morning-dispatch";
 import { decideThursdayWarning, type WarningInput } from "@/lib/meetings/warning-plan";
 import { cleanupStaleThrottleRows } from "@/lib/auth/throttle";
+import { runReminders, type ReminderRunResult } from "@/lib/meetings/reminder-run";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import { retentionCutoff } from "@/lib/ops/retention";
 import { purgeOldOpsEvents } from "@/lib/db/queries/ops-events";
@@ -19,143 +31,280 @@ import { purgeOldOpsEvents } from "@/lib/db/queries/ops-events";
 export const maxDuration = 60;
 
 /**
- * Fáze 2: ve čtvrtek (Europe/Prague) spustí runVotingDispatch pro schůzku
- * naplánovanou na dnešek, v libovolném stavu draft/active/voting (E1, arch
- * 15.1) — cron sám aktivuje i schůzku, kterou nikdo nepřipravil.
+ * Fáze 2 (iter-028, T-005, arch 3.4): ranní rozeslání hlasovacích odkazů.
+ * Nahrazuje dřívější "jen ve čtvrtek, jen schůzka s dnešním datem" dvěma
+ * nezávislými cíli, které `planMorningDispatch` (čistá funkce,
+ * lib/meetings/morning-dispatch.ts) rozhodne z kandidátů
+ * (`getMorningDispatchCandidates`):
  *
- * getMeetingByDate nefiltruje na stav — filtr je až uvnitř
- * runVotingDispatch. Schůzku ve stavu closed fáze 2 pozná a odmítne guardem
- * "meeting-closed", ne tím, že by ji nenašla — "nenašel jsem nic" (žádná
- * schůzka na dnešek) a "našel jsem a nesmím" (guard padl) jsou dvě různé
- * věci a musí zůstat rozeznatelné pro fázi 3 (varování, T-006).
+ * - `thursday-autostart` — schůzka s dnešním datem, JEN ve čtvrtek, v
+ *   libovolném stavu draft/active/voting (E1, beze změny) — cron sám
+ *   aktivuje i schůzku, kterou nikdo nepřipravil. Vždy se spustí, fáze 3
+ *   potřebuje výsledek i při selhání.
+ * - `deferred-send` — běžící hlasování (status 'voting'), jehož schůzka má
+ *   datum dnes nebo dřív a uzávěrka ještě neprošla. Levný pre-check
+ *   (`planVotingDispatch`) napřed zjistí, jestli je vůbec komu poslat —
+ *   `willSend === 0` (všichni mají značku odeslání) se přeskočí BEZ zápisu
+ *   do ops_event, ušetří to 29 záznamů denně po celou dobu hlasování.
  *
- * Návratová hodnota se NEZAHAZUJE — `result` (ok:true i ok:false) je přesně
- * to, co T-006 potřebuje předat do decideThursdayWarning jako
- * dispatchFailure / failedRecipients / membersWithoutEmail (arch 2.6.1, 3.4,
- * 9.1). Tenhle návratový typ je ten hook point.
+ * Oba cíle volají `runVotingDispatch` s `deliver:"now"` — ranní cron je
+ * jediné místo, které smí odeslat mail (arch 3.1); `deliver:"defer"` patří
+ * jen ručnímu tlačítku "Spustit hlasovani" (start-voting/route.ts).
+ *
+ * Každý cíl má VLASTNÍ try/catch (arch 3.4) — pád jednoho (skutečná infra
+ * chyba mimo pět guard kódů) nesmí zastavit zpracování dalšího cíle ani
+ * zbytek cronu. Zachycená výjimka se zapíše jako `infraError`, stejně jako
+ * dřív u jediného čtvrtečního cíle (review MAJOR-1, T-006r).
  */
-export interface ThursdayDispatchOutcome {
-  weekday: string;
-  ranDispatch: boolean;
-  meetingId: string | null;
+export interface MorningDispatchTargetOutcome {
+  meetingId: string;
+  meetingDate: string;
+  reason: MorningReason;
+  /** "nothing-to-send" = deferred-send přeskočen před voláním jádra (willSend 0), bez zápisu do ops_event. */
+  action: "dispatched" | "nothing-to-send";
   result: VotingDispatchResult | null;
-  /**
-   * Vyplněno JEN když `runThursdayDispatch()` samotná vyhodila výjimku —
-   * skutečná infra chyba mimo pět guard kódů (voting-dispatch.ts hlavička,
-   * odchylka 5 handoffu T-005), zachycená a syntetizovaná na úrovni cronu
-   * (`handler()`, review MAJOR-1, T-006r). `result` v tom případě zůstává
-   * `null` — nejde o žádný z pěti guardů, `runVotingDispatch` nevrátila nic.
-   */
   infraError?: { code: "infra-error"; message: string };
 }
 
-async function runThursdayDispatch(
+export interface MorningDispatchOutcome {
+  weekdayPrague: string;
+  todayPrague: string;
+  targets: MorningDispatchTargetOutcome[];
+}
+
+async function runMorningDispatch(
   today: string,
+  now: Date,
   runId: string
-): Promise<ThursdayDispatchOutcome> {
-  const weekday = weekdayInPrague();
-  if (weekday !== "Thursday") {
-    return { weekday, ranDispatch: false, meetingId: null, result: null };
+): Promise<MorningDispatchOutcome> {
+  const candidates = await getMorningDispatchCandidates(today);
+  const plan = planMorningDispatch({ now, meetings: candidates });
+
+  const targets: MorningDispatchTargetOutcome[] = [];
+
+  for (const target of plan.targets) {
+    if (target.reason === "deferred-send") {
+      // iter-028 (T-007r, review T-007 N1 MAJOR): pre-check `deferred-send`
+      // cíle (levné zjištění "je vůbec komu poslat") má VLASTNÍ try/catch,
+      // izolovaný od zbytku smyčky. Bez něj by přechodná chyba DB tady
+      // shodila CELÉ `runMorningDispatch` — a protože cíle jsou seřazené
+      // vzestupně podle data, `thursday-autostart` (vždy nejvyšší datum) by
+      // se ten den vůbec nezpracoval. Chyba se zapíše jako `infraError`
+      // JEN pro tenhle cíl, stejným tvarem jako výjimka z `runVotingDispatch`
+      // níže, a smyčka pokračuje dalším cílem.
+      let willSendPlan: DispatchPlan;
+      try {
+        const [members, links] = await Promise.all([
+          getMembers(),
+          getMeetingLinkRows(target.meetingId),
+        ]);
+        willSendPlan = planVotingDispatch({
+          members: members.map((m) => ({
+            memberId: m.id,
+            memberName: m.name,
+            memberEmail: m.email ?? null,
+          })),
+          links: links.map((l) => ({
+            memberId: l.memberId,
+            revokedAt: l.revokedAt,
+            linkEmailSentAt: l.linkEmailSentAt,
+          })),
+          mode: "start",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        console.error(
+          `morning-dispatch: meeting=${target.meetingId} reason=${target.reason} pre-check threw (infra error):`,
+          msg
+        );
+        targets.push({
+          meetingId: target.meetingId,
+          meetingDate: target.meetingDate,
+          reason: target.reason,
+          action: "dispatched",
+          result: null,
+          infraError: { code: "infra-error", message: msg },
+        });
+        continue;
+      }
+
+      if (willSendPlan.counts.willSend === 0) {
+        targets.push({
+          meetingId: target.meetingId,
+          meetingDate: target.meetingDate,
+          reason: target.reason,
+          action: "nothing-to-send",
+          result: null,
+        });
+        continue;
+      }
+    }
+
+    try {
+      // iter-027 (T-005, arch 6.1): cron předává svoje runId, aby fáze 2
+      // nebyla samostatný běh — všechny události dispatche sdílejí runId
+      // s cron.started.
+      const result = await runVotingDispatch(target.meetingId, {
+        mode: "start",
+        deliver: "now",
+        actor: "cron",
+        now,
+        runId,
+      });
+
+      if (result.ok) {
+        console.log(
+          `morning-dispatch: meeting=${target.meetingId} reason=${target.reason} ` +
+            `statusBefore=${result.statusBefore} statusAfter=${result.statusAfter} ` +
+            `sent=${result.counts.sent} skipped=${result.counts.skipped} errors=${result.counts.error}`
+        );
+      } else {
+        console.error(
+          `morning-dispatch: meeting=${target.meetingId} reason=${target.reason} guard failed code=${result.code}: ${result.error}`
+        );
+      }
+
+      targets.push({
+        meetingId: target.meetingId,
+        meetingDate: target.meetingDate,
+        reason: target.reason,
+        action: "dispatched",
+        result,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error(
+        `morning-dispatch: meeting=${target.meetingId} reason=${target.reason} threw (infra error):`,
+        msg
+      );
+      targets.push({
+        meetingId: target.meetingId,
+        meetingDate: target.meetingDate,
+        reason: target.reason,
+        action: "dispatched",
+        result: null,
+        infraError: { code: "infra-error", message: msg },
+      });
+    }
   }
 
-  const mtg = await getMeetingByDate(today);
-  if (!mtg) {
-    return { weekday, ranDispatch: false, meetingId: null, result: null };
-  }
-
-  // iter-027 (T-005, arch 6.1): cron předává svoje runId, aby fáze 2 nebyla
-  // samostatný běh — všechny události dispatche sdílejí runId s cron.started.
-  const result = await runVotingDispatch(mtg.id, { mode: "start", actor: "cron", runId });
-
-  if (result.ok) {
-    console.log(
-      `thursday-dispatch: meeting=${mtg.id} statusBefore=${result.statusBefore} ` +
-        `statusAfter=${result.statusAfter} sent=${result.counts.sent} ` +
-        `skipped=${result.counts.skipped} errors=${result.counts.error}`
-    );
-  } else {
-    console.error(`thursday-dispatch: meeting=${mtg.id} guard failed code=${result.code}: ${result.error}`);
-  }
-
-  return { weekday, ranDispatch: true, meetingId: mtg.id, result };
+  return { weekdayPrague: plan.weekdayPrague, todayPrague: plan.todayPrague, targets };
 }
 
 /**
- * Sestaví `WarningInput` (arch iter-026 3.4) z `ThursdayDispatchOutcome`
- * fáze 2 (iter-026, T-006). Nesahá na `runVotingDispatch` ani na
- * `voting-dispatch.ts` — jen z návratové hodnoty fáze 2 (včetně
- * `infraError`, T-006r, MAJOR-1) odvozuje, co `decideThursdayWarning`
- * potřebuje.
- *
- * `dispatch.infraError` má přednost před `dispatch.result` — obojí najednou
- * nikdy nenastane (buď `runThursdayDispatch()` vrátila `result`, nebo
- * vyhodila výjimku a handler() ji nahradil `infraError`), ale `??` dává
- * najevo, že jde o dvě alternativní cesty ke stejnému poli, ne o prioritu.
+ * Sestaví `WarningInput` (arch 3.4, 3.7) z `MorningDispatchOutcome` fáze 2.
+ * Nesahá na `runVotingDispatch` ani na `voting-dispatch.ts` — jen z
+ * návratové hodnoty fáze 2 (včetně `infraError`, T-006r MAJOR-1) odvozuje,
+ * co `decideThursdayWarning` potřebuje. `meeting`/`dispatchFailure`/
+ * `failedRecipients` jdou VÝHRADNĚ z cíle `thursday-autostart` (beze změny
+ * proti iter-026/027 — tenhle cíl existuje jen ve čtvrtek). `deferredFirstDispatch`
+ * (D8, iter-028) jde z cíle `deferred-send`, pokud v tomhle běhu existoval.
  */
 async function buildWarningInput(
-  dispatch: ThursdayDispatchOutcome,
+  dispatch: MorningDispatchOutcome,
   today: string
 ): Promise<WarningInput> {
-  const meeting = await resolveWarningMeeting(dispatch, today);
-  const { failedRecipients, membersWithoutEmail } = deriveWarningSignals(dispatch.result);
+  const thursdayTarget =
+    dispatch.targets.find((t) => t.reason === "thursday-autostart") ?? null;
+  const deferredTarget =
+    dispatch.targets.find((t) => t.reason === "deferred-send") ?? null;
+
+  const meeting = await resolveWarningMeeting(thursdayTarget, today);
+  const { failedRecipients, membersWithoutEmail } = deriveWarningSignals(
+    thursdayTarget?.result ?? null
+  );
+  const deferredFirstDispatch = await buildDeferredFirstDispatch(deferredTarget);
 
   return {
-    weekdayPrague: dispatch.weekday,
+    weekdayPrague: dispatch.weekdayPrague,
     todayIso: today,
     meeting,
     dispatchFailure:
-      dispatch.infraError ??
-      (dispatch.result && !dispatch.result.ok
-        ? { code: dispatch.result.code, message: dispatch.result.error }
+      thursdayTarget?.infraError ??
+      (thursdayTarget?.result && !thursdayTarget.result.ok
+        ? { code: thursdayTarget.result.code, message: thursdayTarget.result.error }
         : null),
     failedRecipients,
     membersWithoutEmail,
+    deferredFirstDispatch,
   };
 }
 
 /**
- * Stav schůzky PO fázi 2 pro WarningInput.meeting.
+ * Stav schůzky PO cíli `thursday-autostart` pro WarningInput.meeting.
  *
- * Když `dispatch.result.ok === true`, stav je přímo v něm (meetingId,
+ * Když `target.result.ok === true`, stav je přímo v něm (meetingId,
  * meetingDate, statusAfter) — žádný extra dotaz.
  *
- * Když guard padl (`ok:false`), `VotingDispatchResult` nese jen `code` a
- * `error`, ne datum/stav schůzky (guard padl PŘED jakýmkoli zápisem, takže
- * stav je nezměněný, ale tahle informace se nikam nepropsala). Nejjednodušší
- * a nejspolehlivější je stav čerstvě dotáhnout přes `getMeetingByDate` — ta
- * samá funkce, kterou už fáze 2 volala, nulté rozšiřování
- * `ThursdayDispatchOutcome` (T-005, nesahat). `date` vychází vždy na
- * `today`, protože `getMeetingByDate(today)` ve fázi 2 vrátila právě tuhle
- * schůzku.
- *
- * `dispatch.infraError` (T-006r, MAJOR-1) je stejný případ jako `ok:false`
- * — nezná datum/stav — ale navíc nemusí znát ani `meetingId` (výjimka mohla
- * padnout uvnitř `runThursdayDispatch()` ještě dřív, než se `mtg` stihla
- * dosadit). Proto se `getMeetingByDate` zkouší i bez `meetingId`, dokud je
- * `infraError` nastaven — je to ta samá idempotentní funkce, žádné nové
- * riziko, jen druhý pokus o dotaz, který mohl (transientně) selhat poprvé.
+ * Když guard padl (`ok:false`) nebo přišel `infraError`, `VotingDispatchResult`
+ * nese jen `code`/`error` nebo nic — guard/výjimka padly PŘED jakýmkoli
+ * zápisem, takže stav schůzky je nezměněný, jen se to nikam nepropsalo.
+ * Nejjednodušší je stav čerstvě dotáhnout přes `getMeetingByDate` — ta samá
+ * funkce, jejíž výsledek `planMorningDispatch` dostal jako kandidáta.
  */
 async function resolveWarningMeeting(
-  dispatch: ThursdayDispatchOutcome,
+  thursdayTarget: MorningDispatchTargetOutcome | null,
   today: string
 ): Promise<{ id: string; date: string; status: string } | null> {
-  if (!dispatch.ranDispatch) return null; // není čtvrtek, nebo žádná schůzka na dnešek
+  if (!thursdayTarget) return null; // není čtvrtek, nebo žádná schůzka na dnešek
 
-  if (dispatch.result && dispatch.result.ok) {
+  if (thursdayTarget.result && thursdayTarget.result.ok) {
     return {
-      id: dispatch.result.meetingId,
-      date: dispatch.result.meetingDate,
-      status: dispatch.result.statusAfter,
+      id: thursdayTarget.result.meetingId,
+      date: thursdayTarget.result.meetingDate,
+      status: thursdayTarget.result.statusAfter,
     };
   }
 
-  if (!dispatch.meetingId && !dispatch.infraError) return null;
   const row = await getMeetingByDate(today);
   return row ? { id: row.id, date: row.date, status: row.status } : null;
 }
 
 /**
- * `failedRecipients` a `membersWithoutEmail` z `dispatch.result.recipients`
+ * D8 (arch 3.7, R10): sestaví `deferredFirstDispatch` pro `decideThursdayWarning`,
+ * ale JEN když je tenhle běh prvním dnem, kdy cíl `deferred-send` aspoň
+ * něco poslal nebo se o to pokusil (`isFirstDispatch`) — rutinní každodenní
+ * dosílání zbytku (nebo `action:"nothing-to-send"`, kdy se nic ani
+ * nezkoušelo) se sem nikdy nedostane, aby varování nespamovalo, dokud se
+ * poslední člen nedošle.
+ */
+async function buildDeferredFirstDispatch(
+  target: MorningDispatchTargetOutcome | null
+): Promise<WarningInput["deferredFirstDispatch"]> {
+  if (!target || target.action === "nothing-to-send") return null;
+  if (target.result && !isFirstDispatch(target.result)) return null;
+
+  if (target.result && target.result.ok) {
+    const { failedRecipients } = deriveWarningSignals(target.result);
+    return {
+      meeting: {
+        id: target.result.meetingId,
+        date: target.result.meetingDate,
+        status: target.result.statusAfter,
+      },
+      dispatchFailure: null,
+      failedRecipients,
+    };
+  }
+
+  // ok:false (guard) nebo infraError (výjimka) — stav schůzky se nezměnil,
+  // dotáhnout ho stejně jako u resolveWarningMeeting pro čtvrteční cíl.
+  const row = await getMeetingByDate(target.meetingDate);
+  const meeting = row
+    ? { id: row.id, date: row.date, status: row.status }
+    : { id: target.meetingId, date: target.meetingDate, status: "voting" };
+
+  const dispatchFailure =
+    target.infraError ??
+    (target.result && !target.result.ok
+      ? { code: target.result.code, message: target.result.error }
+      : null);
+
+  return { meeting, dispatchFailure, failedRecipients: [] };
+}
+
+/**
+ * `failedRecipients` a `membersWithoutEmail` z `result.recipients`
  * (arch 9.1) — jen když `ok:true`; při `ok:false` se nic neposílalo, takže
  * obojí je prázdné (rule 3 v decideThursdayWarning stejně převezme dřív).
  */
@@ -185,32 +334,46 @@ function deriveWarningSignals(result: VotingDispatchResult | null): {
  * Internal handler for /api/cron/close-voting
  *
  * Vercel Hobby: 1 cron job, runs once daily at 05:00 UTC.
- *   Summer (CEST, UTC+2): 05:00 UTC = 07:00 local — the intended Thursday 7:00 run.
- *   Winter (CET, UTC+1):  05:00 UTC = 06:00 local — DST drift, accepted (no comments in vercel.json).
+ *   Summer (CEST, UTC+2): 05:00 UTC = 07:00 local — the intended 7:00 run.
+ *   Winter (CET, UTC+1):  05:00 UTC = 06:00 local — DST drift, accepted (D6, vercel.json beze změny).
  *
- * Pořadí fází (arch iter-026 9.1) — POŘADÍ JE ZÁVAZNÉ:
+ * Pořadí fází (arch iter-026 9.1, rozšířeno iter-028 arch 5.3) — POŘADÍ JE ZÁVAZNÉ:
  * Fáze 1  Zavřít vypršená hlasování.        MUSÍ BÝT PRVNÍ — uvolní guard
  *                                            "max jedna aktivní schůzka"
  *                                            (arch 2.5) dřív, než se cokoli
  *                                            aktivuje. Bez tohoto pořadí by
  *                                            27.8. hlasování ze 13.8. pořád
  *                                            blokovalo spuštění nové schůzky.
- * Fáze 2  Spuštění hlasování na dnešek.      Jen ve čtvrtek, deleguje na
- *                                            runVotingDispatch (jádro sdílené
- *                                            s tlačítkem StartVotingPanel).
- * Fáze 3  Varování management týmu.          T-006 (nesahat, mimo scope T-005).
- * Fáze 4  Reporty za schůzky zavřené ve fázi 1.  Schválně až za fází 2 (a
- *                                            budoucí fází 3) — není časově
- *                                            kritické.
+ * Fáze 2  Ranní rozeslání hlasovacích odkazů.  ZMĚNA iter-028 (T-005, arch
+ *                                            3.4) — `thursday-autostart`
+ *                                            (jen ve čtvrtek, jako dřív) i
+ *                                            `deferred-send` (kterýkoli den,
+ *                                            doslání běžícímu hlasování),
+ *                                            oba `deliver:"now"`, deleguje
+ *                                            na runVotingDispatch (jádro
+ *                                            sdílené s tlačítkem
+ *                                            StartVotingPanel).
+ * Fáze 3  Varování management týmu.          ZMĚNA iter-028 (T-005, texty,
+ *                                            D8) — i mimo čtvrtek při
+ *                                            prvním rozeslání.
+ * Fáze 4  Reporty za schůzky zavřené ve fázi 1.  Schválně až za fází 2 a 3
+ *                                            — není časově kritické.
  * Fáze 5  Obnova expirujících členských tokenů (beze změny).
  * Fáze 6  Úklid auth_throttle (beze změny).
- * Fáze 7  Retence ops_event (nová, iter-027 T-005, arch 10). Vlastní
- *                                            try/catch — stejný vzor jako
- *                                            fáze 6, pád retence nesmí
- *                                            shodit zbytek cronu.
+ * Fáze 7  Retence ops_event (iter-027 T-005, arch 10). Vlastní try/catch —
+ *                                            stejný vzor jako fáze 6, pád
+ *                                            retence nesmí shodit zbytek
+ *                                            cronu.
+ * Fáze 8  Připomínky (iter-028, T-006, arch 4.4, 5.3). NOVÁ, POSLEDNÍ,
+ *                                            vlastní try/catch (F3 review
+ *                                            T-002) — pád nesmí shodit nic
+ *                                            před ní. Brzda rozpočtu (arch
+ *                                            5.4, `shouldStopForBudget`)
+ *                                            počítá od `t0` handleru, ne od
+ *                                            začátku téhle fáze.
  *
  * iter-027 (T-005, arch 6.4): `runId = randomUUID()` sdílí jeden běh napříč
- * všemi fázemi (fáze 2 dostává stejné runId, viz runThursdayDispatch).
+ * všemi fázemi (fáze 2 dostává stejné runId, viz runMorningDispatch).
  * Zápisy do ops_event jsou samostatné řádky vedle existujícího `console.*` —
  * žádná podmínka, žádný `return`, žádné pořadí fází se nemění (logOpsEvent
  * nikdy nevyhazuje, D2).
@@ -218,6 +381,11 @@ function deriveWarningSignals(result: VotingDispatchResult | null): {
  * Protected by CRON_SECRET — Vercel sends this header automatically for cron jobs.
  */
 async function handler(request: NextRequest) {
+  // iter-028 (T-006, arch 5.3, 5.4): t0 handleru — brzda rozpočtu fáze 8
+  // (shouldStopForBudget) počítá od TOHOHLE okamžiku, ne od začátku fáze 8,
+  // aby zaseklé volání dřív v běhu (Resend, DB) opravdu ubralo fázi 8 čas.
+  const t0 = new Date();
+
   // Verify CRON_SECRET
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -301,29 +469,42 @@ async function handler(request: NextRequest) {
       );
     }
 
-    // ── Fáze 2: Spuštění hlasování na dnešek (jen čtvrtek), deleguje na jádro ──
-    // Vlastní try/catch (review MAJOR-1, T-006r): `runVotingDispatch` uvnitř
-    // `runThursdayDispatch` záměrně propouští skutečnou infra chybu (DB
-    // nedostupná mimo pět guard kódů, viz voting-dispatch.ts hlavička) jako
-    // výjimku. Bez tohodle try/catch by taková výjimka spadla až do
-    // vnějšího catch celého handleru (dole) a fáze 3-6 by ten den
-    // neproběhly vůbec — přesně ta třída selhání ("cron tiše neudělá nic"),
-    // kvůli které iterace vznikla. Nesahá na voting-dispatch.ts (2.2/2.3) —
-    // jen zachycuje výjimku na úrovni cronu a syntetizuje náhradní stav, se
-    // kterým dál pracuje fáze 3 (decideThursdayWarning, pravidlo
-    // dispatch-failed).
-    let dispatch: ThursdayDispatchOutcome;
+    // ── Fáze 2: Ranní rozeslání hlasovacích odkazů (iter-028, arch 3.4) ──
+    // `runMorningDispatch` obaluje KAŽDÝ cíl vlastním try/catch (review
+    // MAJOR-1, T-006r vzor) — tenhle vnější try/catch je jen pojistka pro
+    // výjimku PŘED smyčkou (getMorningDispatchCandidates,
+    // planMorningDispatch). Bez ní by taková chyba spadla až do vnějšího
+    // catch celého handleru (dole) a fáze 3-7 by ten den neproběhly vůbec —
+    // přesně ta třída selhání ("cron tiše neudělá nic"), kvůli které
+    // iterace vznikla.
+    let dispatch: MorningDispatchOutcome;
     try {
-      dispatch = await runThursdayDispatch(today, runId);
+      dispatch = await runMorningDispatch(today, new Date(), runId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error("close-voting cron: thursday dispatch threw (infra error):", msg);
+      console.error("close-voting cron: morning dispatch threw (infra error):", msg);
+      const weekdayPrague = weekdayInPrague();
       dispatch = {
-        weekday: weekdayInPrague(),
-        ranDispatch: true,
-        meetingId: null,
-        result: null,
-        infraError: { code: "infra-error", message: msg },
+        weekdayPrague,
+        todayPrague: today,
+        // Chyba nastala PŘED zjištěním cílů — synteticky doplníme jen
+        // čtvrteční cíl (stejně jako dřív, T-006r MAJOR-1), aby fáze 3
+        // nehlásila zavádějící "no-meeting". Mimo čtvrtek zůstává tenhle pád
+        // bez varování (D8 potřebuje konkrétní cíl, který tu chybí) —
+        // zdokumentováno v handoffu jako známé omezení.
+        targets:
+          weekdayPrague === "Thursday"
+            ? [
+                {
+                  meetingId: "",
+                  meetingDate: today,
+                  reason: "thursday-autostart",
+                  action: "dispatched",
+                  result: null,
+                  infraError: { code: "infra-error", message: msg },
+                },
+              ]
+            : [],
       };
     }
 
@@ -450,14 +631,43 @@ async function handler(request: NextRequest) {
       retentionResult = { purged: 0, error: msg };
     }
 
+    // ── Fáze 8 (nová, iter-028 T-006, arch 4.4, 5.3): připomínky ──
+    // POSLEDNÍ fáze cronu, vlastní try/catch (F3 review T-002, 13.2 bod 9)
+    // — pád nesmí shodit žádnou fázi před ní (uzavření, odkazy, varování,
+    // reporty jsou hotové dřív). Brzda rozpočtu uvnitř `runReminders` počítá
+    // od `t0` handleru, ne od začátku týhle fáze (arch 5.4). Chyba jde do
+    // `remindersError`, a tím i do `anyPhaseError` (F3) — `cron.finished`
+    // dostane `severity: warn`. Jednotlivá selhání odeslání
+    // (`reminder.failed`) tam NEpatří, stejně jako u dispatche — ta řeší
+    // `partial` v run-status.ts (arch 7).
+    let remindersResult: ReminderRunResult | null = null;
+    let remindersError: string | undefined;
+    try {
+      remindersResult = await runReminders(runId, nextSeq, t0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.error("close-voting cron: reminders phase failed:", msg);
+      remindersError = msg;
+      await logOpsEvent({
+        runId,
+        seq: nextSeq(),
+        source: "cron",
+        kind: "cron.phase-failed",
+        severity: "error",
+        actor: "cron",
+        code: "phase-8-reminders",
+        message: msg,
+      });
+    }
+
     const anyPhaseError =
       closeErrors.length > 0 ||
-      !!dispatch.infraError ||
-      (dispatch.result !== null && !dispatch.result.ok) ||
+      dispatch.targets.some((t) => !!t.infraError || (t.result !== null && !t.result.ok)) ||
       !!warningResult.error ||
       reportResults.some((r) => !!r.error) ||
       !!(tokenRenewalResult.errors && tokenRenewalResult.errors.length > 0) ||
-      !!retentionResult.error;
+      !!retentionResult.error ||
+      !!remindersError;
 
     await logOpsEvent({
       runId,
@@ -469,10 +679,31 @@ async function handler(request: NextRequest) {
       message: "Cron close-voting dokoncen.",
       detail: {
         closed: closedIds.length,
-        dispatchRan: dispatch.ranDispatch,
+        // iter-028 (T-005, arch 7): pole cílů ranního rozeslání — i "žádný
+        // cíl dnes" (prázdné pole) je platný, dohledatelný výsledek.
+        dispatch: dispatch.targets.map((t) => ({
+          meetingDate: t.meetingDate,
+          reason: t.reason,
+          action: t.action,
+        })),
         warningSent: warningResult.sent ?? 0,
         reportsSent: reportResults.length,
         retentionPurged: retentionResult.purged,
+        // iter-028 (T-006, arch 12): nested pod vlastním klíčem, ne na první
+        // úrovni — `sent`/`error`/`totalMembers` na první úrovni by si
+        // `isDispatchFinishedDetail` (lib/ops/run-status.ts) spletlo
+        // s dispatchem (13.2 bod 13).
+        reminders: remindersResult
+          ? {
+              ran: remindersResult.ran,
+              round: remindersResult.round ?? null,
+              eligible: remindersResult.eligible,
+              sent: remindersResult.sent,
+              failed: remindersResult.failed,
+              claimRejected: remindersResult.claimRejected,
+              budgetStopped: remindersResult.budgetStopped,
+            }
+          : null,
       },
     });
 
@@ -480,16 +711,22 @@ async function handler(request: NextRequest) {
       closed: closedIds.length,
       closedIds: closedIds.length > 0 ? closedIds : undefined,
       dispatch: {
-        weekday: dispatch.weekday,
-        ranDispatch: dispatch.ranDispatch,
-        meetingId: dispatch.meetingId,
-        result: dispatch.result,
-        infraError: dispatch.infraError,
+        weekday: dispatch.weekdayPrague,
+        targets: dispatch.targets.map((t) => ({
+          meetingId: t.meetingId,
+          meetingDate: t.meetingDate,
+          reason: t.reason,
+          action: t.action,
+          result: t.result,
+          infraError: t.infraError,
+        })),
       },
       warning: warningResult,
       reports: reportResults.length > 0 ? reportResults : undefined,
       tokenRenewal: tokenRenewalResult,
       retention: retentionResult,
+      reminders: remindersResult ?? undefined,
+      remindersError,
       errors: closeErrors.length > 0 ? closeErrors : undefined,
     });
   } catch (error) {
