@@ -68,6 +68,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public info pages about chapter rules (no session, static) — LL-005 (iter-029)
+  // Exact "/pravidla" or anything under "/pravidla/" (incl. /pravidla/zdroje/*.pdf,
+  // logo and OG images). NOT "/pravidlaX", NOT "/pravidla-x", NOT "/api/...".
+  if (pathname === "/pravidla" || pathname.startsWith("/pravidla/")) {
+    return NextResponse.next();
+  }
+
   // Get session from cookie
   const response = NextResponse.next();
   const session = await getIronSession<SessionData>(request, response, sessionOptions);

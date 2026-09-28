@@ -18,6 +18,15 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "no-referrer" },
         ],
       },
+      {
+        // Public BNI PDFs behind the info pages (iter-029, arch_iter-029_T-001
+        // section 7.5). PDFs cannot carry a robots meta tag, so noindex goes
+        // into a response header.
+        source: "/pravidla/zdroje/:file*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
     ];
   },
 };
