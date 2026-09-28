@@ -1,0 +1,292 @@
+/*
+ * Info stránky /pravidla (iter-029, T-007, arch_iter-029_T-001 sekce 6, 9, 10).
+ *
+ * Výchozí stav = běžný článek: mini osa u každého kroku, sticky skrytý.
+ * Sticky režim zapne až `.info-root[data-scrolly="on"]` (inline skript
+ * v layoutu) a jen při `prefers-reduced-motion: no-preference`.
+ * Bez JS, s reduced motion a v tisku zůstává článek.
+ */
+
+.info-root {
+  background-color: var(--color-surface);
+  overflow-wrap: break-word;
+}
+
+/* Akcent v barvě loga BNI Pilsner Fountains (doplnění orchestrátora). */
+.info-brand-bar {
+  height: 4px;
+  background-color: #cf2031;
+}
+
+/* Kotvy nesmí zajet pod sticky pruh na mobilu. */
+.info-root [id] {
+  scroll-margin-top: 120px;
+}
+
+@media (min-width: 1024px) {
+  .info-root [id] {
+    scroll-margin-top: 2rem;
+  }
+}
+
+/* Dlouhé anglické citace a adresy nesmí roztáhnout stránku (390 px). */
+.info-quote,
+.info-print-sources li {
+  overflow-wrap: anywhere;
+}
+
+.info-print-only {
+  display: none;
+}
+
+/* Sticky je jen doplněk, výchozí stav je skrytý. */
+.info-sticky {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .info-root[data-scrolly="on"] .info-sticky {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  /* Mini osy jen vizuálně skryté, čtečky je dál čtou (role="img"). */
+  .info-root[data-scrolly="on"] .info-inline-visual {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Krok musí být dost vysoký, aby si stav osy stihl změnit. Stránka bez
+     vizuálu (info-layout--none) výšku nepotřebuje (T-007r, m-2). */
+  .info-root[data-scrolly="on"] .info-layout:not(.info-layout--none) .info-step {
+    min-height: 70vh;
+    min-height: 70svh;
+  }
+
+  .info-mark {
+    transition:
+      fill 250ms ease,
+      stroke 250ms ease,
+      opacity 250ms ease;
+  }
+
+  .info-status-dot {
+    transition: background-color 250ms ease;
+  }
+}
+
+/* Desktop: mřížka 5fr / 7fr, sticky vlevo. Bez sticky zůstává jeden sloupec. */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .info-root[data-scrolly="on"] .info-layout:not(.info-layout--none) {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    column-gap: 3rem;
+    align-items: start;
+  }
+
+  .info-root[data-scrolly="on"] .info-sticky {
+    top: 15vh;
+  }
+}
+
+.info-flow {
+  max-width: 42rem;
+}
+
+@media (min-width: 1024px) {
+  .info-root[data-scrolly="on"] .info-flow {
+    max-width: 36rem;
+  }
+}
+
+@media print {
+  @page {
+    margin: 15mm;
+  }
+
+  .info-root,
+  .info-root * {
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  .info-root {
+    background: #fff !important;
+  }
+
+  .info-sticky,
+  .info-skip,
+  .info-print-button {
+    display: none !important;
+  }
+
+  /* Barva stavu osy (např. červená „Výbor jedná") i v tisku. */
+  .info-status-dot {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .info-print-only {
+    display: block !important;
+  }
+
+  /* Mini osy se tisknou vždy, i když byl zapnutý sticky režim. */
+  .info-inline-visual {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 1rem 0 0 !important;
+    overflow: visible !important;
+    clip: auto !important;
+    white-space: normal !important;
+  }
+
+  .info-step,
+  .info-option,
+  .info-note,
+  .info-print-group li {
+    min-height: 0 !important;
+    break-inside: avoid;
+  }
+
+  .info-layout {
+    display: block !important;
+  }
+
+  .info-flow {
+    max-width: none !important;
+  }
+
+  /* Rámeček „u nás v chapteru": plný okraj, význam nese text štítku. */
+  .info-note {
+    border: 1px solid #000 !important;
+    border-left-width: 4px !important;
+    background: #fff !important;
+  }
+
+  .info-root a {
+    text-decoration: none;
+  }
+
+  .info-summary,
+  .info-step--detour {
+    background: #fff !important;
+    border: 1px solid #999 !important;
+  }
+}
+
+/* === Minikomiksy (T-010k) === */
+.info-comic {
+  display: grid;
+  grid-template-columns: var(--info-comic-cols, 1fr);
+  gap: 6px;
+  margin-left: 0;
+  margin-right: 0;
+  break-inside: avoid;
+}
+
+/* Úzký displej: pruh se 4 úzkými panely do dvou sloupců. */
+@media (max-width: 479px) {
+  .info-comic--wrap {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.info-comic-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 2px solid #1a1a1a;
+  border-radius: 6px;
+  background-color: #fbfaf7;
+}
+
+.info-comic-caption {
+  margin: 0;
+  padding: 6px 5px 2px;
+  font-family: var(--font-info-comic), "Comic Sans MS", cursive;
+  font-size: 12.5px;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+  color: #1a1a1a;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .info-comic-caption {
+    font-size: 14px;
+  }
+}
+
+.info-comic-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: auto;
+}
+
+.info-comic--illustration {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Úvodní ilustrace: na mobilu pod popisem, na desktopu vpravo od nadpisu. */
+.info-comic-hero {
+  position: relative;
+  margin: 1rem 0 0;
+  max-width: 360px;
+}
+
+.info-comic-hero-caption {
+  position: absolute;
+  left: 12%;
+  top: 6%;
+  width: 40%;
+  padding: 0;
+  font-size: 13px;
+}
+
+@media (min-width: 1024px) {
+  .info-header--hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    column-gap: 2.5rem;
+    align-items: start;
+  }
+
+  .info-header--hero > .info-comic-hero {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    margin-top: 0;
+  }
+
+  .info-header--hero > :not(.info-comic-hero) {
+    grid-column: 1;
+  }
+}
+
+@media print {
+  .info-comic,
+  .info-comic-hero {
+    break-inside: avoid;
+    max-width: 150mm;
+  }
+
+  .info-comic-panel,
+  .info-comic-hero img,
+  .info-comic--illustration img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
