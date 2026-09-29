@@ -21,6 +21,7 @@
     "test:meeting-token": "tsx scripts/test-meeting-token.ts",
     "test:info-pages": "tsx scripts/test-info-pages.ts",
     "test:iter-029": "npm run test:info-pages",
+    "test:iter-030": "npm run test:info-pages",
     "test:iter-028": "npm run test:voting-window && npm run test:warning-plan && npm run test:morning-dispatch && npm run test:ops-events && npm run test:reminder-plan && npm run test:reminder-template && npm run test:meeting-token",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",

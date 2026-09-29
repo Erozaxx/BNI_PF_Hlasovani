@@ -4,11 +4,13 @@
  * varianta `highlighted` (ta má pevně červený okraj).
  */
 import { Card } from "@/components/ui/Card";
+import { createRoleLinker, linkFact, type RoleLinkOptions } from "@/lib/info-pages/glossary";
 import type { Branch, BranchOption, ChapterNote, VisualKind } from "@/lib/info-pages/types";
 import { ChapterNotes } from "./ChapterNoteBox";
 import { ChapterSide } from "./ChapterSide";
 import { ComicStrip } from "./ComicStrip";
 import { InlineVisual } from "./InlineVisual";
+import { RichText } from "./RichText";
 import { SourceNote } from "./SourceNote";
 
 const TONE_BORDER: Record<BranchOption<VisualKind>["tone"], string> = {
@@ -42,11 +44,16 @@ function OptionCard<K extends VisualKind>({
   option,
   kind,
   notes,
+  links,
 }: {
   option: BranchOption<K>;
   kind: K;
   notes: ChapterNote[];
+  links: RoleLinkOptions;
 }) {
+  const link = createRoleLinker(links);
+  const story = option.story.map(link);
+  const facts = option.chapter.map((fact) => linkFact(link, fact));
   const titleId = `${option.id}-title`;
   // Možnost jen s odkazem dál (A2, A4): krátká karta bez mini osy.
   const linkOnly = option.chapter.length === 0 && Boolean(option.next);
@@ -59,12 +66,14 @@ function OptionCard<K extends VisualKind>({
         </h3>
         {option.comic && <ComicStrip comic={option.comic} />}
         <div className="mt-3 space-y-4 text-lg leading-relaxed text-text-main">
-          {option.story.map((p, i) => (
-            <p key={i}>{p}</p>
+          {story.map((segments, i) => (
+            <p key={i}>
+              <RichText segments={segments} />
+            </p>
           ))}
         </div>
         {!linkOnly && <InlineVisual kind={kind} state={option.visual} />}
-        <ChapterSide facts={option.chapter} />
+        <ChapterSide facts={option.chapter} texts={facts} />
         <ChapterNotes ids={option.chapterNotes} notes={notes} />
         <SourceNote facts={option.chapter} summary={option.sourcesSummary} />
         {option.next && <NextLink href={`#${option.next}`} label={option.nextLabel ?? option.title} />}
@@ -77,10 +86,12 @@ export function BranchBlock<K extends VisualKind>({
   branch,
   kind,
   notes,
+  links,
 }: {
   branch: Branch<K>;
   kind: K;
   notes: ChapterNote[];
+  links: RoleLinkOptions;
 }) {
   const titleId = `${branch.id}-title`;
   return (
@@ -90,7 +101,7 @@ export function BranchBlock<K extends VisualKind>({
       </h2>
       <div className="mt-5 space-y-5">
         {branch.options.map((option) => (
-          <OptionCard key={option.id} option={option} kind={kind} notes={notes} />
+          <OptionCard key={option.id} option={option} kind={kind} notes={notes} links={links} />
         ))}
       </div>
     </section>

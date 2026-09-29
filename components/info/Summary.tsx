@@ -1,12 +1,22 @@
 /** Shrnutí, „Kde to najdeš" a legenda osy (arch 2 scéna 9, 11). */
 import { TEMPLATE_TEXTS } from "@/content/pravidla/texty-sablony";
+import { createRoleLinker, type RoleLinkOptions } from "@/lib/info-pages/glossary";
 import { sourceHref, sourceLinkText, sourceShortRef } from "@/lib/info-pages/sources";
 import type { InfoPage, VisualKind } from "@/lib/info-pages/types";
 import { SUMMARY_ANCHOR } from "@/lib/info-pages/types";
+import { RichText } from "./RichText";
 import { renderLegend } from "./visuals/registry";
 
-export function Summary<K extends VisualKind>({ page }: { page: InfoPage<K> }) {
+export function Summary<K extends VisualKind>({
+  page,
+  links,
+}: {
+  page: InfoPage<K>;
+  links: RoleLinkOptions;
+}) {
   const { summary } = page;
+  const link = createRoleLinker(links);
+  const points = summary.points.map((point) => link(point.text));
   const legend = renderLegend(page.visual, 3);
   return (
     <section
@@ -19,8 +29,10 @@ export function Summary<K extends VisualKind>({ page }: { page: InfoPage<K> }) {
       </h2>
       {summary.subtitle && <p className="mt-1 text-lg text-text-main">{summary.subtitle}</p>}
       <ol className="mt-5 list-decimal space-y-3 pl-6 text-lg leading-relaxed text-text-main">
-        {summary.points.map((point, i) => (
-          <li key={i}>{point.text}</li>
+        {points.map((segments, i) => (
+          <li key={i}>
+            <RichText segments={segments} />
+          </li>
         ))}
       </ol>
 
@@ -31,7 +43,21 @@ export function Summary<K extends VisualKind>({ page }: { page: InfoPage<K> }) {
         {summary.whereToFind.map((ref, i) => (
           <li key={i}>
             <span className="font-medium">{sourceShortRef(ref)}</span>
-            {ref.labelCs && <>: {ref.labelCs}</>}
+            {ref.labelCs && (
+              <>
+                :{" "}
+                {ref.href ? (
+                  <a
+                    href={ref.href}
+                    className="rounded text-navy underline underline-offset-2 focus:outline-none focus-visible:shadow-focus"
+                  >
+                    {ref.labelCs}
+                  </a>
+                ) : (
+                  ref.labelCs
+                )}
+              </>
+            )}
             <br />
             <a
               href={sourceHref(ref)}

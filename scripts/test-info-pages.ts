@@ -9,6 +9,12 @@
  * 3. Čisté funkce (formát data, šablony, shrnutí zdrojů, odkazy na PDF).
  * 4. Statický render stránky přes react-dom/server (bez JS, bez DB):
  *    štítky „u nás v chapteru", vypnutá položka, citace s lang="en".
+ * 6. iter-030 (T-007b, T-011, případy 58 až 60): reálná stránka rolí,
+ *    odkazy z absence na její kotvy, ilustrace R1 až R11.
+ * 5. iter-030 (T-007a, případy 47 až 57): glosář a `linkRoles`, absence
+ *    s odkazy beze změny textu, schéma vedení, referenční část a validátor
+ *    nad fiktivní stránkou `role` (jen v testu, ne v registru), zákaz
+ *    rozlišení závazné / doporučené. Spuštění: npm run test:iter-030
  */
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -18,6 +24,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ChapterNotes, chapterNoteLabel } from "../components/info/ChapterNoteBox";
 import { comicWraps } from "../components/info/ComicStrip";
 import { InfoPageView } from "../components/info/InfoPageView";
+import { barRows, LeadershipChart } from "../components/info/visuals/LeadershipChart";
+import { ROLE_GLOSSARY, ROLE_NAMES, type RoleGlossaryEntry } from "../content/pravidla/role-glosar";
+import { ROLE_COMICS } from "../content/pravidla/role-komiksy";
 import { CHAPTER_NOTES } from "../content/pravidla/u-nas-v-chapteru";
 import { TEMPLATE_TEXTS } from "../content/pravidla/texty-sablony";
 import {
@@ -28,7 +37,15 @@ import {
   joinCs,
   uniqueSources,
 } from "../lib/info-pages/format";
+import {
+  createRoleLinker,
+  linkRoles,
+  roleHref,
+  roleLinksEnabled,
+  type Segment,
+} from "../lib/info-pages/glossary";
 import { INFO_PAGES, getInfoPage } from "../lib/info-pages/registry";
+import { popoverPosition, roleSummaries } from "../lib/info-pages/role-popover";
 import { pickActiveStep } from "../lib/info-pages/scrolly";
 import { SOURCE_DOCS, sourceHref, sourceLinkText, sourceShortRef } from "../lib/info-pages/sources";
 import type {
@@ -38,12 +55,17 @@ import type {
   ComicPanel,
   Fact,
   InfoPage,
+  RoleCard,
+  RoleId,
+  RoleRelation,
   Scene,
   VisualKind,
 } from "../lib/info-pages/types";
+import { ROLE_IDS } from "../lib/info-pages/types";
 import {
   assertValidRegistry,
   findTextIssues,
+  validateGlossary,
   validateInfoPage,
   validateRegistry,
 } from "../lib/info-pages/validate";
@@ -130,6 +152,185 @@ function nonePage(): InfoPage<"none"> {
   };
 }
 
+// --- iter-030 (T-007a): fiktivní stránka rolí, jen v testu, ne v registru ---
+
+const TEST_REF = { doc: "ops-manual-2022" as const, page: 34, quoteEn: "Test quote for the role page." };
+
+function testFact(text: string): Fact {
+  return { text, sources: [TEST_REF] };
+}
+
+/** Karta s povinným polem „Nerozhoduje" (texty fiktivní, bez jmen). */
+function testCard(id: RoleId, title: string, extra: Partial<RoleCard> = {}): RoleCard {
+  return {
+    id,
+    title,
+    lead: `${title} je role v chapteru.`,
+    fields: [
+      { kind: "does", facts: [testFact("Dělá testovací věc.")] },
+      { kind: "notDecides", facts: [testFact("O členství rozhoduje členský výbor.")] },
+    ],
+    ...extra,
+  };
+}
+
+/** Minimální stránka `role` se schématem vedení a referenční částí. */
+function rolePage(): InfoPage<"leadership-chart"> {
+  return {
+    slug: "role",
+    title: "Testovací stránka rolí",
+    description: "Kdo o čem rozhoduje, testovací data.",
+    updated: "2026-09-29",
+    visual: "leadership-chart",
+    situations: [
+      { label: "Kdo rozhoduje o přijetí", anchor: "situace-prihlaska" },
+      { label: "Kdo je konzultant regionu", anchor: "konzultant-regionu" },
+      { label: "Co smí region", anchor: "prava-regionu" },
+    ],
+    intro: {
+      question: "Kdo o čem rozhoduje?",
+      lead: ["Viceprezident vede členský výbor. Výbor rozhoduje o členství."],
+      visual: { roles: [], srText: "Celé schéma vedení bez zvýraznění." },
+    },
+    steps: [
+      {
+        type: "scene",
+        id: "prihlaska-1",
+        label: "Přihláška, krok 1",
+        title: "Host přijde na schůzku",
+        story: [
+          "Tým hostitelů tě přivítá. Hostitelé ti po schůzce vysvětlí přihlášku.",
+          "Hostitelé a regionální tým pomáhají, viceprezident zatím čeká.",
+        ],
+        chapter: [testFact("Konzultant regionu může pomoct.")],
+        visual: {
+          roles: [
+            { role: "hostitele", relation: "acts" },
+            { role: "region", relation: "advises" },
+          ],
+          srText: "Provádí tým hostitelů, radí regionální kancelář.",
+        },
+      },
+      {
+        type: "scene",
+        id: "prihlaska-2",
+        label: "Přihláška, krok 2",
+        title: "Výbor hlasuje",
+        story: ["Člen výboru pro posouzení přihlášek prověří obor, pak hlasuje členský výbor."],
+        chapter: [testFact("Rozhoduje členský výbor.")],
+        visual: {
+          roles: [
+            { role: "clen", relation: "informed" },
+            { role: "vybor-prihlasky", relation: "acts" },
+            { role: "konzultant-regionu", relation: "approves" },
+            { role: "clensky-vybor", relation: "decides" },
+            { role: "viceprezident", relation: "advises" },
+          ],
+          srText: "Rozhoduje členský výbor, musí souhlasit konzultant regionu.",
+        },
+      },
+    ],
+    reference: {
+      title: "Vedení chapteru",
+      lead: ["Jádro vedení tvoří prezident, viceprezident a sekretář/pokladník."],
+      facts: [testFact("Neobsazené role vedení se obsadí do měsíce.")],
+      roles: [
+        testCard("prezident", "Prezident", { inChart: "nahoře" }),
+        testCard("viceprezident", "Viceprezident"),
+        testCard("clensky-vybor", "Členský výbor", {
+          fields: [
+            { kind: "does", facts: [testFact("Členský výbor přijímá nové členy, viceprezident ho vede.")] },
+            { kind: "decides", facts: [testFact("Výbor rozhoduje o volnu.")] },
+            { kind: "approval", facts: [testFact("Konzultant regionu potvrdí postup.")] },
+            { kind: "notDecides", facts: [testFact("O poplatcích nerozhoduje.")] },
+            { kind: "notDefined", facts: [testFact("Pravidla neurčují, kdo obsadí uvolněné místo ve výboru.")] },
+          ],
+          subAnchors: [
+            { id: "vybor-rust", title: "Růst chapteru", facts: [testFact("Volá chybějícím.")] },
+            { id: "vybor-prihlasky", title: "Posouzení přihlášek", facts: [testFact("Prověřuje uchazeče.")] },
+            { id: "vybor-zapojeni", title: "Zapojení členů", facts: [testFact("Hlídá prodloužení.")] },
+            { id: "vybor-vztahy", title: "Vztahy mezi členy", facts: [testFact("Přijímá stížnosti.")] },
+          ],
+        }),
+        testCard("sekretar-pokladnik", "Sekretář/pokladník"),
+        testCard("vzdelavaci-koordinator", "Vzdělávací koordinátor"),
+        testCard("koordinator-mentoru", "Koordinátor mentorů"),
+        testCard("hostitele", "Tým hostitelů"),
+        testCard("konzultant-regionu", "Konzultant regionu"),
+        testCard("region", "BNI a region", {
+          subAnchors: [{ id: "reditel-regionu", title: "Ředitel regionu", facts: [testFact("Souhlasí s výjimkou.")] }],
+        }),
+      ],
+      decisions: [
+        {
+          id: "situace-prihlaska",
+          situation: "Přihláška nového člena",
+          decides: "členský výbor",
+          approves: "–",
+          advises: "člen výboru pro přihlášky prověřuje, viceprezident určí termín",
+          informed: "uchazeč, prezident",
+          sources: [TEST_REF],
+        },
+        {
+          id: "situace-ctvrta-absence",
+          situation: "Čtvrtá absence",
+          decides: "členský výbor",
+          approves: "viceprezident a konzultant regionu",
+          advises: "člen výboru volá",
+          informed: "regionální kancelář",
+          sources: [TEST_REF],
+          link: { href: "/pravidla/absence#ctvrta-absence", label: "Podrobně na stránce absence" },
+        },
+      ],
+      rights: [
+        { id: "r1", text: "Pravidla se můžou měnit.", sources: [TEST_REF] },
+        { id: "r2", text: "Konzultanti regionu smí mít na schůzce prezentaci.", sources: [TEST_REF] },
+      ],
+    },
+    summary: { title: "Shrnutí", points: [{ text: "O členství rozhoduje členský výbor." }], whereToFind: [{ doc: "ops-manual-2022", page: 34 }] },
+    contacts: [{ role: "Viceprezident", when: "Když nevíš, kdo o tvé věci rozhoduje." }],
+    disclaimer: ["Stav k {updated}."],
+  };
+}
+
+function cloneRolePage(): InfoPage<"leadership-chart"> {
+  return JSON.parse(JSON.stringify(rolePage())) as InfoPage<"leadership-chart">;
+}
+
+function renderPage(page: InfoPage, extra: { roleLinks?: boolean } = {}): string {
+  return renderToStaticMarkup(
+    createElement(InfoPageView, { page, notes: CHAPTER_NOTES, baseUrl: "", ...extra })
+  );
+}
+
+/** Text bez značek (odkazy rolí jsou jen obal, text se nesmí změnit). */
+function textContent(html: string): string {
+  return html.replace(/<[^>]+>/g, "");
+}
+
+/** Odstavce a položky, ve kterých se počítají odkazy rolí. */
+function blocks(html: string): string[] {
+  return Array.from(html.matchAll(/<(p|li|td|dd)\b[^>]*>([\s\S]*?)<\/\1>/g)).map((m) => m[2]);
+}
+
+function roleLinkHrefs(html: string): string[] {
+  return Array.from(html.matchAll(/<a href="([^"]+)"[^>]*class="info-role-link/g)).map((m) => m[1]);
+}
+
+/** Rozměry WebP (VP8, VP8L, VP8X) bez závislostí. */
+function webpSize(buf: Buffer): { width: number; height: number } {
+  assert.equal(buf.toString("latin1", 0, 4), "RIFF");
+  assert.equal(buf.toString("latin1", 8, 12), "WEBP");
+  const chunk = buf.toString("latin1", 12, 16);
+  if (chunk === "VP8 ") return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+  if (chunk === "VP8L") {
+    const bits = buf.readUInt32LE(21);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+  }
+  if (chunk === "VP8X") return { width: buf.readUIntLE(24, 3) + 1, height: buf.readUIntLE(27, 3) + 1 };
+  throw new Error(`neznámý WebP chunk ${chunk}`);
+}
+
 /** Všechny soubory pod adresářem (rekurzivně). */
 function listFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -156,11 +357,11 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "02. C1 az C7 existuji, jsou approved a enabled (brief T-007, rozhodnuti 1)",
+    name: "02. C1 az C13 existuji, jsou approved a enabled (iter-029 C1 az C7, iter-030 C8 az C13, C14 neni)",
     run: () => {
       assert.deepEqual(
         CHAPTER_NOTES.map((n) => n.id),
-        ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]
+        ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13"]
       );
       for (const note of CHAPTER_NOTES) {
         assert.equal(note.status, "approved", note.id);
@@ -526,7 +727,10 @@ const cases: TestCase[] = [
         .map((ul) => (ul.match(/<li\b/g) ?? []).length)
         .reduce((a, b) => a + b, 0);
       assert.equal(rendered, facts.length);
-      for (const fact of facts) assert.ok(html.includes(fact.text.replace(/"/g, "&quot;")), fact.text);
+      // Od iter-030 jsou v textu odkazy na role, text se porovnává bez značek.
+      const plain = text.replace(/\s+/g, " ").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+      const noTags = html.replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+      for (const fact of facts) assert.ok(noTags.includes(fact.text) || plain.includes(fact.text), fact.text);
       const committee = renderToStaticMarkup(
         createElement(InfoPageView, { page: basePage, notes: CHAPTER_NOTES, baseUrl: "" })
       ).includes("bg-[#cf2031]");
@@ -768,6 +972,675 @@ const cases: TestCase[] = [
       const ids = clonePage();
       scene(ids, "uvod").id = "kontakty-title";
       assertHasError(errorsOf(ids), /id „kontakty-title" je rezervované/);
+    },
+  },
+  // --- iter-030 (T-007a): glosář, odkazy rolí, schéma vedení, referenční část ---
+  {
+    name: "47. glosar: realna data bez chyb, clen neni v glosari, tvary unikatni a neprazdne",
+    run: () => {
+      assert.deepEqual(validateGlossary(ROLE_GLOSSARY, INFO_PAGES), []);
+      assert.ok(!ROLE_GLOSSARY.some((e) => e.id === "clen"));
+      for (const id of ["vybor-prihlasky", "vybor-rust", "vybor-zapojeni", "vybor-vztahy", "reditel-regionu"]) {
+        assert.ok(ROLE_GLOSSARY.some((e) => e.id === id), id);
+      }
+      // Specializace výboru bez anglického názvu (arch 3.5, K7).
+      for (const e of ROLE_GLOSSARY.filter((x) => x.id.startsWith("vybor-"))) assert.equal(e.en, undefined, e.id);
+      for (const id of ROLE_IDS) assert.ok(ROLE_NAMES[id].trim().length > 0, id);
+
+      const dup: RoleGlossaryEntry[] = [...ROLE_GLOSSARY, { id: "prezident", forms: ["Výboru"] }];
+      const errors = validateGlossary(dup, INFO_PAGES);
+      assertHasError(errors, /role prezident je v glosáři víckrát/);
+      assertHasError(errors, /tvar „Výboru" má role clensky-vybor i prezident/);
+      assertHasError(validateGlossary([{ id: "prezident", forms: [" "] }], []), /prázdný tvar/);
+      assertHasError(validateGlossary([{ id: "clen", forms: ["člen"] }], []), /„clen" není role s kartou/);
+      assertHasError(validateGlossary([{ id: "prezident", forms: [] }], []), /nemá žádný tvar/);
+    },
+  },
+  {
+    name: "48. linkRoles: nejdelsi shoda, prezident ve viceprezidentovi, diakritika, velke pismeno, prvni vyskyt, seen, uvozovky",
+    run: () => {
+      const on = { selfSlug: "absence", enabled: true };
+      const run = (text: string, seen = new Set<RoleId>()) => linkRoles(text, { ...on, seen });
+      const linked = (segments: Segment[]) => segments.filter((s) => s.role).map((s) => `${s.role}:${s.text}`);
+      const join = (segments: Segment[]) => segments.map((s) => s.text).join("");
+
+      const a = run("Hlasuje členský výbor a výbor pak pošle dopis.");
+      assert.deepEqual(linked(a), ["clensky-vybor:členský výbor"]);
+      assert.equal(join(a), "Hlasuje členský výbor a výbor pak pošle dopis.");
+
+      const b = run("Viceprezident a prezident.");
+      assert.deepEqual(linked(b), ["viceprezident:Viceprezident", "prezident:prezident"]);
+      assert.deepEqual(linked(run("Rozhoduje viceprezidentem vedený výbor.")), [
+        "viceprezident:viceprezidentem",
+        "clensky-vybor:výbor",
+      ]);
+
+      const c = run("Napiš členovi výboru, výbory se neodkazují, výboru ano.");
+      assert.deepEqual(linked(c), ["clensky-vybor:výboru"]);
+      assert.equal(c.find((s) => s.role)!.text, "výboru");
+      assert.equal(join(c), "Napiš členovi výboru, výbory se neodkazují, výboru ano.");
+      assert.deepEqual(linked(run("Výbor.")), ["clensky-vybor:Výbor"]);
+      assert.deepEqual(linked(run("Předvýbor a výborový nejsou role.")), []);
+
+      const seen = new Set<RoleId>();
+      assert.deepEqual(linked(run("Konzultant regionu radí.", seen)), ["konzultant-regionu:Konzultant regionu"]);
+      assert.deepEqual(linked(run("Konzultant regionu potvrdí postup.", seen)), [], "druhý odstavec kroku");
+
+      const q = run("Role se jmenuje „ředitel regionu“, pak ředitel regionu souhlasí.");
+      assert.deepEqual(linked(q), ["reditel-regionu:ředitel regionu"]);
+      assert.ok(q[0].text.includes("„ředitel regionu“"), "výskyt v uvozovkách zůstal textem");
+      assert.deepEqual(linked(run('Citace "Vice President and viceprezident" zůstává.')), []);
+      assert.deepEqual(linked(run("Adresa /pravidla/role#viceprezident není role.")), []);
+      assert.deepEqual(
+        linked(linkRoles("Členský výbor jiného spolku.", { ...on, seen: new Set(), noLink: ["výbor jiného spolku"] })),
+        []
+      );
+
+      const link = a.find((s) => s.role)!;
+      assert.equal(link.role && link.href, "/pravidla/role#clensky-vybor");
+      assert.equal(link.role && link.title, "Membership Committee");
+      const self = linkRoles("Viceprezident vede výbor.", { selfSlug: "role", enabled: true, seen: new Set() });
+      assert.deepEqual(self.filter((s) => s.role).map((s) => s.role && s.href), ["#viceprezident", "#clensky-vybor"]);
+      assert.equal(roleHref("region", "absence"), "/pravidla/role#region");
+
+      assert.deepEqual(linkRoles("Viceprezident.", { selfSlug: "absence", enabled: false, seen: new Set() }), [
+        { text: "Viceprezident." },
+      ]);
+      const pre = createRoleLinker(on, ["viceprezident"]);
+      assert.deepEqual(linked(pre("Viceprezident vede výbor.")), ["clensky-vybor:výbor"]);
+      assert.deepEqual(linked(pre("Výbor znovu.")), []);
+      assert.deepEqual(linked(run("Sekretářem/pokladníkem a vzdělávacím koordinátorem.")), [
+        "sekretar-pokladnik:Sekretářem/pokladníkem",
+        "vzdelavaci-koordinator:vzdělávacím koordinátorem",
+      ]);
+    },
+  },
+  {
+    name: "49. odkazy rolí jen se strankou role v registru, glossary false vypne",
+    run: () => {
+      assert.equal(roleLinksEnabled(INFO_PAGES, basePage), true, "stránka role je v registru (T-007b)");
+      assert.equal(roleLinksEnabled([basePage], basePage), false);
+      assert.equal(roleLinksEnabled([{ slug: "role" }, basePage], basePage), true);
+      assert.equal(roleLinksEnabled([{ slug: "role" }, basePage], { glossary: false }), false);
+      assert.ok(!renderPage(basePage, { roleLinks: false }).includes("info-role-link"));
+      assert.ok(renderPage(basePage).includes("info-role-link"), "absence má odkazy na role");
+      const off = clonePage();
+      off.glossary = false;
+      assert.ok(!renderPage(off, { roleLinks: true }).includes("info-role-link"));
+    },
+  },
+  {
+    name: "50. absence s odkazy: textContent shodny s iter-029 (fixture z HEAD + schvalena vyjimka T-010r6), odkazy na /pravidla/role#<role>, max 1 na roli v odstavci, nic v citacich",
+    run: () => {
+      const plain = renderPage(basePage, { roleLinks: false });
+      const linked = renderPage(basePage);
+      const note = `<p class="info-print-only">${TEMPLATE_TEXTS.roleLinks.printNote} /pravidla/role.</p>`;
+      assert.ok(linked.includes(note), "patička tisku s odkazem na stránku rolí");
+      assert.equal(textContent(linked.replace(note, "")), textContent(plain));
+      // Review T-008, S-6: text článku proti stavu iter-029 (vykresleno z commitu
+      // e98ec2e, bez tiskové přílohy Zdrojů, ta se v iter-030 čísluje).
+      // Fixture obsahuje jedinou schválenou výjimku z 29. 9. 2026 (T-010r6,
+      // rozhodnutí uživatele): u ředitele regionu vypuštěno „, tedy ten, kdo
+      // odpovídá za celý region BNI".
+      const fixture = readFileSync(join(process.cwd(), "scripts", "fixtures", "absence-iter-029.txt"), "utf8");
+      const article = linked.replace(note, "");
+      const cut = article.indexOf('<section class="info-print-only info-print-sources');
+      assert.ok(cut > 0);
+      assert.equal(textContent(article.slice(0, cut)), fixture, "text absence se proti iter-029 změnil");
+
+      const hrefs = roleLinkHrefs(linked);
+      assert.ok(hrefs.length > 0);
+      const glossaryIds = new Set<string>(ROLE_GLOSSARY.map((e) => e.id));
+      for (const href of hrefs) {
+        const m = /^\/pravidla\/role#([a-z-]+)$/.exec(href);
+        assert.ok(m && glossaryIds.has(m[1]), href);
+      }
+      for (const id of ["viceprezident", "konzultant-regionu", "clensky-vybor", "reditel-regionu"]) {
+        assert.ok(hrefs.includes(`/pravidla/role#${id}`), id);
+      }
+      for (const block of blocks(linked)) {
+        const inBlock = roleLinkHrefs(block);
+        assert.equal(new Set(inBlock).size, inBlock.length, `víc odkazů na stejnou roli: ${block.slice(0, 120)}`);
+      }
+      for (const quote of linked.match(/<blockquote[\s\S]*?<\/blockquote>/g) ?? []) {
+        assert.ok(!quote.includes("info-role-link"), "odkaz v anglické citaci");
+      }
+      for (const heading of linked.match(/<h[1-6][\s\S]*?<\/h[1-6]>/g) ?? []) {
+        assert.ok(!heading.includes("info-role-link"), "odkaz v nadpisu");
+      }
+      for (const box of linked.match(/<aside class="info-note[\s\S]*?<\/aside>/g) ?? []) {
+        assert.ok(!box.includes("info-role-link"), "odkaz v rámečku u nás v chapteru");
+      }
+      assert.ok(!/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*<a\b/.test(linked), "vnořený odkaz");
+      // Stránka absence se jinak nemění (test 42 dál platí i s odkazy).
+      assert.ok(!linked.includes("bg-navy") && !linked.includes("info-tag"));
+    },
+  },
+  {
+    name: "51. validator leadership-chart: neznama role a vztah, duplicitni role, prazdny srText; fiktivni stranka role projde",
+    run: () => {
+      assert.deepEqual(validateRegistry([rolePage(), basePage], CHAPTER_NOTES).errors, []);
+      const bad = cloneRolePage();
+      const step = bad.steps[1] as Scene<"leadership-chart">;
+      step.visual.roles.push({ role: "kral" as RoleId, relation: "decides" });
+      step.visual.roles.push({ role: "prezident", relation: "vetuje" as RoleRelation });
+      step.visual.roles.push({ role: "clensky-vybor", relation: "acts" });
+      bad.intro.visual.srText = " ";
+      const errors = errorsOf(bad);
+      assertHasError(errors, /neznámá role „kral"/);
+      assertHasError(errors, /neznámý vztah „vetuje"/);
+      assertHasError(errors, /role clensky-vybor je ve stavu víckrát/);
+      assertHasError(errors, /intro\.visual\.srText: prázdný text/);
+    },
+  },
+  {
+    name: "52. validator referencni casti: poradi poli, notDecides, zdroje, kotvy, glosar napric registrem, obligation, odkaz",
+    run: () => {
+      const order = cloneRolePage();
+      order.reference!.roles[2].fields.reverse();
+      assertHasError(errorsOf(order), /karta clensky-vybor: pole .* není v pevném pořadí/);
+
+      const noNot = cloneRolePage();
+      noNot.reference!.roles[0].fields = noNot.reference!.roles[0].fields.filter((f) => f.kind !== "notDecides");
+      assertHasError(errorsOf(noNot), /karta prezident: chybí pole notDecides/);
+
+      const emptyField = cloneRolePage();
+      emptyField.reference!.roles[0].fields[0].facts = [];
+      assertHasError(errorsOf(emptyField), /karta prezident: pole does nemá žádný fakt/);
+
+      const rowSrc = cloneRolePage();
+      rowSrc.reference!.decisions[0].sources = [];
+      assertHasError(errorsOf(rowSrc), /situace situace-prihlaska: řádek nemá zdroj/);
+
+      const rightSrc = cloneRolePage();
+      rightSrc.reference!.rights[1].sources = [];
+      assertHasError(errorsOf(rightSrc), /právo r2: položka nemá zdroj/);
+
+      const dupAnchor = cloneRolePage();
+      dupAnchor.steps[0].id = "viceprezident";
+      assertHasError(errorsOf(dupAnchor), /id „viceprezident" není unikátní/);
+      const dupRef = cloneRolePage();
+      dupRef.reference!.rights[0].id = "situace-prihlaska";
+      assertHasError(errorsOf(dupRef), /id „situace-prihlaska" není unikátní/);
+
+      const noCard = cloneRolePage();
+      noCard.reference!.roles = noCard.reference!.roles.filter((c) => c.id !== "hostitele");
+      noCard.reference!.roles.find((c) => c.id === "region")!.subAnchors = [];
+      const reg = validateRegistry([noCard, basePage], CHAPTER_NOTES).errors;
+      assertHasError(reg, /role hostitele nemá na stránce role kartu ani pod-kotvu/);
+      assertHasError(reg, /role reditel-regionu nemá na stránce role kartu/);
+
+      const obligation = cloneRolePage();
+      obligation.reference!.roles[1].fields[0].facts[0].obligation = "must";
+      assertHasError(errorsOf(obligation), /karta viceprezident\.does\[0\]: referenční část nerozlišuje/);
+
+      const appLink = cloneRolePage();
+      appLink.reference!.decisions[1].link!.href = "/dashboard";
+      assertHasError(errorsOf(appLink), /odkaz „\/dashboard" nevede na \/pravidla/);
+
+      const dash = cloneRolePage();
+      dash.reference!.rights[0].text = "Pravidla — mění BNI.";
+      assertHasError(errorsOf(dash), /právo r1\.text: em dash/);
+
+      const quote = cloneRolePage();
+      quote.reference!.decisions[0].sources[0].quoteEn = "";
+      assertHasError(errorsOf(quote), /situace-prihlaska\.sources\[0\]: prázdná quoteEn/);
+
+      const note = cloneRolePage();
+      note.reference!.roles[0].chapterNotes = ["C99"];
+      assertHasError(errorsOf(note), /karta prezident: odkaz na neexistující položku „u nás v chapteru" C99/);
+
+      // Bez steps (forma B) validátor kroky nevyžaduje, kotvy reference platí pro rozcestník.
+      const onlyRef = cloneRolePage();
+      onlyRef.steps = [];
+      assert.deepEqual(errorsOf(onlyRef), []);
+    },
+  },
+  {
+    name: "53. render stranky role: kotvy, karty jako dl v pevnem poradi, tabulka se scope a data-label, prava v ol, odkazy #role",
+    run: () => {
+      const page = rolePage();
+      const html = renderPage(page, { roleLinks: true });
+      for (const id of ["vedeni", "role-karty", "kdo-rozhoduje", "prava-regionu", "shrnuti"]) {
+        assert.ok(html.includes(`id="${id}"`), id);
+      }
+      const ref = page.reference!;
+      for (const card of ref.roles) {
+        assert.match(html, new RegExp(`<section id="${card.id}"[^>]*class="info-role-card`), card.id);
+        for (const sub of card.subAnchors ?? []) assert.ok(html.includes(`id="${sub.id}"`), sub.id);
+      }
+      const vybor = html.slice(html.indexOf('<section id="clensky-vybor"'), html.indexOf('<section id="sekretar-pokladnik"'));
+      const labels = Array.from(vybor.matchAll(/<dt[^>]*>([^<]+)<\/dt>/g)).map((m) => m[1]);
+      const F = TEMPLATE_TEXTS.reference.fields;
+      assert.deepEqual(labels, [F.does, F.decides, F.approval, F.notDecides, F.notDefined]);
+      assert.ok(!vybor.includes('href="#clensky-vybor"'), "karta neodkazuje sama na sebe");
+      assert.ok(!vybor.includes('href="#vybor-rust"'), "karta neodkazuje na vlastní pod-kotvu");
+      assert.ok(vybor.includes('href="#viceprezident"'), "karta odkazuje jinou roli");
+
+      assert.equal((html.match(/<th[^>]*scope="col"/g) ?? []).length, 6);
+      assert.equal((html.match(/<th[^>]*scope="row"/g) ?? []).length, ref.decisions.length);
+      for (const row of ref.decisions) assert.match(html, new RegExp(`<tr id="${row.id}"`));
+      assert.ok(html.includes('data-label="Rozhoduje"'));
+      assert.ok(html.includes('href="/pravidla/absence#ctvrta-absence"'));
+      const rights = html.slice(html.indexOf('<ol class="info-rights'));
+      assert.equal((rights.match(/<li id="r\d+"/g) ?? []).length, ref.rights.length);
+
+      const hrefs = roleLinkHrefs(html);
+      assert.ok(hrefs.length > 0);
+      assert.ok(hrefs.every((h) => h.startsWith("#")), "na stránce role vedou odkazy na kotvy stejné stránky");
+      assert.ok(!html.includes("Role jsou vysvětlené na"), "stránka role nemá patičku s odkazem na sebe");
+
+      // Pořadí stránky: příběh, reference, shrnutí.
+      const iStep = html.indexOf('id="prihlaska-2"');
+      const iRef = html.indexOf('id="vedeni"');
+      const iSum = html.indexOf('id="shrnuti"');
+      assert.ok(iStep < iRef && iRef < iSum);
+      assert.ok(html.indexOf("info-reference") > html.lastIndexOf("info-flow"), "reference je mimo info-layout");
+
+      // Příloha tisku obsahuje citace referenční části.
+      const print = html.slice(html.indexOf("info-print-sources"));
+      assert.ok(print.includes(TEMPLATE_TEXTS.reference.decisionsTitle));
+      assert.ok(print.includes(TEMPLATE_TEXTS.reference.rightsTitle));
+      assert.ok(print.includes(`${TEMPLATE_TEXTS.reference.rolesTitle}: Členský výbor`));
+
+      const levels = headingLevels(html);
+      levels.forEach((level, i) => {
+        if (i > 0) assert.ok(level <= levels[i - 1] + 1, `h${levels[i - 1]} -> h${level}`);
+      });
+      assert.ok(!html.includes("—"));
+    },
+  },
+  {
+    name: "54. zakaz obligation: zadne zavazne/doporucene/info-tag ve strance role ani s obligation v datech, komponenty pole nectou",
+    run: () => {
+      const clean = renderPage(rolePage(), { roleLinks: true });
+      const marked = cloneRolePage();
+      for (const card of marked.reference!.roles) for (const f of card.fields) for (const fact of f.facts) fact.obligation = "must";
+      for (const fact of marked.reference!.facts) fact.obligation = "recommended";
+      for (const s of marked.steps) if (s.type === "scene") for (const fact of s.chapter) fact.obligation = "must";
+      const html = renderPage(marked, { roleLinks: true });
+      assert.equal(html, clean, "obligation nesmí změnit výstup");
+      assert.ok(!/závazné|doporučené/.test(textContent(html)));
+      assert.ok(!html.includes("info-tag"));
+      for (const file of [
+        "ReferenceSection.tsx",
+        "RoleCards.tsx",
+        "DecisionTable.tsx",
+        "RightsList.tsx",
+        "RichText.tsx",
+        "ChapterSide.tsx",
+        "visuals/LeadershipChart.tsx",
+      ]) {
+        const src = readFileSync(join(process.cwd(), "components", "info", file), "utf8");
+        const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+        assert.ok(!/obligation/.test(code), `${file} čte obligation`);
+      }
+    },
+  },
+  {
+    name: "55. schema vedeni: pruh max 3 radky v poradi vztahu, sticky obe varianty, uvod cele schema, bez cervene",
+    run: () => {
+      const step = (rolePage().steps[1] as Scene<"leadership-chart">).visual;
+      assert.deepEqual(
+        barRows(step).map((r) => r.relation),
+        ["decides", "approves", "advises"],
+        "rozhoduje > musí souhlasit > radí, max 3"
+      );
+      assert.deepEqual(barRows(step)[0].names, ["členský výbor"]);
+      assert.deepEqual(barRows({ roles: [], srText: "x" }), []);
+
+      const sticky = renderToStaticMarkup(createElement(LeadershipChart, { state: step, size: "sticky" }));
+      assert.match(sticky, /<div class="lg:hidden"><ul class="info-lc-bar/);
+      assert.match(sticky, /<div class="hidden lg:block"><div class="info-lc-chart/);
+      assert.ok(sticky.includes("Rozhoduje:</span> členský výbor"));
+      assert.ok(sticky.includes("musí souhlasit") && sticky.includes("<svg"), "zámek u musí souhlasit");
+      assert.ok(sticky.includes('data-role="vybor-prihlasky" class="info-lc-node info-lc-node--acts'));
+      assert.ok(sticky.includes('info-lc-node--idle'), "nezvýrazněné role jsou šedé");
+      assert.ok(!sticky.includes("vybor-prihlasky\" class=\"info-lc-node info-lc-node--idle"));
+
+      const intro = renderToStaticMarkup(
+        createElement(LeadershipChart, { state: { roles: [], srText: "x" }, size: "inline" })
+      );
+      assert.ok(intro.includes("info-lc-chart") && !intro.includes("info-lc-bar"), "úvod: celé schéma bez pruhu");
+      assert.ok(!intro.includes("hidden lg:block"), "úvod: schéma na všech šířkách");
+      assert.ok(!intro.includes("info-lc-node--idle") && intro.includes("info-lc-node--plain"));
+      assert.ok(!intro.includes("info-lc-note"), "věta pod schématem vypuštěna (T-010r2)");
+
+      const inline = renderToStaticMarkup(createElement(LeadershipChart, { state: step, size: "inline" }));
+      assert.match(inline, /info-lc-bar[\s\S]*<div class="mt-3 hidden lg:block print:block"><div class="info-lc-chart/);
+
+      for (const html of [sticky, intro, inline]) {
+        assert.ok(!/#cf2031|primary|danger|text-red|bg-red/.test(html), "červená se ve schématu nepoužívá");
+      }
+
+      const page = renderPage(rolePage());
+      assert.match(page, /class="info-inline-visual [^"]*info-inline-visual--keep" role="img" aria-label="Celé schéma/);
+      assert.ok(page.includes(TEMPLATE_TEXTS.leadership.legendTitle), "legenda vztahů v úvodu");
+      assert.ok(!renderPage(basePage).includes("info-inline-visual--keep"), "absence beze změny");
+    },
+  },
+  {
+    name: "56. CSS: tabulka jako karty pod 768 px, uvodni schema zustava, odkaz role teckovane, kotvy reference, tisk",
+    run: () => {
+      const css = readFileSync(join(process.cwd(), "app", "pravidla", "pravidla.css"), "utf8");
+      assert.match(css, /@media \(max-width: 767px\) \{\s*\.info-decisions,/);
+      assert.match(css, /\.info-decisions td::before \{\s*content: attr\(data-label\)/);
+      assert.match(css, /\.info-root\[data-scrolly="on"\] \.info-inline-visual--keep \{\s*position: static/);
+      assert.match(css, /\.info-role-link \{[^}]*text-decoration-style: dotted/);
+      assert.match(css, /\.info-root \.info-reference \[id\] \{\s*scroll-margin-top/);
+      assert.match(css, /@media print \{[^}]*\.info-role-field,/);
+      assert.match(css, /\.info-root h2,\s*\.info-root h3,[^}]*break-after: avoid/);
+      assert.match(css, /content: attr\(data-label\) \/ "";/);
+    },
+  },
+  {
+    name: "57. registr: role prvni, fiktivni stranka role projde validaci",
+    run: () => {
+      assert.deepEqual(
+        INFO_PAGES.map((p) => p.slug),
+        ["role", "absence"],
+        "role první (K5)"
+      );
+      const pages = [rolePage(), basePage] as InfoPage[];
+      assert.doesNotThrow(() => assertValidRegistry(pages, CHAPTER_NOTES));
+      const situations = pages.flatMap((p) => p.situations.map((s) => `/pravidla/${p.slug}#${s.anchor}`));
+      assert.equal(situations[0], "/pravidla/role#situace-prihlaska");
+    },
+  },
+  // --- iter-030 (T-007b, T-011): reálná stránka rolí a její ilustrace ---
+  {
+    name: "58. stranka role: data podle textu a gate (8 kroku, 10 situaci, prava r1 az r27, pet poli na karte, C8 az C13)",
+    run: () => {
+      const role = getInfoPage("role")!;
+      assert.ok(role, "stránka role je v registru");
+      assert.deepEqual(validateInfoPage(role, CHAPTER_NOTES).errors, []);
+      assert.equal(role.steps.length, 8);
+      const ref = role.reference!;
+      assert.equal(ref.decisions.length, 10);
+      assert.deepEqual(ref.rights.map((r) => r.id), Array.from({ length: 27 }, (_, i) => `r${i + 1}`));
+      // Gate T-006: úpravy 1, 6, 7, 8, 9, 10 a odkaz karty regionu.
+      assert.equal(role.description, "Kdo v chapteru přijímá nové členy, kdo řeší stížnosti a jak se mění vedení.");
+      const decision = role.steps.find((s) => s.id === "stiznost-rozhodnuti") as Scene<"leadership-chart">;
+      assert.deepEqual(decision.visual.roles.map((r) => r.role), ["clensky-vybor", "konzultant-regionu"]);
+      const card = (id: string) => ref.roles.find((c) => c.id === id)!;
+      const field = (id: string, kind: string) => card(id).fields.find((f) => f.kind === kind)?.facts ?? [];
+      assert.equal(field("viceprezident", "approval").length, 0);
+      // T-010r2: M61 jen na kartě výboru (dřív gate úprava 7 na kartě viceprezidenta).
+      const m61 = (f: Fact) => f.sources.some((s) => /for support PRIOR/.test(s.quoteEn));
+      assert.ok(!card("viceprezident").fields.some((x) => x.facts.some(m61)));
+      assert.ok(
+        field("clensky-vybor", "does").some(
+          (f) => m61(f) && f.text === "Než výbor u stížnosti postoupí dál, viceprezident se obrátí na konzultanta regionu pro podporu."
+        )
+      );
+      assert.equal(field("region", "approval").length, 0);
+      assert.equal(field("region", "notDefined").length, 0);
+      assert.equal(field("clensky-vybor", "notDefined").length, 1);
+      assert.deepEqual(card("region").link, { href: "#prava-regionu", label: "Všechna práva BNI a regionu" });
+      const html = renderPage(role);
+      for (const c of ref.roles) {
+        const section = html.slice(html.indexOf(`<section id="${c.id}"`));
+        const cardHtml = section.slice(0, section.indexOf("</dl>"));
+        assert.equal((cardHtml.match(/<dt\b/g) ?? []).length, 5, `${c.id}: pět polí`);
+      }
+      assert.ok(
+        html.includes(`<span aria-hidden="true">–</span><span class="sr-only">${TEMPLATE_TEXTS.reference.emptyFieldSr}</span>`),
+        "prázdné pole jako pomlčka, čtečka „nic“"
+      );
+      assert.ok(!/Pravidla tu nic neuvádějí|žádnou mezeru nenašli/.test(html));
+      for (const id of ["C8", "C9", "C10", "C11", "C12", "C13"]) {
+        assert.ok(html.includes(CHAPTER_NOTES.find((n) => n.id === id)!.text), id);
+      }
+      const text = textContent(html);
+      assert.ok(!/závazné|doporučené/.test(text), "žádné závazné ani doporučené");
+      // Slovo „návrh" je v textu jen jako návrh změny pravidel (G7), ne jako štítek.
+      const labels = Array.from(html.matchAll(/<p class="info-note-label[^"]*">([^<]*)<\/p>/g)).map((m) => m[1]);
+      assert.ok(labels.length >= 6);
+      assert.ok(labels.every((l) => l === TEMPLATE_TEXTS.chapterNote.label), JSON.stringify(labels));
+      assert.equal((text.match(/návrh/g) ?? []).length, 2, "návrh jen u změny pravidel (karta regionu, R1)");
+      assert.ok(!html.includes("info-tag"));
+      assert.ok(!html.includes("—"));
+      const levels = headingLevels(html);
+      levels.forEach((level, i) => {
+        if (i > 0) assert.ok(level <= levels[i - 1] + 1, `h${levels[i - 1]} -> h${level}`);
+      });
+    },
+  },
+  {
+    name: "59. odkazy z absence vedou na existujici kotvy stranky role",
+    run: () => {
+      const role = renderPage(getInfoPage("role")!);
+      const hrefs = roleLinkHrefs(renderPage(basePage));
+      assert.ok(hrefs.length > 20);
+      for (const href of new Set(hrefs)) {
+        const id = href.split("#")[1];
+        assert.ok(role.includes(`id="${id}"`), `kotva ${id} na stránce role`);
+      }
+      for (const href of roleLinkHrefs(role)) assert.ok(role.includes(`id="${href.slice(1)}"`), href);
+    },
+  },
+  {
+    name: "60. T-011: komiksy role (soubory WebP, rozmery, < 40 kB na panel, < 600 kB celkem, popisky z gate, umisteni)",
+    run: () => {
+      const role = getInfoPage("role")!;
+      const ref = role.reference!;
+      const comicOf = (id: string) => role.steps.find((s) => s.id === id)?.type === "scene"
+        ? (role.steps.find((s) => s.id === id) as Scene<VisualKind>).comic
+        : undefined;
+      const R = ROLE_COMICS;
+      assert.equal(role.intro.comic, R.R10, "R10 v úvodu");
+      assert.equal(role.hero, undefined, "hero se nerozšiřuje");
+      const cards: [string, Comic][] = [
+        ["prezident", R.R1], ["viceprezident", R.R2], ["clensky-vybor", R.R3], ["konzultant-regionu", R.R4],
+        ["region", R.R5], ["sekretar-pokladnik", R.R6], ["vzdelavaci-koordinator", R.R7],
+        ["koordinator-mentoru", R.R8], ["hostitele", R.R9],
+      ];
+      for (const [id, comic] of cards) assert.equal(ref.roles.find((c) => c.id === id)!.comic, comic, id);
+      assert.equal(comicOf("prihlaska-host"), R.R9);
+      assert.equal(comicOf("stiznost-postup"), R.R4);
+      assert.equal(comicOf("stiznost-rozhodnuti"), R.R3);
+      assert.equal(comicOf("vedeni-vyber"), R.R11);
+      assert.equal(R.R3.panels[2].caption, "Dopis jde vždy za výbor, nikdy za jednotlivce.");
+      assert.equal(R.R11.panels[0].caption, "Období vedení trvá šest měsíců.");
+      let total = 0;
+      const panels = Object.values(R).flatMap((c) => c.panels);
+      assert.equal(panels.length, 28);
+      for (const p of panels) {
+        assert.match(p.src, /^\/pravidla\/komiksy\/role-r\d{2}-\d\.webp$/);
+        const path = join(process.cwd(), "public", p.src);
+        assert.ok(existsSync(path), `chybí ${path}`);
+        const buf = readFileSync(path);
+        const { width, height } = webpSize(buf);
+        assert.equal(width, p.width, `${p.src} width`);
+        assert.equal(height, p.height, `${p.src} height`);
+        assert.ok(buf.length < 40 * 1024, `${p.src} má ${buf.length} B`);
+        assert.ok(p.caption.trim() && p.alt.trim(), p.src);
+        total += buf.length;
+      }
+      assert.ok(total < 600 * 1024, `celkem ${total} B`);
+      const html = renderPage(role);
+      const intro = html.slice(html.indexOf("info-intro"), html.indexOf('id="prihlaska-host"'));
+      assert.ok(intro.includes("role-r10-1.webp"), "pruh R10 v úvodu");
+    },
+  },
+  // --- iter-030 (T-008r): opravy po code review ---
+  {
+    name: "61. T-008r: Kde to najdes bez vytazeneho prava (S-1), srText uvodu s vetou N2 (S-3), pruh s celym nazvem a labelem (N-1, N-2)",
+    run: () => {
+      const role = getInfoPage("role")! as InfoPage<"leadership-chart">;
+      assert.ok(!role.summary.whereToFind.some((w) => w.rule === "Administrative Policy #7"));
+      const all = role.summary.whereToFind.find((w) => w.href === "#prava-regionu");
+      assert.equal(all?.labelCs, "Všechna práva BNI, regionu a franšízanta");
+      const html = renderPage(role);
+      const summary = html.slice(html.indexOf('id="shrnuti"'));
+      assert.ok(summary.includes('href="#prava-regionu"'));
+      assert.ok(!html.includes("Kdo o čem rozhoduje, z něj nevyčteš."), "věta „z něj nevyčteš“ vypuštěna (T-010r2)");
+      const bad = cloneRolePage();
+      bad.summary.whereToFind = [{ doc: "general-policies", page: 2, labelCs: "X", href: "#neni" }];
+      assertHasError(errorsOf(bad), /odkaz „#neni" nemíří na kotvu stránky/);
+
+      const podani = (role.steps.find((s) => s.id === "stiznost-podani") as Scene<"leadership-chart">).visual;
+      assert.deepEqual(barRows(podani).find((r) => r.relation === "acts")?.names, ["člen výboru pro vztahy mezi členy"]);
+      const host = (role.steps.find((s) => s.id === "prihlaska-host") as Scene<"leadership-chart">).visual;
+      assert.deepEqual(barRows(host).find((r) => r.relation === "advises")?.names, ["regionální tým BNI"]);
+    },
+  },
+  {
+    name: "62. T-008r: neaktivni role bez pruhlednosti s kontrastem >= 4,5:1 (S-2)",
+    run: () => {
+      const state = (getInfoPage("role")!.steps[1] as Scene<"leadership-chart">).visual;
+      const html = renderToStaticMarkup(createElement(LeadershipChart, { state, size: "sticky" }));
+      assert.ok(!html.includes("opacity-"), "žádná průhlednost ve schématu");
+      assert.ok(html.includes("info-lc-node--idle") && html.includes("text-[#666]"));
+      const lum = (hex: string) => {
+        const c = [0, 2, 4]
+          .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+          .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      };
+      const ratio = (1 + 0.05) / (lum("666666") + 0.05);
+      assert.ok(ratio >= 4.5, `kontrast ${ratio.toFixed(2)}`);
+    },
+  },
+  {
+    name: "63. T-008r: tiskova priloha tiskne kazdou citaci jednou, opakovani cislem (S-4)",
+    run: () => {
+      for (const page of INFO_PAGES) {
+        const html = renderPage(page);
+        const appendix = html.slice(html.indexOf("info-print-sources"));
+        const quotes = Array.from(appendix.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/g)).map((m) => m[1]);
+        assert.equal(new Set(quotes).size, quotes.length, `${page.slug}: citace v příloze víckrát`);
+        const numbers = Array.from(appendix.matchAll(/>\[(\d+)\] /g)).map((m) => Number(m[1]));
+        assert.deepEqual(numbers, numbers.map((_, i) => i + 1), `${page.slug}: čísla citací 1..n`);
+        const refs = Array.from(appendix.matchAll(/\[(\d+)\]/g)).map((m) => Number(m[1]));
+        for (const n of refs) assert.ok(n <= numbers.length, `${page.slug}: odkaz na neexistující citaci [${n}]`);
+      }
+      const role = renderPage(getInfoPage("role")!);
+      assert.ok(role.includes(TEMPLATE_TEXTS.sources.printRepeated), "role má opakované citace jen číslem");
+    },
+  },
+  {
+    name: "64. T-010r2: prezident bez nejednoznacneho tematu, slozeni vyboru na zacatku karty, veta o schematu s odkazem na tabulku",
+    run: () => {
+      const role = getInfoPage("role")!;
+      const ref = role.reference!;
+      const prezident = ref.roles.find((c) => c.id === "prezident")!;
+      assert.ok(!prezident.fields.some((f) => f.facts.some((x) => /téma/.test(x.text))), "téma schůzky na kartě prezidenta není");
+      assert.ok(ref.decisions.find((d) => d.id === "situace-schuzka")!.decides.includes("Téma jednou měsíčně vybírá vedení."));
+      const vybor = ref.roles.find((c) => c.id === "clensky-vybor")!;
+      const first = vybor.fields.find((f) => f.kind === "does")!.facts[0];
+      assert.equal(
+        first.text,
+        "Členský výbor se skládá z členů, kteří zastupují tyto role: posouzení přihlášek, růst chapteru, zapojení členů a vztahy mezi členy. Vede ho viceprezident, který hlasuje stejně jako ostatní."
+      );
+      assert.ok(!vybor.fields.some((f) => f.facts.some((x) => x.text === "Vede ho viceprezident a hlasuje v něm jako ostatní členové.")));
+      const html = renderPage(role);
+      assert.ok(html.includes('najdeš v tabulce <a href="#kdo-rozhoduje"'), "odkaz na tabulku v úvodu reference");
+      assert.ok(html.includes(">Kdo o čem rozhoduje.</a>"));
+      // Validátor: odkaz faktu jen na existující kotvu a jen na text faktu.
+      const bad = cloneRolePage();
+      bad.reference!.facts[0].link = { text: "neni v textu", href: "#vedeni" };
+      assertHasError(errorsOf(bad), /link.text není v textu faktu/);
+      const bad2 = cloneRolePage();
+      bad2.reference!.facts[0].link = { text: "Neobsazené", href: "#neni" };
+      assertHasError(errorsOf(bad2), /odkaz „#neni" nemíří na kotvu stránky/);
+      // Věty „z něj nevyčteš“ nikde (šablona, srText, data).
+      assert.ok(!JSON.stringify(role).includes("Kdo o čem rozhoduje, z něj nevyčteš."));
+    },
+  },
+  {
+    name: "65. T-010r3: karta prezidenta, pole Co dela uplne (manual str. 35 a 36), Rozhoduje a Nerozhoduje beze zmeny",
+    run: () => {
+      const prezident = getInfoPage("role")!.reference!.roles.find((c) => c.id === "prezident")!;
+      const facts = (kind: string) => prezident.fields.find((f) => f.kind === kind)!.facts.map((f) => f.text);
+      assert.deepEqual(facts("does"), [
+        "Vede týdenní schůzku podle agendy BNI.",
+        "Vede měsíční setkání vedení, a to jeho první polovinu.",
+        "Dohlíží, aby všechny role ve vedení plnily svoje úkoly.",
+        "Dává chapteru směr a motivaci, aby splnil svoje cíle.",
+        "Každý týden mluví s konzultantem regionu.",
+        "Po schválení výborem zavolá přijatým uchazečům a přivítá je.",
+      ]);
+      assert.deepEqual(facts("decides"), ["Schvaluje platby, které platí sekretář/pokladník."]);
+      assert.equal(facts("notDecides").length, 2);
+      const does = prezident.fields.find((f) => f.kind === "does")!.facts;
+      assert.ok(does.every((f) => f.sources.every((s) => s.doc === "ops-manual-2022" && s.page >= 35 && s.page <= 36)));
+      assert.ok(does[1].sources.some((s) => s.quoteEn === "facilitates monthly Leadership Team Meetings"));
+      assert.ok(!/pouze/.test(JSON.stringify(prezident)));
+    },
+  },
+  {
+    name: "66. T-010r3: navigace Na strance u role (kotvy existuji, druhy radek karet, v tisku skryta), absence bez navigace",
+    run: () => {
+      const role = getInfoPage("role")!;
+      const html = renderPage(role);
+      const nav = html.slice(html.indexOf('<nav aria-labelledby="na-strance-title"'), html.indexOf("</nav>") + 6);
+      assert.ok(nav.length > 100, "navigace chybí");
+      assert.ok(nav.includes(">Na stránce</h2>"));
+      assert.match(nav, /class="info-toc[^"]*print:hidden/);
+      const labels = Array.from(nav.matchAll(/<a href="#([^"]+)"[^>]*>([^<]+)<\/a>/g)).map((m) => [m[1], m[2]]);
+      assert.deepEqual(labels.slice(0, 5).map((l) => l[1]), [
+        "Příběhy",
+        "Vedení chapteru",
+        "Role",
+        "Kdo o čem rozhoduje",
+        "Práva BNI a regionu",
+      ]);
+      assert.equal(labels.length, 14, "5 hlavních + 9 karet");
+      for (const [anchor] of labels) assert.ok(html.includes(`id="${anchor}"`), anchor);
+      // Navigace je pod úvodní větou, před úvodním schématem.
+      assert.ok(html.indexOf("Každá věc v chapteru") < html.indexOf("na-strance-title"));
+      assert.ok(html.indexOf("na-strance-title") < html.indexOf("info-inline-visual--keep"));
+      assert.ok(!renderPage(basePage).includes("na-strance"), "absence navigaci nemá");
+      const bad = cloneRolePage();
+      bad.toc = [{ label: "Nic", anchor: "neni" }];
+      assertHasError(errorsOf(bad), /toc\[0\]: kotva „neni" neexistuje/);
+    },
+  },
+  {
+    name: "67. T-010r4: bublina u role (shrnuti z dat karet, kazda role z glosare ma shrnuti, umisteni na 390 px, bez JS odkaz)",
+    run: () => {
+      const summaries = roleSummaries(INFO_PAGES);
+      const ref = getInfoPage("role")!.reference!;
+      for (const card of ref.roles) {
+        assert.deepEqual(summaries[card.id], { title: card.title, text: card.lead }, card.id);
+        for (const sub of card.subAnchors ?? []) {
+          assert.deepEqual(summaries[sub.id], { title: sub.title, text: sub.facts[0].text }, sub.id);
+        }
+      }
+      assert.equal(summaries.prezident?.text, "Vede týdenní schůzky a dává chapteru směr.");
+      for (const entry of ROLE_GLOSSARY) assert.ok(summaries[entry.id], `shrnutí pro ${entry.id}`);
+      assert.equal(summaries.clen, undefined);
+
+      // Umístění: 390 px, bublina celá v okně, pod slovem.
+      const vp = { width: 390, scrollX: 0, scrollY: 1000 };
+      const right = popoverPosition({ left: 360, bottom: 200 }, vp);
+      assert.equal(right.width, 300);
+      assert.equal(right.left, 390 - 8 - 300);
+      assert.equal(right.top, 1206);
+      assert.equal(popoverPosition({ left: 2, bottom: 10 }, vp).left, 8);
+      const narrow = popoverPosition({ left: 50, bottom: 10 }, { width: 280, scrollX: 0, scrollY: 0 });
+      assert.equal(narrow.width, 264);
+      assert.ok(narrow.left + narrow.width <= 280 - 8);
+
+      // Bez JS: server vykreslí odkazy s href na existující kartu, bublina v HTML není.
+      for (const page of INFO_PAGES) {
+        const html = renderPage(page);
+        const role = renderPage(getInfoPage("role")!);
+        const links = Array.from(html.matchAll(/<a href="([^"]+)" title="[^"]*" data-role="([a-z-]+)" class="info-role-link/g));
+        assert.ok(links.length > 0, page.slug);
+        for (const [, href, id] of links) {
+          assert.ok(href.endsWith(`#${id}`), href);
+          assert.ok(role.includes(`id="${id}"`), id);
+        }
+        assert.ok(!html.includes("info-role-popover"), `${page.slug}: bublina není v HTML ze serveru`);
+      }
+      const css = readFileSync(join(process.cwd(), "app", "pravidla", "pravidla.css"), "utf8");
+      assert.match(css, /\.info-role-popover \{\s*display: none !important;/);
+      const src = readFileSync(join(process.cwd(), "components", "info", "RolePopover.tsx"), "utf8");
+      for (const needle of ['"use client"', "aria-expanded", "aria-controls", 'role="dialog"', "Escape", "createPortal"]) {
+        assert.ok(src.includes(needle), needle);
+      }
     },
   },
 ];
