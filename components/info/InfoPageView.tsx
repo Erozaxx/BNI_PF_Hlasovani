@@ -6,18 +6,30 @@
  */
 import { TEMPLATE_TEXTS } from "@/content/pravidla/texty-sablony";
 import { fillTemplate } from "@/lib/info-pages/format";
+import {
+  createRoleLinker,
+  ROLE_PAGE_SLUG,
+  roleLinksEnabled,
+  type RoleLinkOptions,
+} from "@/lib/info-pages/glossary";
+import { INFO_PAGES } from "@/lib/info-pages/registry";
 import type { ChapterNote, InfoPage, VisualKind, VisualStateMap } from "@/lib/info-pages/types";
 import { SUMMARY_ANCHOR } from "@/lib/info-pages/types";
 import { BranchBlock } from "./BranchBlock";
-import { ComicHero } from "./ComicStrip";
+import { ComicHero, ComicStrip } from "./ComicStrip";
 import { ContactRoles } from "./ContactRoles";
 import { InlineVisual } from "./InlineVisual";
 import { PrintButton } from "./PrintButton";
+import { PageToc } from "./PageToc";
 import { PrintSources } from "./PrintSources";
+import { ReferenceSection } from "./ReferenceSection";
+import { RolePopover } from "./RolePopover";
+import { roleSummaries } from "@/lib/info-pages/role-popover";
+import { RichText } from "./RichText";
 import { ScrollyStage } from "./ScrollyStage";
 import { StepScene } from "./StepScene";
 import { Summary } from "./Summary";
-import { hasVisual, renderLegend } from "./visuals/registry";
+import { hasVisual, keepsIntro, renderLegend } from "./visuals/registry";
 
 function collectStates<K extends VisualKind>(page: InfoPage<K>) {
   const states: { id: string; state: VisualStateMap[K] }[] = [];
@@ -50,14 +62,25 @@ export function InfoPageView<K extends VisualKind>({
   page,
   notes,
   baseUrl,
+  roleLinks,
 }: {
   page: InfoPage<K>;
   notes: ChapterNote[];
   /** Adresa webu pro tisk (prázdná = jen cesta). */
   baseUrl: string;
+  /**
+   * Odkazy na role (arch_iter-030 7.3). Bez hodnoty podle registru: jen když
+   * je stránka `role` v `INFO_PAGES`. `glossary: false` na stránce má přednost.
+   */
+  roleLinks?: boolean;
 }) {
   const withVisual = hasVisual(page.visual);
   const updated = fillTemplate(TEMPLATE_TEXTS.updated, { updated: page.updated });
+  const links: RoleLinkOptions = {
+    selfSlug: page.slug,
+    enabled: page.glossary !== false && (roleLinks ?? roleLinksEnabled(INFO_PAGES, page)),
+  };
+  const lead = page.intro.lead.map(createRoleLinker(links));
 
   return (
     <article className="info-article" aria-labelledby="info-title">
@@ -86,38 +109,60 @@ export function InfoPageView<K extends VisualKind>({
         <div className="info-flow min-w-0">
           <section className="info-intro pb-4" aria-label={page.intro.question}>
             <p className="text-xl font-semibold leading-snug text-text-main">{page.intro.question}</p>
+            {page.intro.comic && <ComicStrip comic={page.intro.comic} />}
             <div className="mt-4 space-y-4 text-lg leading-relaxed text-text-main">
-              {page.intro.lead.map((p, i) => (
-                <p key={i}>{p}</p>
+              {lead.map((segments, i) => (
+                <p key={i}>
+                  <RichText segments={segments} />
+                </p>
               ))}
             </div>
-            <InlineVisual kind={page.visual} state={page.intro.visual} />
+            {page.toc && <PageToc items={page.toc} />}
+            <InlineVisual kind={page.visual} state={page.intro.visual} keep={keepsIntro(page.visual)} />
             <Legend kind={page.visual} />
           </section>
 
           {page.steps.map((step) =>
             step.type === "scene" ? (
-              <StepScene key={step.id} scene={step} kind={page.visual} notes={notes} />
+              <StepScene key={step.id} scene={step} kind={page.visual} notes={notes} links={links} />
             ) : (
-              <BranchBlock key={step.id} branch={step} kind={page.visual} notes={notes} />
+              <BranchBlock key={step.id} branch={step} kind={page.visual} notes={notes} links={links} />
             )
           )}
         </div>
       </div>
 
-      <Summary page={page} />
-      <ContactRoles contacts={page.contacts} />
+      {page.reference && <ReferenceSection reference={page.reference} links={links} notes={notes} />}
+
+      <Summary page={page} links={links} />
+      <ContactRoles contacts={page.contacts} links={links} />
 
       <footer className="info-disclaimer mt-10 space-y-2 border-t border-border pt-6 text-sm leading-relaxed text-text-main">
         {page.disclaimer.map((p, i) => (
           <p key={i}>{fillTemplate(p, { updated: page.updated })}</p>
         ))}
+        {links.enabled && page.slug !== ROLE_PAGE_SLUG && (
+          <p className="info-print-only">
+            {TEMPLATE_TEXTS.roleLinks.printNote} {baseUrl}/pravidla/{ROLE_PAGE_SLUG}.
+          </p>
+        )}
         <p className="pt-2 print:hidden">
           <PrintButton label={TEMPLATE_TEXTS.print} />
         </p>
       </footer>
 
       <PrintSources page={page} baseUrl={baseUrl} />
+
+      {links.enabled && (
+        <RolePopover
+          summaries={roleSummaries(INFO_PAGES)}
+          linkLabel={
+            page.slug === ROLE_PAGE_SLUG
+              ? TEMPLATE_TEXTS.roleLinks.popoverLinkSelf
+              : TEMPLATE_TEXTS.roleLinks.popoverLinkOther
+          }
+        />
+      )}
     </article>
   );
 }

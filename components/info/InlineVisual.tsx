@@ -17,15 +17,19 @@ function srTextOf(state: unknown): string | undefined {
 export function InlineVisual<K extends VisualKind>({
   kind,
   state,
+  keep = false,
 }: {
   kind: K;
   state: VisualStateMap[K];
+  /** Zůstane vidět i se sticky režimem pod 1024 px (úvod schématu vedení). */
+  keep?: boolean;
 }) {
   const visual = renderVisual(kind, state, "inline");
   if (!visual) return null;
+  const base = "info-inline-visual mt-5 rounded-card border border-border bg-surface px-3 py-2.5";
   return (
     <div
-      className="info-inline-visual mt-5 rounded-card border border-border bg-surface px-3 py-2.5"
+      className={keep ? `${base} info-inline-visual--keep` : base}
       role="img"
       aria-label={srTextOf(state)}
     >

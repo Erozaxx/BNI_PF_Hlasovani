@@ -290,3 +290,187 @@
     print-color-adjust: exact;
   }
 }
+
+/* === Role a pravomoci (iter-030, T-007a, arch_iter-030_T-001 sekce 7) === */
+
+/* Odkaz na roli: tečkované podtržení, odlišné od akčních odkazů (arch 7.3). */
+.info-role-link {
+  color: var(--color-navy);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.info-role-link:hover {
+  text-decoration-style: solid;
+}
+
+/* Úvodní schéma vedení zůstává pod 1024 px vidět i se sticky režimem:
+   sticky tam ukazuje jen pruh, celé schéma je jednou v úvodu (arch 7.1). */
+@media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
+  .info-root[data-scrolly="on"] .info-inline-visual--keep {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0.625rem 0.75rem;
+    margin: 1.25rem 0 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    border-width: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .info-lc-node {
+    transition:
+      background-color 250ms ease,
+      border-color 250ms ease,
+      opacity 250ms ease;
+  }
+}
+
+/* Referenční část stojí mimo info-layout, sticky pruh ji nepřekrývá.
+   Stačí malý odstup nadpisu karty při skoku z odkazu (arch 7.4). */
+.info-root .info-reference [id] {
+  scroll-margin-top: 1.5rem;
+}
+
+.info-role-card:target,
+.info-role-sub:target,
+.info-decision-row:target,
+.info-rights li:target {
+  outline: 2px solid var(--color-navy);
+  outline-offset: 4px;
+}
+
+/* Tabulka situací: od 768 px tabulka, pod 768 px každý řádek jako karta. */
+.info-decisions th,
+.info-decisions td {
+  padding: 0.75rem 0.5rem;
+  vertical-align: top;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.info-decisions thead th {
+  border-bottom: 2px solid var(--color-border-strong);
+}
+
+.info-decisions td {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .info-decisions,
+  .info-decisions tbody,
+  .info-decisions tr,
+  .info-decisions th,
+  .info-decisions td {
+    display: block;
+    width: 100%;
+  }
+
+  .info-decisions thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .info-decision-row {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+  }
+
+  .info-decisions .info-decision-row th,
+  .info-decisions .info-decision-row td {
+    padding: 0.375rem 0;
+    border-bottom: 0;
+  }
+
+  .info-decisions .info-decision-row th {
+    font-size: 1.125rem;
+  }
+
+  /* Popisek je jen vizuální: čtečka ho zná ze záhlaví sloupce (review T-008,
+     N-3). Prohlížeč bez alternativního textu použije první řádek. */
+  .info-decisions td::before {
+    content: attr(data-label);
+    content: attr(data-label) / "";
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-navy);
+  }
+}
+
+@media print {
+  /* Celá karta se nedělí jen po polích, jinak zůstávají prázdné stránky
+     (review T-008, S-4). Nadpis nezůstane sám na konci stránky. */
+  .info-role-field,
+  .info-role-sub,
+  .info-decision-row,
+  .info-rights li,
+  .info-lc-chart,
+  .info-print-group h3 + ul > li:first-child {
+    break-inside: avoid;
+  }
+
+  .info-root h2,
+  .info-root h3,
+  .info-root h4,
+  .info-role-field dt {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .info-role-card > h3 + *,
+  .info-reference section > h2 + * {
+    break-before: avoid;
+  }
+
+  /* Kroky se schématem vedení jsou delší než strana: dělí se, jinak zůstávají
+     prázdné stránky. Schéma u kroku menší, celé je v úvodu (review T-008, S-4). */
+  .info-step:has(.info-lc) {
+    break-inside: auto;
+  }
+
+  .info-step .info-lc--inline .info-lc-chart {
+    zoom: 0.7;
+  }
+
+  .info-role-card .info-comic,
+  .info-step:has(.info-lc) .info-comic,
+  .info-intro .info-comic {
+    max-width: 120mm;
+  }
+
+  .info-role-popover {
+    display: none !important;
+  }
+
+  /* Odkazy rolí jako běžný text (arch 7.3). */
+  .info-role-link {
+    text-decoration: none !important;
+  }
+
+  .info-role-card {
+    border: 1px solid #999 !important;
+  }
+
+  .info-role-sub,
+  .info-lc-node--decides {
+    background: #fff !important;
+  }
+
+  .info-decisions th,
+  .info-decisions td {
+    border-color: #999 !important;
+  }
+}

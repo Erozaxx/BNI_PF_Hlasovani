@@ -1031,7 +1031,7 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
               ],
             },
             {
-              text: "Když výbor uvolňuje místo bez předchozí zkušební doby, musí souhlasit i ředitel regionu. V pravidlech je to Executive Director nebo Regional Director, tedy ten, kdo odpovídá za celý region BNI.",
+              text: "Když výbor uvolňuje místo bez předchozí zkušební doby, musí souhlasit i ředitel regionu. V pravidlech je to Executive Director nebo Regional Director.",
               obligation: "must",
               sources: [
                 {
