@@ -12,11 +12,19 @@ export function formatDateCs(iso: string): string {
   return `${Number(match[3])}. ${Number(match[2])}. ${match[1]}`;
 }
 
-/** Nahradí `{updated}` českým datem, `{n}` číslem. */
-export function fillTemplate(text: string, values: { updated?: string; n?: number }): string {
+/**
+ * Nahradí `{updated}` českým datem, `{n}` a `{total}` číslem, `{label}` textem
+ * (`{total}` a `{label}`: pozice vizuálu `process-track`, iter-031).
+ */
+export function fillTemplate(
+  text: string,
+  values: { updated?: string; n?: number; total?: number; label?: string }
+): string {
   let out = text;
   if (values.updated !== undefined) out = out.split("{updated}").join(formatDateCs(values.updated));
   if (values.n !== undefined) out = out.split("{n}").join(String(values.n));
+  if (values.total !== undefined) out = out.split("{total}").join(String(values.total));
+  if (values.label !== undefined) out = out.split("{label}").join(values.label);
   return out;
 }
 

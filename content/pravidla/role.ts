@@ -435,7 +435,11 @@ const CARDS: RoleCard[] = [
         kind: "does",
         facts: [
           fact("Hlídá a připomíná poplatky za členství.", "M77"),
-          fact("Vede pořadí prezentací a zařadí do něj i termíny konzultanta regionu.", "M81"),
+          // iter-031 L9: jen odkaz, text beze změny.
+          {
+            ...fact("Vede pořadí prezentací a zařadí do něj i termíny konzultanta regionu.", "M81"),
+            link: { text: "pořadí prezentací", href: "/pravidla/schuzka#hlavni-prezentace" },
+          },
           fact("Platí účty chapteru a jednou ročně sestaví rozpočet.", "M78", "M79"),
           fact("Účastní se výběru nového vedení.", "M80"),
         ],
@@ -466,7 +470,7 @@ const CARDS: RoleCard[] = [
       {
         kind: "does",
         facts: [
-          fact("Připravuje dvou až tříminutové vzdělávací okénko. Může ho svěřit jiným členům.", "M93", "M95"),
+          fact("Připravuje vzdělávací okénko. Může ho svěřit jiným členům.", "M93", "M95"),
           fact("Každý týden ladí témata s prezidentem.", "M94"),
         ],
       },
@@ -495,6 +499,8 @@ const CARDS: RoleCard[] = [
       { kind: "notDecides", facts: [fact("O členství nerozhoduje. Členem výboru není.", "M17", "G1")] },
       { kind: "notDefined", facts: [] },
     ],
+    // iter-031 L6: popisek content-writer T-005a, gate T-006a.
+    link: { href: "/pravidla/clenstvi#passport", label: "Jak probíhá Passport s mentory" },
   },
   {
     id: "hostitele",
@@ -506,7 +512,11 @@ const CARDS: RoleCard[] = [
       {
         kind: "does",
         facts: [
-          fact("Vítá hosty a náhradníky. Po schůzce jim vysvětlí, jak se přihlásit, a ozve se jim.", "M90"),
+          // iter-031 L8: jen odkaz, text beze změny.
+          {
+            ...fact("Vítá hosty a náhradníky. Po schůzce jim vysvětlí, jak se přihlásit, a ozve se jim.", "M90"),
+            link: { text: "náhradníky", href: "/pravidla/schuzka#nahradnik" },
+          },
           fact("Když má host zájem, ale jeho obor je obsazený, dá vědět konzultantovi regionu.", "M91"),
           fact("Koordinátor hostitelů chodí na měsíční setkání vedení.", "M92"),
         ],
@@ -516,6 +526,8 @@ const CARDS: RoleCard[] = [
       { kind: "notDecides", facts: [fact("O přijetí hosta rozhoduje členský výbor.", "M20", "G18")] },
       { kind: "notDefined", facts: [] },
     ],
+    // iter-031 L7: popisek content-writer T-005a, gate T-006a.
+    link: { href: "/pravidla/clenstvi#navsteva", label: "Co host na návštěvě zažije" },
   },
 ];
 
@@ -529,7 +541,7 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
   situations: [
     { label: "Kdo mi schválí volno", anchor: "situace-volno" },
     { label: "Kdo rozhoduje o přijetí nového člena", anchor: "situace-prihlaska" },
-    { label: "Chci si stěžovat na člena", anchor: "stiznost-podani" },
+    // iter-031 L14 (gate T-004 c K3): „Chci si stěžovat na člena" přesunuto na stránku stiznosti.
     { label: "Kdo vybírá nové vedení", anchor: "situace-vedeni" },
     { label: "Kdo je konzultant regionu", anchor: "konzultant-regionu" },
     { label: "Co pravidla dávají BNI a regionu", anchor: "prava-regionu" },
@@ -638,7 +650,11 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
       chapter: [
         fact("Po schválení výborem prezident přijatým uchazečům zavolá a přivítá je v chapteru.", "M20"),
         fact("Koordinátor mentorů dohlédne, aby nový člen prošel programem mentorů.", "M96"),
-        fact("Kdo chce později změnit obor, podává novou přihlášku.", "G5"),
+        // iter-031 L11: jen odkaz, text beze změny.
+        {
+          ...fact("Kdo chce později změnit obor, podává novou přihlášku.", "G5"),
+          link: { text: "změnit obor", href: "/pravidla/obor#zmena-oboru" },
+        },
       ],
       sourcesSummary: "General Policy #10, manuál str. 35 a 75",
       visual: {
@@ -661,7 +677,11 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
       ],
       chapter: [
         fact("Člen výboru pro vztahy mezi členy přijímá obavy i stížnosti, ústní i písemné.", "M58"),
-        fact("Výbor postupuje dál, až když je stížnost napsaná.", "M60"),
+        // iter-031 L12: jen odkaz, text beze změny.
+        {
+          ...fact("Výbor postupuje dál, až když je stížnost napsaná.", "M60"),
+          link: { text: "stížnost", href: "/pravidla/stiznosti#pisemna-stiznost" },
+        },
         fact(
           "Jakmile písemná stížnost přijde, člen výboru pro vztahy mezi členy dá hned vědět viceprezidentovi a konzultantovi regionu.",
           "M59"
@@ -859,6 +879,8 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
           "Člen výboru pro posouzení přihlášek uchazeče prověří. Hostitelé a regionální tým pomáhají s hosty.",
         informed: "Uchazeč do další schůzky. Po přijetí mu zavolá prezident a přivítá ho.",
         sources: refs("M41", "M31", "M45", "M20", "M08"),
+        // iter-031 L4: popisek content-writer T-005a, gate T-006a.
+        link: { href: "/pravidla/clenstvi#prihlaska", label: "Od přihlášky po přijetí" },
       },
       {
         id: "situace-obor",
@@ -868,6 +890,8 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
         advises: "Člen výboru pro vztahy mezi členy přijme obavu.",
         informed: "Pravidla neuvádějí",
         sources: refs("G18", "M47", "M46", "M58"),
+        // iter-031 L10: popisek content-writer T-005b, gate T-006b.
+        link: { href: "/pravidla/obor#spor-o-obor", label: "Jak se řeší překryv oborů" },
       },
       {
         id: "situace-ctvrta-absence",
@@ -899,6 +923,8 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
           "Člen výboru pro vztahy mezi členy stížnost přijme. Viceprezident se obrátí na konzultanta regionu pro podporu a může přizvat další členy.",
         informed: "Regionální kancelář dostane kopii kontrolního listu.",
         sources: refs("M60", "M61", "M63", "M62", "M66", "M68", "M69", "M72", "M73"),
+        // iter-031 L13: popisek content-writer T-005c, gate T-006c.
+        link: { href: "/pravidla/stiznosti", label: "Jak postup u stížnosti probíhá" },
       },
       {
         id: "situace-prevod",
@@ -909,6 +935,8 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
           "Konzultant regionu provede chapter postupem. Kvůli přesunu do sousedního chapteru se kredit nevydává.",
         informed: "Pravidla neuvádějí",
         sources: refs("G15", "M48", "M54"),
+        // iter-031 L5: popisek content-writer T-005a, gate T-006a.
+        link: { href: "/pravidla/clenstvi#prestup", label: "Jak probíhá přestup" },
       },
       {
         id: "situace-vedeni",
@@ -923,7 +951,7 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
         id: "situace-schuzka",
         situation: "Program a místo schůzky",
         decides:
-          "Schůzka jde podle agendy BNI. Téma jednou měsíčně vybírá vedení. Vzdělávací okénko vybírá vzdělávací koordinátor s ohledem na cíle chapteru.",
+          "Schůzka jde podle agendy BNI. Pořadí otevřené schůzky máme u nás vlastní. Téma jednou měsíčně vybírá vedení. Vzdělávací okénko vybírá vzdělávací koordinátor s ohledem na cíle chapteru.",
         approves:
           "Změnu místa regionální nebo oblastní ředitel. Schůzku delší než 90 minut v chapteru s 50 a víc členy ředitel regionu.",
         advises: "Prezident vede schůzku. Konzultant regionu může mít prezentaci.",
@@ -1098,7 +1126,7 @@ export const ROLE_PAGE: InfoPage<"leadership-chart"> = {
     { role: "Sekretář/pokladník chapteru", when: "Když se ptáš na poplatky nebo na platby z účtu chapteru." },
   ],
   disclaimer: [
-    "Tahle stránka je výklad našeho chapteru. Oficiální česká verze pravidel BNI neexistuje, rozhoduje anglické znění.",
+    "Tahle stránka je výklad našeho chapteru.",
     "Vychází z BNI Chapter Operations Manual 2022-2023, platného od 27. 7. 2022, a z BNI General Policies.",
     "Stav k {updated}.",
   ],

@@ -194,6 +194,13 @@
   break-inside: avoid;
 }
 
+/* Jednopanelový pruh (iter-031, review T-008 MAJOR-1): nejvýš nativní šířka
+   kresby (480 px), zarovnaný vlevo s textem. Na 390 px je sloupec užší,
+   nic se nemění. Vícepanelové pruhy, hero a `comicWide` se netýká. */
+.info-comic--single {
+  max-width: 480px;
+}
+
 /* Úzký displej: pruh se 4 úzkými panely do dvou sloupců. */
 @media (max-width: 479px) {
   .info-comic--wrap {
@@ -472,5 +479,144 @@
   .info-decisions th,
   .info-decisions td {
     border-color: #999 !important;
+  }
+}
+
+/* === Série iter-031 (T-007s, arch_iter-031_T-003s X7) === */
+
+/* Postup v etapách `process-track`: na mobilu řádek pozice nejvýš na dva
+   řádky, aby se s pruhem vešel do sticky 104 px (T-003s 1.1). */
+.info-pt--sticky .info-pt-position {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .info-pt--sticky .info-pt-position {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .info-pt-seg,
+  .info-pt-item,
+  .info-agenda-item {
+    transition:
+      background-color 250ms ease,
+      border-color 250ms ease,
+      color 250ms ease;
+  }
+}
+
+/* Program schůzky `meeting-agenda`: zvýrazněný blok navy levým okrajem,
+   ostatní #666 (kontrast 5,7:1). Úvod zůstává pod 1024 px vidět (keepIntro). */
+.info-agenda-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Široký panel kroku (`comicWide`, schůzka C5): přes celou šířku sloupce. */
+.info-comic--wide {
+  grid-template-columns: 1fr;
+}
+
+/* Referenční seznamy (`sections`) stojí mimo info-layout jako referenční část. */
+.info-root .info-sections [id] {
+  scroll-margin-top: 1.5rem;
+}
+
+@media print {
+  .info-comic--wide {
+    max-width: 150mm;
+  }
+
+  .info-list-section > h2 + * {
+    break-before: avoid;
+  }
+
+  /* Odkazy na jiné stránky série dostanou v tisku adresu (T-003s 1.2).
+     Odkazy rolí mají vlastní poznámku v patičce, PDF se tisknou v příloze. */
+  .info-article a[href^="/pravidla/"]:not(.info-role-link):not([href^="/pravidla/zdroje/"])::after {
+    content: " (" attr(href) ")";
+    font-size: 0.875em;
+  }
+}
+
+/* Rozcestník /pravidla (iter-031, T-012x): karty témat a situace v <details>. */
+.info-hub-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card, 0 1px 3px rgb(0 0 0 / 0.08));
+  transition: box-shadow 150ms ease;
+}
+
+.info-hub-card:hover {
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.12);
+}
+
+/* Jednotný poměr stran obrázků karet, aby měly karty v řádku stejnou výšku. */
+.info-hub-card-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Titulek je odkaz roztažený přes celou kartu (bez vnořených odkazů). */
+.info-hub-card-link {
+  color: var(--color-navy, inherit);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.info-hub-card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.info-hub-card-link:focus {
+  outline: none;
+}
+
+.info-hub-card-link:focus-visible::after {
+  border-radius: inherit;
+  box-shadow: var(--shadow-focus, 0 0 0 3px rgb(23 63 126 / 0.5));
+}
+
+.info-hub-summary {
+  list-style-position: inside;
+}
+
+@media print {
+  .info-hub-card {
+    break-inside: avoid;
+  }
+
+  /* Zavřený <details> se v Chromiu netiskne; tiskne se samostatný blok. */
+  .info-hub-screen {
+    display: none !important;
+  }
+
+  .info-hub-print-group {
+    break-inside: avoid;
+    margin-top: 0.75rem;
+  }
+
+  .info-hub-print-group ul {
+    margin-top: 0.25rem;
+    padding-left: 1.25rem;
+    list-style: disc;
   }
 }

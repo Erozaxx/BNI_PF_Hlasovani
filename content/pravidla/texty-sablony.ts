@@ -10,6 +10,8 @@ export const TEMPLATE_TEXTS = {
     lead: "Jak u nás v chapteru fungují pravidla BNI. Krok za krokem.",
     situationsTitle: "Najdi svou situaci",
     topicsTitle: "Témata",
+    /** Souhrn skupiny situací: název stránky a počet situací. */
+    groupSummary: "{title} · {count}",
   },
   updated: "Stav k {updated}",
   skipToSummary: "Přeskočit na shrnutí",
@@ -49,9 +51,9 @@ export const TEMPLATE_TEXTS = {
     absences: "absence {n} ze 3",
     absencesOverByOne: "absence {n}, o jednu nad limit",
     absencesOver: "absence {n}, nad limitem 3",
-    substitutes: "náhradník {n} ze 3",
-    substitutesOverByOne: "náhradník {n}, o jednu nad limit",
-    substitutesOver: "náhradník {n}, nad limitem 3",
+    substitutes: "náhradník {n}",
+    substitutesOverByOne: "náhradník {n}",
+    substitutesOver: "náhradník {n}",
   },
   /**
    * Schéma vedení `leadership-chart` (iter-030). Texty: content-writer T-005
@@ -116,6 +118,40 @@ export const TEMPLATE_TEXTS = {
       informed: "Dozví se",
       sources: "Zdroje",
     },
+  },
+  /**
+   * Postup v etapách `process-track` (iter-031, clenstvi a stiznosti). Texty:
+   * content-writer T-005c, schváleno gate T-006c. `{label}` = název etapy,
+   * nebo `outcome` stavu.
+   */
+  processTrack: {
+    position: "Etapa {n} ze {total}: {label}",
+    /** Úvod (`current = -1`), žádná etapa nesvítí. */
+    overview: "Celkem {total} etap",
+    ariaLabel: "Kde právě jsi",
+  },
+  /**
+   * Program otevřené schůzky `meeting-agenda` (iter-031, schuzka). Texty:
+   * content-writer T-012w, schváleno gate T-012w2 (pořadí podle rozhodnutí
+   * uživatele 13. 10. 2026). Bloky bez času, délka je v názvu („Představení
+   * členů, každý 30 sekund"). Prázdný `time` = řádek jen s názvem.
+   */
+  agenda: {
+    blocks: {
+      uvod: { time: "", name: "Prezident: BNI, hodnoty a noví členové" },
+      seznam: { time: "", name: "Tým hostitelů: seznam hostů a změny" },
+      clenove: { time: "", name: "Představení členů, každý 30 sekund" },
+      hoste: { time: "", name: "Představení hostů, každý 60 sekund" },
+      vzdelavani: { time: "", name: "Vzdělávací okénko, 5 minut" },
+      prezentace: { time: "", name: "Hlavní prezentace, 5 minut" },
+      zprava: { time: "", name: "Zpráva viceprezidenta: čísla chapteru" },
+      doporuceni: { time: "", name: "Doporučení a reference" },
+      networking: { time: "", name: "Volný networking" },
+    },
+    /** Oddělovač času a názvu, použije se jen u neprázdného času. */
+    separator: " · ",
+    /** Pruh bez zvýraznění (`current: []`). */
+    idle: "Program otevřené schůzky",
   },
   /** Patička tisku u stránek s odkazy na role (arch_iter-030 sekce 7.3). */
   roleLinks: {

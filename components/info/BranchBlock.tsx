@@ -8,7 +8,7 @@ import { createRoleLinker, linkFact, type RoleLinkOptions } from "@/lib/info-pag
 import type { Branch, BranchOption, ChapterNote, VisualKind } from "@/lib/info-pages/types";
 import { ChapterNotes } from "./ChapterNoteBox";
 import { ChapterSide } from "./ChapterSide";
-import { ComicStrip } from "./ComicStrip";
+import { ComicStrip, ComicWide } from "./ComicStrip";
 import { InlineVisual } from "./InlineVisual";
 import { RichText } from "./RichText";
 import { SourceNote } from "./SourceNote";
@@ -65,6 +65,7 @@ function OptionCard<K extends VisualKind>({
           {option.title}
         </h3>
         {option.comic && <ComicStrip comic={option.comic} />}
+        {option.comicWide && <ComicWide panel={option.comicWide} />}
         <div className="mt-3 space-y-4 text-lg leading-relaxed text-text-main">
           {story.map((segments, i) => (
             <p key={i}>
