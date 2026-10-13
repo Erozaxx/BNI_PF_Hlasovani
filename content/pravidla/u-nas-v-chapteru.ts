@@ -4,7 +4,7 @@
  *
  * Texty: content-writer T-005 (schváleno T-006). Všechny položky jsou
  * `approved` (uživatel 28. 9. 2026: štítek „návrh" odebrat, C1 až C7
- * schvaluje sám, C8 až C13 29. 9. 2026). `draft` přidá ke štítku slovo „návrh", `enabled: false`
+ * schvaluje sám, C8 až C13 29. 9. 2026, C15 a C16 12. 10. 2026, C17 13. 10. 2026, C18 a C19 13. 10. 2026, C20 až C23 13. 10. 2026). `draft` přidá ke štítku slovo „návrh", `enabled: false`
  * položku skryje všude včetně tisku.
  */
 import type { ChapterNote } from "@/lib/info-pages/types";
@@ -87,6 +87,69 @@ export const CHAPTER_NOTES: ChapterNote[] = [
   {
     id: "C13",
     text: "Když nevíš, kdo o tvé věci rozhoduje, napiš komukoli z vedení. Když to nepatří jemu, předá to dál a dá ti vědět komu.",
+    status: "approved",
+    enabled: true,
+  },
+  // C14 se nepoužívá (v iter-030 ji uživatel zrušil). C15 a C16: rytmus schůzek
+  // podle rozhodnutí uživatele 12. 10. 2026 (iter-031, content-writer T-005d,
+  // schváleno gate T-006d). C15 i na stránce clenstvi v kroku `host`.
+  // C15 upraveno 12. 10. po BFU (gate T-012p úprava 23).
+  {
+    id: "C15",
+    text: "Každá druhá čtvrteční schůzka je u nás interní, bez hostů. Na otevřené schůzce se věnujeme hostům. Na interní pracujeme na vlastním růstu, víc se propojujeme mezi sebou a probíráme, jak dopadla schůzka s hosty. Na jejím konci se schází členský výbor a rozhoduje o přihláškách.",
+    status: "approved",
+    enabled: true,
+  },
+  {
+    id: "C16",
+    text: "Střídání otevřených a interních schůzek je u nás výjimka, kterou schválil franšízant. Ostatní chaptery se jím inspirují.",
+    status: "approved",
+    enabled: true,
+  },
+  // C17: rozhodnutí uživatele 13. 10. 2026 (iter-031, T-012r), nahrazuje
+  // úpravu 4 z gate T-012p. Na stránce clenstvi u možnosti `odmitnuti`.
+  {
+    id: "C17",
+    text: "Výsledek přihlášky hostovi oznámí vybraný člen chapteru.",
+    status: "approved",
+    enabled: true,
+  },
+  // C18, C19: rozhodnutí uživatele 13. 10. 2026 (iter-031 T-012v).
+  {
+    id: "C18",
+    text: "Kolikrát za tebe přijde náhradník, u nás neřešíme. Chceme hlavně kvalitního náhradníka, který tě zastoupí, kdykoli je potřeba.",
+    status: "approved",
+    enabled: true,
+  },
+  {
+    id: "C19",
+    text: "Hlavní prezentaci za tebe u nás může mít i náhradník.",
+    status: "approved",
+    enabled: true,
+  },
+  // C20 až C23: rozhodnutí uživatele 13. 10. 2026 (iter-031 T-012w, gate T-012w2).
+  // C22 i na stránce clenstvi v kroku `prijeti` a na stránce kodex v kroku `slib`.
+  {
+    id: "C20",
+    text: "Průběh otevřené schůzky je u nás trochu jiný než v manuálu BNI. Prezident představí BNI a jeho hodnoty. Tým hostitelů uvede seznam hostů a případné změny. Pak se představí členové a po nich hosté. Následuje vzdělávací okénko, hlavní prezentace, zpráva viceprezidenta s čísly chapteru a doporučení a reference. Na konci je volný networking.",
+    status: "approved",
+    enabled: true,
+  },
+  {
+    id: "C21",
+    text: "Na představení má u nás člen 30 sekund a host 60 sekund.",
+    status: "approved",
+    enabled: true,
+  },
+  {
+    id: "C22",
+    text: "Nové členy uvádí prezident na konci své části, jen na otevřené schůzce. Když nový člen přijde poprvé na interní schůzku, i tam ho představíme a přivítáme. Oficiální uvedení je až na příští otevřené schůzce.",
+    status: "approved",
+    enabled: true,
+  },
+  {
+    id: "C23",
+    text: "Vzdělávací okénko i hlavní prezentace mají u nás každé 5 minut.",
     status: "approved",
     enabled: true,
   },

@@ -16,6 +16,10 @@
  * iter-030 (T-007a, arch_iter-030_T-001 sekce 7): vizuál `leadership-chart`,
  * referenční část `InfoPage.reference` a vypínač odkazů rolí `glossary`.
  * Nové typy nemají žádné pole pro rozlišení závazné / doporučené.
+ *
+ * iter-031 (T-007s, arch_iter-031_T-003s sekce 1 a 2): vizuály `process-track`
+ * a `meeting-agenda`, široký panel kroku `comicWide`, referenční seznamy
+ * `InfoPage.sections` a odkazy z faktu na jinou stránku série.
  */
 
 /** Id, které stránka používá pro shrnutí (odkaz „Přeskočit na shrnutí"). */
@@ -56,7 +60,13 @@ export interface Fact {
   obligation?: Obligation;
   /** Aspoň jeden zdroj (validátor). */
   sources: SourceRef[];
-  /** Část textu jako odkaz na kotvu stránky (`text` musí být v `Fact.text`). */
+  /**
+   * Část textu jako odkaz (`text` musí být v `Fact.text`). Povolené tvary
+   * `href` (T-003s 1.2): `#<kotva>` na téže stránce, `/pravidla/<slug>` nebo
+   * `/pravidla/<slug>#<kotva>` na jinou stránku série. Plná cesta na vlastní
+   * stránku je chyba. Slug i kotvu ověří `validateRegistry` napříč registrem.
+   * Jeden fakt nejvýš jeden odkaz, fráze nesmí být název role z glosáře.
+   */
   link?: { text: string; href: string };
 }
 
@@ -75,6 +85,8 @@ export interface ChapterNote {
 export interface VisualStateMap {
   "absence-timeline": AbsenceTimelineState;
   "leadership-chart": LeadershipChartState;
+  "process-track": ProcessTrackState;
+  "meeting-agenda": MeetingAgendaState;
   none: Record<string, never>;
 }
 export type VisualKind = keyof VisualStateMap;
@@ -138,6 +150,46 @@ export interface LeadershipChartState {
   srText: string;
 }
 
+/**
+ * Postup v etapách (T-003s 1.1): stránky clenstvi a stiznosti. Etapy jsou
+ * stejné pole u všech stavů stránky (konstanta `STAGES` v souboru stránky).
+ */
+export interface ProcessTrackState {
+  stages: string[];
+  /** -1 jen v `intro.visual` (nic nesvítí), jinak 0 .. stages.length - 1. */
+  current: number;
+  /** Přepíše popisek aktuální etapy („Přestup", „Zkušební doba"). */
+  outcome?: string;
+  /**
+   * Cesta tu končí: etapy za `current` přerušovaně, ne jako budoucí.
+   * Jen u možnosti rozcestí bez `next` (validátor).
+   */
+  ended?: boolean;
+  /** Věta pro čtečky, režim bez sticky a tisk. */
+  srText: string;
+}
+
+/** Bloky programu schůzky v pořadí agendy (arch_iter-031_T-001d 4.2). */
+export const AGENDA_BLOCKS = [
+  "uvod",
+  "seznam",
+  "clenove",
+  "hoste",
+  "vzdelavani",
+  "prezentace",
+  "zprava",
+  "doporuceni",
+  "networking",
+] as const;
+export type AgendaBlockId = (typeof AGENDA_BLOCKS)[number];
+
+export interface MeetingAgendaState {
+  /** Zvýrazněné bloky. Prázdné = celý program bez zvýraznění (úvod, rytmus). */
+  current: AgendaBlockId[];
+  /** Věta pro čtečky, tisk a pruh bez JS. V úvodu vyjmenuje všech 9 bloků programu. */
+  srText: string;
+}
+
 /** Panel minikomiksu (T-010k): kresba bez textu, text panelu je HTML. */
 export interface ComicPanel {
   /** Cesta pod `/pravidla/komiksy/`. */
@@ -170,6 +222,11 @@ interface StepContent<K extends VisualKind> {
   sourcesSummary?: string;
   /** Minikomiks pod nadpisem kroku (T-010k). */
   comic?: Comic;
+  /**
+   * Jeden široký panel pod `comic` přes celou šířku sloupce (T-003s X1,
+   * schůzka C5). Kontroly jako `hero`: rozměry, `alt`, `caption`.
+   */
+  comicWide?: ComicPanel;
   visual: VisualStateMap[K];
 }
 
@@ -261,6 +318,29 @@ export interface InfoReference {
   rights: RightsItem[];
 }
 
+/**
+ * Referenční seznam za příběhem (arch_iter-031_T-001c SC3, gate T-004 c K2):
+ * etický kodex, respekt, kontakty. Stojí mimo sticky rozvržení za `reference`,
+ * před shrnutím. Kotvy sekcí i položek jsou ve stejné množině jako kroky.
+ */
+export interface InfoListSection {
+  /** Kotva sekce (H2). */
+  id: string;
+  title: string;
+  /** Odstavce úvodu bez zdroje. */
+  lead?: string[];
+  /** Fakta se zdroji, vykreslí se pod seznamem (T-007z). */
+  facts?: Fact[];
+  /** `true` = fakta uvádějí seznam a stojí nad ním (kodex). Bez faktů je to chyba. */
+  factsFirst?: boolean;
+  /** Položky seznamu, každá s kotvou a zdrojem. */
+  items: RightsItem[];
+  /** `true` = číslovaný seznam (kodex). */
+  ordered?: boolean;
+  chapterNotes?: string[];
+  comic?: Comic;
+}
+
 export interface InfoPage<K extends VisualKind = VisualKind> {
   /** "absence" */
   slug: string;
@@ -289,6 +369,8 @@ export interface InfoPage<K extends VisualKind = VisualKind> {
   steps: Step<K>[];
   /** Referenční část (karty rolí, tabulka situací, práva), iter-030. */
   reference?: InfoReference;
+  /** Referenční seznamy za příběhem (iter-031, stránka stiznosti). */
+  sections?: InfoListSection[];
   /** `false` = na stránce se názvy rolí neodkazují (výjimka k variantě G, arch 7.3). */
   glossary?: false;
   summary: {

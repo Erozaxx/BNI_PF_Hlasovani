@@ -18,13 +18,16 @@ export function InlineVisual<K extends VisualKind>({
   kind,
   state,
   keep = false,
+  intro = false,
 }: {
   kind: K;
   state: VisualStateMap[K];
   /** Zůstane vidět i se sticky režimem pod 1024 px (úvod schématu vedení). */
   keep?: boolean;
+  /** Úvod stránky (program schůzky tu ukáže celý seznam). */
+  intro?: boolean;
 }) {
-  const visual = renderVisual(kind, state, "inline");
+  const visual = renderVisual(kind, state, "inline", intro);
   if (!visual) return null;
   const base = "info-inline-visual mt-5 rounded-card border border-border bg-surface px-3 py-2.5";
   return (

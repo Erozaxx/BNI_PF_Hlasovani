@@ -7,6 +7,9 @@
  * seskupené podle podsekce (úvod, karty rolí, tabulka situací, práva).
  * Každá citace se tiskne jen jednou s číslem, další skupiny na ni odkazují
  * číslem (review T-008, S-4).
+ *
+ * iter-031: za referenční částí citace referenčních seznamů (`sections`),
+ * jedna skupina na sekci (fakta, pak položky).
  */
 import { TEMPLATE_TEXTS } from "@/content/pravidla/texty-sablony";
 import { joinCs, uniqueSources } from "@/lib/info-pages/format";
@@ -88,6 +91,15 @@ export function PrintSources<K extends VisualKind>({
     }
   }
   if (page.reference) groups.push(...referenceGroups(page.reference));
+  for (const section of page.sections ?? []) {
+    // Pořadí citací jako na obrazovce: fakta nad seznamem jen s `factsFirst`.
+    const factSources = uniqueSources(section.facts ?? []);
+    const itemSources = section.items.flatMap((item) => item.sources);
+    const sources = uniqueRefs(
+      section.factsFirst ? [...factSources, ...itemSources] : [...itemSources, ...factSources],
+    );
+    if (sources.length > 0) groups.push({ id: `sekce-${section.id}`, heading: section.title, sources });
+  }
   const docIds = new Set<SourceDocId>(groups.flatMap((g) => g.sources.map((s) => s.doc)));
   const numbered = numberGroups(groups);
 

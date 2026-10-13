@@ -55,10 +55,12 @@ export function ComicStrip({ comic }: { comic: Comic }) {
     );
   }
 
-  const wrap = comicWraps(panels);
+  // Jeden panel (iter-031, review T-008 MAJOR-1): šířka omezená v CSS na
+  // nativních 480 px, na desktopu se nenafoukne přes celý sloupec.
+  const variant = panels.length === 1 ? " info-comic--single" : comicWraps(panels) ? " info-comic--wrap" : "";
   return (
     <figure
-      className={wrap ? "info-comic info-comic--wrap mt-4" : "info-comic mt-4"}
+      className={`info-comic${variant} mt-4`}
       style={{ ["--info-comic-cols" as string]: panels.map((p) => `${p.width}fr`).join(" ") }}
     >
       {panels.map((p, i) => (
@@ -75,6 +77,29 @@ export function ComicStrip({ comic }: { comic: Comic }) {
           />
         </div>
       ))}
+    </figure>
+  );
+}
+
+/**
+ * Široký panel pod komiksem kroku přes celou šířku sloupce (iter-031,
+ * `StepContent.comicWide`, schůzka C5). Popisek nad kresbou jako u panelu.
+ */
+export function ComicWide({ panel }: { panel: ComicPanel }) {
+  return (
+    <figure className="info-comic info-comic--wide mt-3">
+      <div className="info-comic-panel">
+        {panel.caption && <Caption text={panel.caption} />}
+        <img
+          src={panel.src}
+          alt={panel.alt}
+          width={panel.width}
+          height={panel.height}
+          loading="lazy"
+          decoding="async"
+          className="info-comic-img"
+        />
+      </div>
     </figure>
   );
 }

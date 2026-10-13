@@ -181,22 +181,10 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
       chapter: [
         {
           text: "Náhradník se jako absence nepočítá.",
+          // iter-031 L1: jen obalí existující text odkazem, text beze změny.
+          link: { text: "Náhradník", href: "/pravidla/schuzka#nahradnik" },
           obligation: "must",
           sources: [GP5],
-        },
-        {
-          text: "Náhradníka můžeš poslat nejvýš třikrát za šest měsíců.",
-          obligation: "must",
-          sources: [
-            GP5,
-            {
-              doc: GP,
-              page: 4,
-              rule: "Substitute Program 3",
-              quoteEn:
-                "The primary purpose for a substitute is to represent a BNI Member. BNI recommends minimal use of a substitute. However, a Member is allowed to use substitutes up to three times in a six-month period.",
-            },
-          ],
         },
         {
           text: "Náhradník je na nepřítomnost, o které víš předem. Absence je pro situace, které přijdou na poslední chvíli.",
@@ -221,6 +209,7 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
           ],
         },
       ],
+      chapterNotes: ["C18"],
       sourcesSummary: "General Policy #5, manuál str. 55, General Policies (Substitute Program)",
       visual: {
         marks: [{ week: 3, mark: "S" }],
@@ -228,7 +217,7 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
         statusLabel: "V pořádku",
         counters: { absences: 0, substitutes: 1 },
         srText:
-          "Ve třetím týdnu za tebe přišel náhradník. Absenci nemáš, náhradníka jsi použil jednou ze tří.",
+          "Ve třetím týdnu za tebe přišel náhradník. Absenci nemáš, náhradníka jsi použil jednou.",
       },
     },
 
@@ -950,6 +939,8 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
             },
             {
               text: "Délku zkušební doby určí výbor.",
+              // iter-031 L2: jen odkaz, text beze změny.
+              link: { text: "zkušební doby", href: "/pravidla/stiznosti#zkusebni-doba" },
               obligation: "must",
               sources: [
                 {
@@ -1020,6 +1011,8 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
           chapter: [
             {
               text: "Místo se smí uvolnit až poté, co konzultant regionu potvrdí, že se dodržel postup.",
+              // iter-031 L3: jen odkaz, text beze změny.
+              link: { text: "Místo se smí uvolnit", href: "/pravidla/obor#uvolneni-oboru" },
               obligation: "must",
               sources: [
                 {
@@ -1181,7 +1174,7 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
         doc: GP,
         page: 1,
         rule: "General Policy #5",
-        labelCs: "tři absence a tři náhradníci za šest měsíců",
+        labelCs: "tři absence za šest měsíců",
       },
       { doc: GP, page: 1, rule: "General Policy #9", labelCs: "volno" },
       { doc: GP, page: 2, rule: "Administrative Policy #5", labelCs: "poplatky a kredit" },
@@ -1205,7 +1198,7 @@ export const ABSENCE_PAGE: InfoPage<"absence-timeline"> = {
   ],
 
   disclaimer: [
-    "Tahle stránka je výklad našeho chapteru. Oficiální česká verze pravidel BNI neexistuje, rozhoduje anglické znění.",
+    "Tahle stránka je výklad našeho chapteru.",
     "Vychází z BNI Chapter Operations Manual 2022-2023, platného od 27. 7. 2022, a z BNI General Policies.",
     "Stav k {updated}.",
   ],

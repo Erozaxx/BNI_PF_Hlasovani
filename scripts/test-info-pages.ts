@@ -15,16 +15,34 @@
  *    s odkazy beze změny textu, schéma vedení, referenční část a validátor
  *    nad fiktivní stránkou `role` (jen v testu, ne v registru), zákaz
  *    rozlišení závazné / doporučené. Spuštění: npm run test:iter-030
+ * 7. iter-031 (T-007s, arch_iter-031_T-003s sekce 6, případy 68 až 86;
+ *    T-007z případ 87, pořadí faktů v sekcích):
+ *    vizuály process-track a meeting-agenda, comicWide, referenční seznamy,
+ *    rejstřík série (fakta.ts), odkazy mezi stránkami, kontrakt kotev,
+ *    rozcestník po stránkách, zákaz závazné/doporučené na nových stránkách,
+ *    text absence a role beze změny (fixtures). Testy běží nad celým
+ *    registrem, coder stránky je nemění. Spuštění: npm run test:iter-031
  */
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import PravidlaHubPage from "../app/pravidla/page";
 import { ChapterNotes, chapterNoteLabel } from "../components/info/ChapterNoteBox";
 import { comicWraps } from "../components/info/ComicStrip";
 import { InfoPageView } from "../components/info/InfoPageView";
 import { barRows, LeadershipChart } from "../components/info/visuals/LeadershipChart";
+import { agendaBarText, agendaLine, MeetingAgenda } from "../components/info/visuals/MeetingAgenda";
+import { processTrackPosition, stageState } from "../components/info/visuals/ProcessTrack";
+import { hasVisual, keepsIntro, renderLegend } from "../components/info/visuals/registry";
+import { CLENSTVI_SOURCES } from "../content/pravidla/clenstvi-zdroje";
+import { mergeSources, SERIES_SOURCES, src as seriesSrc } from "../content/pravidla/fakta";
+import { KODEX_SOURCES } from "../content/pravidla/kodex-zdroje";
+import { OBOR_SOURCES } from "../content/pravidla/obor-zdroje";
+import { ROLE_SOURCES } from "../content/pravidla/role-zdroje";
+import { SCHUZKA_SOURCES } from "../content/pravidla/schuzka-zdroje";
+import { STIZNOSTI_SOURCES } from "../content/pravidla/stiznosti-zdroje";
 import { ROLE_GLOSSARY, ROLE_NAMES, type RoleGlossaryEntry } from "../content/pravidla/role-glosar";
 import { ROLE_COMICS } from "../content/pravidla/role-komiksy";
 import { CHAPTER_NOTES } from "../content/pravidla/u-nas-v-chapteru";
@@ -54,16 +72,20 @@ import type {
   Comic,
   ComicPanel,
   Fact,
+  InfoListSection,
   InfoPage,
+  MeetingAgendaState,
+  ProcessTrackState,
   RoleCard,
   RoleId,
   RoleRelation,
   Scene,
   VisualKind,
 } from "../lib/info-pages/types";
-import { ROLE_IDS } from "../lib/info-pages/types";
+import { AGENDA_BLOCKS, ROLE_IDS } from "../lib/info-pages/types";
 import {
   assertValidRegistry,
+  checkCrossLink,
   findTextIssues,
   validateGlossary,
   validateInfoPage,
@@ -77,6 +99,25 @@ const basePage: InfoPage = absence;
 /** Hluboká kopie dat, aby si případy navzájem nepřepisovaly stav. */
 function clonePage(): InfoPage {
   return JSON.parse(JSON.stringify(basePage)) as InfoPage;
+}
+
+/**
+ * Registr se stránkami nahrazenými podle slugu, nové na konec (T-003s sekce 6).
+ * Absence a role mají od iter-031 odkazy na ostatní stránky, proto testy
+ * s fiktivní stránkou validují celý registr, ne jeho výřez.
+ */
+function registryWith(...pages: InfoPage[]): InfoPage[] {
+  const bySlug = new Map(pages.map((p) => [p.slug, p]));
+  const out = INFO_PAGES.map((p) => bySlug.get(p.slug) ?? p);
+  for (const page of pages) if (!INFO_PAGES.some((p) => p.slug === page.slug)) out.push(page);
+  return out;
+}
+
+/** Chyby registru bez odkazů na kotvy stránky `role`, kterou test nahradil fiktivní. */
+function errorsWithFakeRole(pages: InfoPage[]): string[] {
+  return validateRegistry(pages, CHAPTER_NOTES).errors.filter(
+    (e) => !/odkaz „\/pravidla\/role#[^"]*" míří na kotvu/.test(e)
+  );
 }
 
 function cloneNotes(): ChapterNote[] {
@@ -345,6 +386,186 @@ function headingLevels(html: string): number[] {
   return Array.from(visible.matchAll(/<h([1-6])\b/g)).map((m) => Number(m[1]));
 }
 
+// --- iter-031 (T-007s): fiktivní stránky pro nové vizuály, jen v testu ---
+
+const TRACK_STAGES = ["Návštěva", "Přihláška", "Prověrka", "Rozhodnutí", "Začátek"];
+
+function track(current: number, srText: string, extra: Partial<ProcessTrackState> = {}): ProcessTrackState {
+  return { stages: [...TRACK_STAGES], current, srText, ...extra };
+}
+
+/** Stránka s vizuálem `process-track`: úvod, dvě scény, rozcestí s koncem cesty. */
+function trackPage(): InfoPage<"process-track"> {
+  return {
+    slug: "test-postup",
+    title: "Testovací postup",
+    description: "Postup v etapách, testovací data.",
+    updated: "2026-10-12",
+    visual: "process-track",
+    situations: [{ label: "Testovací situace postupu", anchor: "navsteva" }],
+    intro: { question: "Jak to probíhá?", lead: ["Úvod."], visual: track(-1, "Postup má pět etap.") },
+    steps: [
+      { type: "scene", id: "navsteva", label: "Krok 1", title: "Návštěva", story: ["Přijdeš."], chapter: [testFact("Fakt.")], visual: track(0, "Jsi na návštěvě.") },
+      { type: "scene", id: "prihlaska", label: "Krok 2", title: "Přihláška", story: ["Přihlásíš se."], chapter: [testFact("Fakt.")], visual: track(1, "Podáváš přihlášku.", { outcome: "Přihláška podaná" }) },
+      {
+        type: "branch",
+        id: "vysledek",
+        question: "Jak výbor rozhodne?",
+        options: [
+          { tone: "good", id: "prijeti", label: "Možnost 1", title: "Přijetí", story: ["Přijetí."], chapter: [testFact("Fakt.")], visual: track(4, "Jsi členem.") },
+          { tone: "neutral", id: "odmitnuti", label: "Možnost 2", title: "Nepřijetí", story: ["Nepřijetí."], chapter: [testFact("Fakt.")], visual: track(3, "Cesta tu končí.", { outcome: "Přihláška neprošla", ended: true }) },
+        ],
+      },
+    ],
+    summary: { title: "Shrnutí", points: [{ text: "Bod." }], whereToFind: [{ doc: "ops-manual-2022", page: 34 }] },
+    contacts: [],
+    disclaimer: ["Stav k {updated}."],
+  };
+}
+
+function cloneTrackPage(): InfoPage<"process-track"> {
+  return JSON.parse(JSON.stringify(trackPage())) as InfoPage<"process-track">;
+}
+
+function agenda(current: MeetingAgendaState["current"], srText: string): MeetingAgendaState {
+  return { current, srText };
+}
+
+const TEST_PANEL: ComicPanel = { src: "/pravidla/komiksy/test-siroky.webp", width: 960, height: 420, caption: "Široký panel.", alt: "Testovací kresba." };
+
+/** Stránka s vizuálem `meeting-agenda` a širokým panelem v kroku. */
+function agendaPage(): InfoPage<"meeting-agenda"> {
+  return {
+    slug: "test-program",
+    title: "Testovací program",
+    description: "Program schůzky, testovací data.",
+    updated: "2026-10-12",
+    visual: "meeting-agenda",
+    situations: [{ label: "Testovací situace programu", anchor: "prichod" }],
+    intro: { question: "Jak schůzka probíhá?", lead: ["Úvod."], visual: agenda([], "Program schůzky, devět bloků.") },
+    steps: [
+      {
+        type: "scene",
+        id: "prichod",
+        label: "Krok 1",
+        title: "Příchod",
+        story: ["Přijdeš."],
+        chapter: [testFact("Fakt.")],
+        comic: { panels: [{ ...TEST_PANEL, src: "/pravidla/komiksy/test-1.webp", width: 440, caption: "Panel." }] },
+        comicWide: { ...TEST_PANEL },
+        visual: agenda(["uvod"], "Začátek, prezident."),
+      },
+      { type: "scene", id: "zpravy", label: "Krok 2", title: "Zprávy", story: ["Zprávy."], chapter: [testFact("Fakt.")], visual: agenda(["prezentace", "zprava"], "Zpráva a hlavní prezentace.") },
+      { type: "scene", id: "rytmus", label: "Krok 3", title: "Rytmus", story: ["Rytmus."], chapter: [testFact("Fakt.")], visual: agenda([], "Celý program bez zvýraznění.") },
+    ],
+    summary: { title: "Shrnutí", points: [{ text: "Bod." }], whereToFind: [{ doc: "ops-manual-2022", page: 11 }] },
+    contacts: [],
+    disclaimer: ["Stav k {updated}."],
+  };
+}
+
+function cloneAgendaPage(): InfoPage<"meeting-agenda"> {
+  return JSON.parse(JSON.stringify(agendaPage())) as InfoPage<"meeting-agenda">;
+}
+
+const SECTION_REF = { doc: "general-policies" as const, page: 2, quoteEn: "Test quote for the code of ethics." };
+
+/** Referenční seznamy (kodex číslovaný, respekt odrážkami) na stránce bez vizuálu. */
+function sectionsPage(): InfoPage<"none"> {
+  const sections: InfoListSection[] = [
+    {
+      id: "kodex",
+      title: "Kodex",
+      ordered: true,
+      facts: [{ text: "Kodex platí pro každého člena. Body jsou níž.", sources: [SECTION_REF], link: { text: "Body jsou níž.", href: "#kodex-1" } }],
+      items: [
+        { id: "kodex-1", text: "První bod kodexu.", sources: [SECTION_REF] },
+        { id: "kodex-2", text: "Druhý bod kodexu.", sources: [SECTION_REF] },
+      ],
+    },
+    {
+      id: "respekt",
+      title: "Respekt",
+      lead: ["Úvod sekce."],
+      items: [{ id: "nediskriminace", text: "Chapter vybírá členy podle kvalifikace.", sources: [{ ...SECTION_REF, quoteEn: "Second test quote." }] }],
+      chapterNotes: ["C3"],
+    },
+  ];
+  return { ...nonePage(), slug: "test-sekce", situations: [{ label: "Testovací kodex", anchor: "kodex" }], sections };
+}
+
+/** Kontrakt kotev (arch_iter-031_T-003s sekce 4): stránky registru je musí mít. */
+const ANCHOR_CONTRACT: Record<string, string[]> = {
+  clenstvi: ["host", "navsteva", "prihlaska", "prestup", "hlasovani", "prijeti", "odmitnuti", "orientace", "passport"],
+  obor: ["jeden-obor", "hlavni-profese", "vyber-oboru", "zmena-oboru", "spor-o-obor", "uvolneni-oboru"],
+  stiznosti: ["nejdriv-rozhovor", "pisemna-stiznost", "domluva", "zkusebni-doba", "posouzeni"],
+  kodex: ["slib", "kodex-1", "kodex-2", "kodex-3", "kodex-4", "kodex-5", "kodex-6", "kodex-7", "v-praxi", "hodnoty"],
+  schuzka: ["program", "predstaveni", "hlavni-prezentace", "pozdni-prichod", "nahradnik", "jiny-chapter", "rytmus"],
+  absence: ["uvod", "nahradnik", "treti-absence", "ctvrta-absence", "odchod-s-kreditem"],
+  role: ["vedeni"],
+};
+
+/** Popisky odkazů L4 až L7, L10, L13: jediný nový text na stránce rolí (T-003s 1.8). */
+const ROLE_NEW_LABELS = [
+  "Od přihlášky po přijetí",
+  "Jak probíhá přestup",
+  "Jak probíhá Passport s mentory",
+  "Co host na návštěvě zažije",
+  "Jak se řeší překryv oborů",
+  "Jak postup u stížnosti probíhá",
+];
+
+/** Všechny `Fact.link` stránky (kroky, možnosti, reference, sekce). */
+function factLinksOf(page: InfoPage): { text: string; href: string }[] {
+  const facts: Fact[] = [];
+  for (const step of page.steps) {
+    if (step.type === "scene") facts.push(...step.chapter);
+    else for (const option of step.options) facts.push(...option.chapter);
+  }
+  if (page.reference) {
+    facts.push(...page.reference.facts);
+    for (const card of page.reference.roles) {
+      for (const field of card.fields) facts.push(...field.facts);
+      for (const sub of card.subAnchors ?? []) facts.push(...sub.facts);
+    }
+  }
+  for (const section of page.sections ?? []) facts.push(...(section.facts ?? []));
+  return facts.flatMap((f) => (f.link ? [f.link] : []));
+}
+
+/** Všechny fakty stránky (kontrola `obligation` na nových stránkách). */
+function allFactsOf(page: InfoPage): Fact[] {
+  const facts: Fact[] = [];
+  for (const step of page.steps) {
+    if (step.type === "scene") facts.push(...step.chapter);
+    else for (const option of step.options) facts.push(...option.chapter);
+  }
+  if (page.reference) {
+    facts.push(...page.reference.facts);
+    for (const card of page.reference.roles) {
+      for (const field of card.fields) facts.push(...field.facts);
+      for (const sub of card.subAnchors ?? []) facts.push(...sub.facts);
+    }
+  }
+  for (const section of page.sections ?? []) facts.push(...(section.facts ?? []));
+  return facts;
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+}
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+}
+
+/** Text článku bez tiskové přílohy (stejný řez jako fixture absence). */
+function articleText(html: string): string {
+  const cut = html.indexOf('<section class="info-print-only info-print-sources');
+  assert.ok(cut > 0, "tisková příloha zdrojů");
+  return textContent(html.slice(0, cut));
+}
+
 type TestCase = { name: string; run: () => void };
 
 const cases: TestCase[] = [
@@ -357,11 +578,11 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "02. C1 az C13 existuji, jsou approved a enabled (iter-029 C1 az C7, iter-030 C8 az C13, C14 neni)",
+    name: "02. C1 az C13, C15 az C23 existuji, jsou approved a enabled (iter-029 C1 az C7, iter-030 C8 az C13, iter-031 C15 az C23, C14 neni)",
     run: () => {
       assert.deepEqual(
         CHAPTER_NOTES.map((n) => n.id),
-        ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13"]
+        ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13", "C15", "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23"]
       );
       for (const note of CHAPTER_NOTES) {
         assert.equal(note.status, "approved", note.id);
@@ -645,8 +866,8 @@ const cases: TestCase[] = [
     name: "29. uniqueSources odstrani duplicitni citace (citace jako vyse)",
     run: () => {
       const sources = uniqueSources(scene(basePage, "nahradnik").chapter);
-      // GP #5, Substitute Program 3, manuál 55, Substitute Program 1
-      assert.equal(sources.length, 4);
+      // GP #5, manuál 55, Substitute Program 1 (limit 3 náhradníků odpadl, T-012v)
+      assert.equal(sources.length, 3);
     },
   },
   {
@@ -669,10 +890,10 @@ const cases: TestCase[] = [
       assert.equal(formatCounter(3, abs), "absence 3 ze 3");
       assert.equal(formatCounter(4, abs), "absence 4, o jednu nad limit");
       assert.equal(formatCounter(5, abs), "absence 5, nad limitem 3");
-      assert.equal(formatCounter(0, sub), "náhradník 0 ze 3");
-      assert.equal(formatCounter(3, sub), "náhradník 3 ze 3");
-      assert.equal(formatCounter(4, sub), "náhradník 4, o jednu nad limit");
-      assert.equal(formatCounter(5, sub), "náhradník 5, nad limitem 3");
+      assert.equal(formatCounter(0, sub), "náhradník 0");
+      assert.equal(formatCounter(3, sub), "náhradník 3");
+      assert.equal(formatCounter(4, sub), "náhradník 4");
+      assert.equal(formatCounter(5, sub), "náhradník 5");
     },
   },
   {
@@ -882,7 +1103,7 @@ const cases: TestCase[] = [
       branch(bad, "co-ted").options[1].next = "neexistuje";
       scene(bad, "uvod").chapter[0].sources[0].page = 999;
       assert.throws(
-        () => assertValidRegistry([bad], CHAPTER_NOTES),
+        () => assertValidRegistry(registryWith(bad), CHAPTER_NOTES),
         (e: unknown) =>
           e instanceof Error &&
           /neprošly validací \(2\)/.test(e.message) &&
@@ -921,7 +1142,7 @@ const cases: TestCase[] = [
     name: "35. m-2: fiktivni stranka s visual none projde validatorem a vyrenderuje se bez osy",
     run: () => {
       const page = nonePage();
-      assert.deepEqual(validateRegistry([basePage, page], CHAPTER_NOTES).errors, []);
+      assert.deepEqual(validateRegistry(registryWith(page), CHAPTER_NOTES).errors, []);
       const html = renderToStaticMarkup(
         createElement(InfoPageView, { page, notes: CHAPTER_NOTES, baseUrl: "" })
       );
@@ -1119,7 +1340,7 @@ const cases: TestCase[] = [
   {
     name: "51. validator leadership-chart: neznama role a vztah, duplicitni role, prazdny srText; fiktivni stranka role projde",
     run: () => {
-      assert.deepEqual(validateRegistry([rolePage(), basePage], CHAPTER_NOTES).errors, []);
+      assert.deepEqual(errorsWithFakeRole(registryWith(rolePage())), []);
       const bad = cloneRolePage();
       const step = bad.steps[1] as Scene<"leadership-chart">;
       step.visual.roles.push({ role: "kral" as RoleId, relation: "decides" });
@@ -1336,13 +1557,14 @@ const cases: TestCase[] = [
   {
     name: "57. registr: role prvni, fiktivni stranka role projde validaci",
     run: () => {
+      // iter-031: pořadí T-003s 1.7 (role první podle K5 iter-030).
       assert.deepEqual(
         INFO_PAGES.map((p) => p.slug),
-        ["role", "absence"],
-        "role první (K5)"
+        ["role", "clenstvi", "schuzka", "absence", "obor", "kodex", "stiznosti"],
+        "role první (K5), pak pořadí T-003s 1.7, kodex před stížnostmi (K3 gate T-004e)"
       );
-      const pages = [rolePage(), basePage] as InfoPage[];
-      assert.doesNotThrow(() => assertValidRegistry(pages, CHAPTER_NOTES));
+      const pages = registryWith(rolePage());
+      assert.deepEqual(errorsWithFakeRole(pages), []);
       const situations = pages.flatMap((p) => p.situations.map((s) => `/pravidla/${p.slug}#${s.anchor}`));
       assert.equal(situations[0], "/pravidla/role#situace-prihlaska");
     },
@@ -1624,9 +1846,9 @@ const cases: TestCase[] = [
       assert.ok(narrow.left + narrow.width <= 280 - 8);
 
       // Bez JS: server vykreslí odkazy s href na existující kartu, bublina v HTML není.
+      const role = renderPage(getInfoPage("role")!);
       for (const page of INFO_PAGES) {
         const html = renderPage(page);
-        const role = renderPage(getInfoPage("role")!);
         const links = Array.from(html.matchAll(/<a href="([^"]+)" title="[^"]*" data-role="([a-z-]+)" class="info-role-link/g));
         assert.ok(links.length > 0, page.slug);
         for (const [, href, id] of links) {
@@ -1641,6 +1863,664 @@ const cases: TestCase[] = [
       for (const needle of ['"use client"', "aria-expanded", "aria-controls", 'role="dialog"', "Escape", "createPortal"]) {
         assert.ok(src.includes(needle), needle);
       }
+    },
+  },
+  // --- iter-031 (T-007s, arch_iter-031_T-003s sekce 6) ---
+  {
+    name: "68. fillTemplate {n} {total} {label} a radek pozice process-track (texty sablony T-005c, gate T-006c)",
+    run: () => {
+      const P = TEMPLATE_TEXTS.processTrack;
+      assert.equal(P.position, "Etapa {n} ze {total}: {label}");
+      assert.equal(P.overview, "Celkem {total} etap");
+      assert.equal(P.ariaLabel, "Kde právě jsi");
+      assert.equal(fillTemplate(P.position, { n: 2, total: 7, label: "Přihláška" }), "Etapa 2 ze 7: Přihláška");
+      assert.equal(fillTemplate("{n}/{total} {label} {updated}", { n: 1, total: 3, label: "A", updated: "2026-10-12" }), "1/3 A 12. 10. 2026");
+      assert.equal(fillTemplate("bez zástupců", { total: 3, label: "x" }), "bez zástupců");
+      assert.equal(processTrackPosition(track(-1, "x")), "Celkem 5 etap");
+      assert.equal(processTrackPosition(track(1, "x")), "Etapa 2 ze 5: Přihláška");
+      assert.equal(processTrackPosition(track(1, "x", { outcome: "Přestup" })), "Etapa 2 ze 5: Přestup");
+      const ended = track(2, "x", { ended: true });
+      assert.deepEqual([0, 1, 2, 3, 4].map((i) => stageState(ended, i)), ["done", "done", "current", "ended", "ended"]);
+      assert.deepEqual([0, 1, 2].map((i) => stageState(track(-1, "x"), i)), ["future", "future", "future"]);
+    },
+  },
+  {
+    name: "69. validator process-track: rozsah current, -1 jen v uvodu, stejne stages, ended jen u moznosti bez next, texty",
+    run: () => {
+      assert.deepEqual(errorsOf(trackPage()), []);
+      const range = cloneTrackPage();
+      (range.steps[0] as Scene<"process-track">).visual.current = 5;
+      assertHasError(errorsOf(range), /krok navsteva\.visual: current 5 mimo rozsah -1 až 4/);
+      const minus = cloneTrackPage();
+      (minus.steps[1] as Scene<"process-track">).visual.current = -1;
+      assertHasError(errorsOf(minus), /krok prihlaska\.visual: current -1 smí jen intro\.visual/);
+      const stages = cloneTrackPage();
+      (stages.steps[1] as Scene<"process-track">).visual.stages = ["Jiná", "Přihláška", "Prověrka", "Rozhodnutí", "Začátek"];
+      assertHasError(errorsOf(stages), /krok prihlaska\.visual: stages se liší od ostatních stavů stránky/);
+      const endedScene = cloneTrackPage();
+      (endedScene.steps[0] as Scene<"process-track">).visual.ended = true;
+      assertHasError(errorsOf(endedScene), /krok navsteva\.visual: ended smí jen možnost rozcestí bez next/);
+      const endedNext = cloneTrackPage();
+      const option = (endedNext.steps[2] as Branch<"process-track">).options[1];
+      option.next = "navsteva";
+      option.nextLabel = "Zpět na začátek";
+      assertHasError(errorsOf(endedNext), /odmitnuti\.visual: ended smí jen možnost rozcestí bez next/);
+      const intro = cloneTrackPage();
+      intro.intro.visual.ended = true;
+      assertHasError(errorsOf(intro), /intro\.visual: ended smí jen možnost rozcestí bez next/);
+      const text = cloneTrackPage();
+      (text.steps[1] as Scene<"process-track">).visual.outcome = "Přihláška — podaná";
+      (text.steps[0] as Scene<"process-track">).visual.srText = "";
+      text.intro.visual.stages = ["Návštěva", "", "Prověrka", "Rozhodnutí", "Začátek"];
+      const errors = errorsOf(text);
+      assertHasError(errors, /krok prihlaska\.visual\.outcome: em dash/);
+      assertHasError(errors, /krok navsteva\.visual\.srText: prázdný text/);
+      assertHasError(errors, /intro\.visual\.stages\[1\]: prázdný text/);
+      const empty = cloneTrackPage();
+      empty.intro.visual.stages = [];
+      assertHasError(errorsOf(empty), /intro\.visual: stages je prázdné/);
+    },
+  },
+  {
+    name: "70. render process-track: sticky pruh i seznam v DOM, inline pozice a srText, konec cesty prerusovane, bez cervene",
+    run: () => {
+      assert.ok(hasVisual("process-track"));
+      assert.equal(keepsIntro("process-track"), false);
+      assert.equal(renderLegend("process-track", 2), null);
+      const html = renderPage(trackPage() as InfoPage);
+      const sticky = html.slice(html.indexOf('<div class="info-sticky"'), html.indexOf('<div class="info-flow'));
+      assert.ok(sticky.includes('class="info-pt info-pt--sticky"'));
+      assert.ok(sticky.includes('class="lg:hidden"') && sticky.includes('class="hidden lg:block"'));
+      assert.ok(sticky.includes("Celkem 5 etap"), "sticky začíná stavem úvodu");
+      assert.ok(sticky.includes('aria-label="Kde právě jsi"'));
+      const flow = html.slice(html.indexOf('<div class="info-flow'));
+      for (const line of ["Celkem 5 etap", "Etapa 1 ze 5: Návštěva", "Etapa 2 ze 5: Přihláška podaná", "Etapa 4 ze 5: Přihláška neprošla", "Cesta tu končí."]) {
+        assert.ok(flow.includes(line), line);
+      }
+      const option = flow.slice(flow.indexOf('id="odmitnuti"'));
+      const bar = option.slice(option.indexOf('class="info-pt-bar'), option.indexOf("</div>", option.indexOf('class="info-pt-bar')));
+      assert.deepEqual(Array.from(bar.matchAll(/data-stage="([a-z]+)"/g)).map((m) => m[1]), ["done", "done", "done", "current", "ended"]);
+      assert.ok(bar.includes("border-dashed"));
+      assert.ok(!/danger|cf2031|#cf2e2e/i.test(sticky + bar), "červená se nepoužívá");
+      assert.ok(flow.includes('role="img" aria-label="Jsi na návštěvě."'));
+    },
+  },
+  {
+    name: "71. validator meeting-agenda: neznamy blok, duplicitni blok, prazdny srText; platna stranka projde",
+    run: () => {
+      assert.deepEqual(AGENDA_BLOCKS, ["uvod", "seznam", "clenove", "hoste", "vzdelavani", "prezentace", "zprava", "doporuceni", "networking"]);
+      assert.deepEqual(errorsOf(agendaPage()), []);
+      const unknown = cloneAgendaPage();
+      (unknown.steps[0] as Scene<"meeting-agenda">).visual.current = ["kava" as never];
+      assertHasError(errorsOf(unknown), /krok prichod\.visual: neznámý blok programu „kava"/);
+      const dup = cloneAgendaPage();
+      (dup.steps[1] as Scene<"meeting-agenda">).visual.current = ["zprava", "zprava"];
+      assertHasError(errorsOf(dup), /krok zpravy\.visual: blok zprava je ve stavu víckrát/);
+      const sr = cloneAgendaPage();
+      (sr.steps[2] as Scene<"meeting-agenda">).visual.srText = " ";
+      assertHasError(errorsOf(sr), /krok rytmus\.visual\.srText: prázdný text/);
+    },
+  },
+  {
+    name: "72. render meeting-agenda: uvod cely program (keepIntro), krok jen pruh a srText, pruh bez (+n), okenko, bez cervene",
+    run: () => {
+      const A = TEMPLATE_TEXTS.agenda;
+      assert.equal(A.blocks.vzdelavani.name, "Vzdělávací okénko, 5 minut");
+      assert.equal(A.blocks.clenove.name, "Představení členů, každý 30 sekund");
+      assert.ok(AGENDA_BLOCKS.every((id) => A.blocks[id].time === ""), "bloky bez času (gate T-012w2)");
+      assert.ok(!("note" in A), "věta o orientačních časech zrušena");
+      assert.equal(agendaBarText(agenda([], "x")), "Program otevřené schůzky");
+      assert.equal(agendaBarText(agenda(["prezentace", "zprava"], "x")), "Hlavní prezentace, 5 minut");
+      assert.equal(agendaBarText(agenda(["vzdelavani"], "x")), "Vzdělávací okénko, 5 minut");
+      assert.equal(agendaLine("networking"), "Volný networking");
+      assert.ok(hasVisual("meeting-agenda"));
+      assert.equal(keepsIntro("meeting-agenda"), true);
+      assert.equal(renderLegend("meeting-agenda", 2), null);
+
+      const html = renderPage(agendaPage() as InfoPage);
+      assert.equal((html.match(/class="info-agenda-list/g) ?? []).length, 2, "celý seznam jen v úvodu a ve sticky na desktopu");
+      const intro = html.slice(html.indexOf('class="info-intro'), html.indexOf('id="prichod"'));
+      assert.ok(intro.includes("info-inline-visual--keep"));
+      assert.equal((intro.match(/data-block="/g) ?? []).length, 9);
+      assert.ok(!/min\.|90 minut/.test(intro), "bez minutových značek a 90 minut");
+      const rytmus = html.slice(html.indexOf('id="rytmus"'));
+      assert.ok(rytmus.includes("Program otevřené schůzky") && rytmus.includes("Celý program bez zvýraznění."));
+      const zpravy = html.slice(html.indexOf('id="zpravy"'), html.indexOf('id="rytmus"'));
+      assert.ok(zpravy.includes("Hlavní prezentace, 5 minut"));
+      assert.ok(!html.includes("(+"), "pruh bez (+n), gate T-012p úprava 22");
+
+      const sticky = renderToStaticMarkup(createElement(MeetingAgenda, { state: agenda(["zprava", "prezentace"], "x"), size: "sticky" }));
+      assert.ok(sticky.includes('class="lg:hidden"') && sticky.includes('class="hidden lg:block"'));
+      assert.equal((sticky.match(/data-active="true"/g) ?? []).length, 2);
+      assert.ok(sticky.includes("border-navy") && !/danger|cf2031|#cf2e2e/i.test(sticky));
+      assert.ok(!/chvilk/i.test(html), "vzdělávací okénko, ne chvilka");
+    },
+  },
+  {
+    name: "73. comicWide: validator jako hero (src, alt, caption, rozmery), vykresli se pod komiksem kroku pres celou sirku",
+    run: () => {
+      const bad = cloneAgendaPage();
+      const wide = (bad.steps[0] as Scene<"meeting-agenda">).comicWide!;
+      wide.src = "/obrazky/c5.webp";
+      wide.alt = "";
+      wide.caption = "";
+      wide.width = 0;
+      const errors = errorsOf(bad);
+      assertHasError(errors, /krok prichod\.comicWide: src „\/obrazky\/c5\.webp" není pod \/pravidla\/komiksy\//);
+      assertHasError(errors, /krok prichod\.comicWide: prázdný alt/);
+      assertHasError(errors, /krok prichod\.comicWide: prázdný caption/);
+      assertHasError(errors, /krok prichod\.comicWide: width 0 není kladné celé číslo/);
+      const html = renderPage(agendaPage() as InfoPage);
+      const step = html.slice(html.indexOf('id="prichod"'), html.indexOf('id="zpravy"'));
+      const strip = step.search(/class="info-comic(?: info-comic--single)? mt-4"/);
+      const wideAt = step.indexOf('class="info-comic info-comic--wide mt-3"');
+      assert.ok(strip > 0 && wideAt > strip, "široký panel pod komiksem");
+      assert.ok(step.includes('src="/pravidla/komiksy/test-siroky.webp"') && step.includes('width="960" height="420"'));
+      assert.ok(step.includes("Široký panel."));
+    },
+  },
+  {
+    name: "74. referencni seznamy (sections): kotvy, zdroj u polozky, obligation, render ol/ul mimo layout, tisk citace jednou",
+    run: () => {
+      const page = sectionsPage();
+      assert.deepEqual(errorsOf(page), []);
+      const dup = sectionsPage();
+      dup.sections![1].items[0].id = "krok-a";
+      assertHasError(errorsOf(dup), /id „krok-a" není unikátní/);
+      const noSource = sectionsPage();
+      noSource.sections![0].items[1].sources = [];
+      assertHasError(errorsOf(noSource), /sekce kodex\/kodex-2: položka nemá zdroj/);
+      const obligation = sectionsPage();
+      obligation.sections![0].facts![0].obligation = "must";
+      assertHasError(errorsOf(obligation), /sekce kodex\.facts\[0\]: referenční část nerozlišuje/);
+      const empty = sectionsPage();
+      empty.sections![1].items = [];
+      assertHasError(errorsOf(empty), /sekce respekt: sekce nemá žádnou položku/);
+      const link = sectionsPage();
+      link.sections![0].facts![0].link = { text: "Body jsou níž.", href: "#neni" };
+      assertHasError(errorsOf(link), /sekce kodex\.facts\[0\]: odkaz „#neni" nemíří na kotvu stránky/);
+      const text = sectionsPage();
+      text.sections![1].lead = ["Úvod — sekce."];
+      assertHasError(errorsOf(text), /sekce respekt\.lead\[0\]: em dash/);
+
+      const html = renderPage(page);
+      const layoutEnd = html.indexOf('<section id="kodex"');
+      assert.ok(layoutEnd > html.indexOf('id="krok-a"') && layoutEnd < html.indexOf(`id="shrnuti"`), "sekce za příběhem, před shrnutím");
+      const kodex = html.slice(layoutEnd, html.indexOf('<section id="respekt"'));
+      assert.ok(/<h2 id="kodex-title"[^>]*>Kodex<\/h2>/.test(kodex));
+      assert.ok(kodex.includes("<ol class=\"info-rights") && kodex.includes('id="kodex-1"') && kodex.includes('href="#kodex-1"'));
+      const respekt = html.slice(html.indexOf('<section id="respekt"'));
+      assert.ok(respekt.includes("<ul class=\"info-rights") && respekt.includes(CHAPTER_NOTES.find((n) => n.id === "C3")!.text));
+      const print = html.slice(html.indexOf('class="info-print-only info-print-sources'));
+      assert.equal((print.match(/Test quote for the code of ethics\./g) ?? []).length, 1, "citace v tisku jednou");
+      assert.ok(print.includes("Second test quote.") && print.includes(">Kodex</h3>") && print.includes(">Respekt</h3>"));
+    },
+  },
+  {
+    name: "75. SERIES_SOURCES (fakta.ts): unikatni klice, zadna shodna citace pod dvema id, src() neznamy klic vyhodi, prefixy, zrusene id",
+    run: () => {
+      const registries = { ROLE_SOURCES, CLENSTVI_SOURCES, OBOR_SOURCES, STIZNOSTI_SOURCES, SCHUZKA_SOURCES, KODEX_SOURCES };
+      const total = Object.values(registries).reduce((sum, r) => sum + Object.keys(r).length, 0);
+      assert.equal(Object.keys(SERIES_SOURCES).length, total, "žádný klíč ve dvou rejstřících");
+      assert.throws(() => mergeSources({ a: { X1: SECTION_REF }, b: { X1: SECTION_REF } }), /citace X1 je v rejstříku a i b/);
+      const norm = (q: string) => q.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+      const seen = new Map<string, string>();
+      for (const [id, ref] of Object.entries(SERIES_SOURCES)) {
+        const key = `${ref.doc}|${ref.page}|${norm(ref.quoteEn)}`;
+        assert.ok(!seen.has(key), `shodná citace ${seen.get(key)} a ${id}`);
+        seen.set(key, id);
+        assert.ok(ref.quoteEn.trim() !== "", id);
+        assert.ok(ref.page >= 1 && ref.page <= SOURCE_DOCS[ref.doc].pageCount, `${id}: strana ${ref.page}`);
+        assert.ok(!/[—]/.test(ref.rule ?? ""), id);
+      }
+      const prefixes: [Record<string, unknown>, RegExp][] = [
+        [CLENSTVI_SOURCES, /^H\d+$/],
+        [OBOR_SOURCES, /^O[GM]\d+$/],
+        [STIZNOSTI_SOURCES, /^S[GM]\d+$/],
+        [SCHUZKA_SOURCES, /^Q[GM]\d+$/],
+        [KODEX_SOURCES, /^K[GM]\d+$/],
+      ];
+      for (const [registry, re] of prefixes) for (const id of Object.keys(registry)) assert.match(id, re);
+      // T-003s 1.3 (rušené duplicity) a gate T-004 3s / T-006x (citace bez faktu).
+      for (const id of ["H31", "H102", "SM55", "QG3", "OG5", "OM33", "OM8", "QM13", "SM53", "QM47", "QM45", "SM59", "SM37", "SM49", "OM39", "OM44", "OM36", "OG4", "SM52", "OM37", "OM20", "SM47", "QM41", "QM42", "OM35", "H38", "H12", "H96", "H101", "SG2", "SG3", "SG4", "SG5", "SG6", "SG7", "SG8", "SM1", "SM2", "SM58"]) {
+        assert.ok(!(id in SERIES_SOURCES), `${id} v rejstříku být nemá`);
+      }
+      for (const id of ["H22", "H68", "H70", "H72", "H105", "QM49", "H87", "H100", "OM4", "OM12", "OM17", "SM13", "SM25", "SM30", "QG10", "KG1", "KG2", "KG3", "KG4", "KG5", "KG6", "KG7", "KM1", "KM3"]) {
+        assert.ok(id in SERIES_SOURCES, `${id} v rejstříku chybí`);
+      }
+      assert.throws(() => seriesSrc("neni"), /citace neni není v rejstříku série/);
+      assert.equal(seriesSrc("H01").quoteEn, "Visitors may attend BNI chapter meetings up to two times in a six-month period.");
+      assert.equal(seriesSrc("G12", "pozn.").noteCs, "pozn.");
+      assert.equal(seriesSrc("G12").noteCs, undefined);
+    },
+  },
+  {
+    name: "76. glosar: hostitel v jednotnem cisle odkazuje na tym hostitelu, absence a role tvary nemaji",
+    run: () => {
+      const entry = ROLE_GLOSSARY.find((e) => e.id === "hostitele")!;
+      for (const form of ["hostitel", "hostitele", "hostiteli", "hostitelem", "hostitelé"]) assert.ok(entry.forms.includes(form), form);
+      for (const text of ["Hostitel ti zavolá.", "Zavolá ti hostitel.", "S hostitelem.", "Řekni hostiteli.", "Bez hostitele."]) {
+        const segments = linkRoles(text, { selfSlug: "clenstvi", enabled: true, seen: new Set() });
+        assert.ok(segments.some((s) => s.role === "hostitele"), text);
+        assert.equal(segments.map((s) => s.text).join(""), text);
+      }
+      const plain = (p: InfoPage) => textContent(renderPage(p, { roleLinks: false }));
+      for (const slug of ["absence", "role"]) {
+        assert.ok(!/(?<!\p{L})(hostitel|hostitele|hostiteli|hostitelem)(?!\p{L})/iu.test(plain(getInfoPage(slug)!)), slug);
+      }
+    },
+  },
+  {
+    name: "77. krizove odkazy: platny projde; neexistujici stranka, kotva a plna cesta na sebe = chyba, i u DecisionRow a RoleCard",
+    run: () => {
+      const ids = new Map([
+        ["absence", new Set(["nahradnik", "shrnuti"])],
+        ["role", new Set(["vedeni"])],
+      ]);
+      assert.equal(checkCrossLink("role", "/pravidla/absence#nahradnik", ids), undefined);
+      assert.equal(checkCrossLink("role", "/pravidla/absence", ids), undefined);
+      assert.equal(checkCrossLink("role", "/pravidla", ids), undefined);
+      assert.match(checkCrossLink("role", "/pravidla/neni#x", ids) ?? "", /stránku neni, která není v registru/);
+      assert.match(checkCrossLink("role", "/pravidla/absence#neni", ids) ?? "", /kotvu neni, kterou stránka absence nemá/);
+      assert.match(checkCrossLink("absence", "/pravidla/absence#nahradnik", ids) ?? "", /míří na vlastní stránku, použij jen „#nahradnik"/);
+      assert.match(checkCrossLink("role", "/pravidla/Absence", ids) ?? "", /není ve tvaru/);
+
+      // Fakt: validateInfoPage odkaz jen uloží, cíl ověří registr.
+      const fact = clonePage();
+      scene(fact, "uvod").chapter[0].link = { text: scene(fact, "uvod").chapter[0].text.slice(0, 5), href: "/pravidla/obor#neni-tu" };
+      const page = validateInfoPage(fact, CHAPTER_NOTES);
+      assert.ok(!page.errors.some((e) => /neni-tu/.test(e)));
+      assert.ok(page.crossLinks.some((l) => l.href === "/pravidla/obor#neni-tu"));
+      assertHasError(validateRegistry(registryWith(fact), CHAPTER_NOTES).errors, /\[absence\] krok uvod\.chapter\[0\]: odkaz „\/pravidla\/obor#neni-tu" míří na kotvu neni-tu, kterou stránka obor nemá/);
+      const self = clonePage();
+      scene(self, "uvod").chapter[0].link = { text: scene(self, "uvod").chapter[0].text.slice(0, 5), href: "/pravidla/absence#uvod" };
+      assertHasError(validateRegistry(registryWith(self), CHAPTER_NOTES).errors, /míří na vlastní stránku/);
+      const missing = clonePage();
+      scene(missing, "uvod").chapter[0].link = { text: scene(missing, "uvod").chapter[0].text.slice(0, 5), href: "/pravidla/neexistuje" };
+      assertHasError(validateRegistry(registryWith(missing), CHAPTER_NOTES).errors, /stránku neexistuje, která není v registru/);
+      // In-page odkaz: zpráva beze změny proti iter-030.
+      const local = clonePage();
+      scene(local, "uvod").chapter[0].link = { text: scene(local, "uvod").chapter[0].text.slice(0, 5), href: "#neni" };
+      assertHasError(errorsOf(local), /odkaz „#neni" nemíří na kotvu stránky/);
+
+      // DecisionRow.link a RoleCard.link: stejná kontrola cíle.
+      const role = cloneRolePage();
+      role.reference!.decisions[1].link = { href: "/pravidla/absence#neni", label: "Popisek" };
+      role.reference!.roles[0].link = { href: "#neni", label: "Popisek karty" };
+      role.reference!.roles[1].link = { href: "/pravidla/role#prezident", label: "Na sebe" };
+      role.reference!.roles[2].link = { href: "https://example.com", label: "Ven" };
+      assertHasError(errorsOf(role), /karta prezident: odkaz „#neni" nemíří na kotvu stránky/);
+      assertHasError(errorsOf(role), /karta clensky-vybor: odkaz „https:\/\/example\.com" nevede na \/pravidla ani na kotvu/);
+      const reg = validateRegistry(registryWith(role), CHAPTER_NOTES).errors;
+      assertHasError(reg, /\[role\] situace situace-ctvrta-absence: odkaz „\/pravidla\/absence#neni" míří na kotvu neni/);
+      assertHasError(reg, /\[role\] karta viceprezident: odkaz „\/pravidla\/role#prezident" míří na vlastní stránku/);
+      const ok = cloneRolePage();
+      ok.reference!.roles[0].link = { href: "#kdo-rozhoduje", label: "Tabulka" };
+      assert.deepEqual(errorsOf(ok), []);
+    },
+  },
+  {
+    name: "78. registr a kontrakt kotev: nove stranky s finalnim slugem a titulkem, vsechny kotvy sekce 4 existuji",
+    run: () => {
+      const titles: Record<string, string> = {
+        clenstvi: "Od hosta ke členovi",
+        obor: "Jeden obor, jeden člověk",
+        stiznosti: "Stížnost a spor",
+        schuzka: "Jak probíhá čtvrteční schůzka",
+        kodex: "Etický kodex",
+      };
+      for (const [slug, title] of Object.entries(titles)) assert.equal(getInfoPage(slug)?.title, title, slug);
+      for (const [slug, anchors] of Object.entries(ANCHOR_CONTRACT)) {
+        const page = getInfoPage(slug);
+        assert.ok(page, slug);
+        const ids = validateInfoPage(page, CHAPTER_NOTES).ids;
+        for (const anchor of anchors) assert.ok(ids.has(anchor), `${slug}#${anchor}`);
+      }
+      // T-007z: zástupné stránky jsou pryč, žádná stránka registru není zástupná.
+      assert.ok(!existsSync(join(process.cwd(), "content", "pravidla", "zastupna-stranka.ts")));
+      for (const page of INFO_PAGES) {
+        assert.ok(!renderPage(page).includes("Připravuje se."), `[${page.slug}] zástupný text „Připravuje se."`);
+      }
+    },
+  },
+  {
+    name: "79. kazdy Fact.link vsech stranek se vykresli jako <a href> se stejnym href (fraze nekoliduje s rolí); L1 az L14 v datech",
+    run: () => {
+      for (const page of INFO_PAGES) {
+        const html = renderPage(page);
+        for (const link of factLinksOf(page)) {
+          const re = new RegExp(`<a href="${escapeRe(escapeHtml(link.href))}"[^>]*>${escapeRe(escapeHtml(link.text))}</a>`);
+          assert.ok(re.test(html), `[${page.slug}] odkaz „${link.text}" -> ${link.href} se nevykreslil`);
+        }
+      }
+      const absence = factLinksOf(basePage).map((l) => `${l.text} -> ${l.href}`);
+      for (const l of ["Náhradník -> /pravidla/schuzka#nahradnik", "zkušební doby -> /pravidla/stiznosti#zkusebni-doba", "Místo se smí uvolnit -> /pravidla/obor#uvolneni-oboru"]) {
+        assert.ok(absence.includes(l), l);
+      }
+      const role = getInfoPage("role")!;
+      const roleLinks = factLinksOf(role).map((l) => `${l.text} -> ${l.href}`);
+      for (const l of ["náhradníky -> /pravidla/schuzka#nahradnik", "pořadí prezentací -> /pravidla/schuzka#hlavni-prezentace", "změnit obor -> /pravidla/obor#zmena-oboru", "stížnost -> /pravidla/stiznosti#pisemna-stiznost"]) {
+        assert.ok(roleLinks.includes(l), l);
+      }
+      const ref = role.reference!;
+      const row = (id: string) => ref.decisions.find((d) => d.id === id)!.link;
+      const card = (id: string) => ref.roles.find((c) => c.id === id)!.link;
+      assert.deepEqual(row("situace-prihlaska"), { href: "/pravidla/clenstvi#prihlaska", label: "Od přihlášky po přijetí" });
+      assert.deepEqual(row("situace-prevod"), { href: "/pravidla/clenstvi#prestup", label: "Jak probíhá přestup" });
+      assert.deepEqual(card("koordinator-mentoru"), { href: "/pravidla/clenstvi#passport", label: "Jak probíhá Passport s mentory" });
+      assert.deepEqual(card("hostitele"), { href: "/pravidla/clenstvi#navsteva", label: "Co host na návštěvě zažije" });
+      assert.deepEqual(row("situace-obor"), { href: "/pravidla/obor#spor-o-obor", label: "Jak se řeší překryv oborů" });
+      assert.deepEqual(row("situace-stiznost"), { href: "/pravidla/stiznosti", label: "Jak postup u stížnosti probíhá" });
+      assert.ok(!role.situations.some((s) => s.label === "Chci si stěžovat na člena"), "L14");
+    },
+  },
+  {
+    name: "80. rozcestnik: situace po strankach v <details> s titulkem a poctem, odkazy na kotvy; popisky situaci unikatni napric registrem",
+    run: () => {
+      const html = renderToStaticMarkup(createElement(PravidlaHubPage));
+      const situations = html.slice(html.indexOf('id="situace-title"'));
+      for (const page of INFO_PAGES.filter((p) => p.situations.length > 0)) {
+        const summary = `${escapeHtml(page.title)} · ${page.situations.length}</summary>`;
+        const at = situations.indexOf(summary);
+        assert.ok(at > 0, `summary ${page.slug}`);
+        const group = situations.slice(at, situations.indexOf("</details>", at));
+        for (const s of page.situations) assert.ok(group.includes(`href="/pravidla/${page.slug}#${s.anchor}"`), `${page.slug}#${s.anchor}`);
+      }
+      const labels = INFO_PAGES.flatMap((p) => p.situations.map((s) => s.label.toLowerCase()));
+      assert.equal(new Set(labels).size, labels.length, "popisky situací unikátní");
+      const dup = { ...nonePage(), slug: "test-dup", situations: [{ label: basePage.situations[0].label, anchor: "krok-a" }] } as InfoPage;
+      assertHasError(validateRegistry(registryWith(dup), CHAPTER_NOTES).errors, /\[test-dup\] situace „.*" je v rozcestníku i u stránky absence/);
+    },
+  },
+  {
+    name: "91. rozcestnik T-012x: karty temat pred situacemi, 7 karet s odkazem na stranku, všechny karty s obrázkem (role náhradní), skupiny v zavrenych <details>",
+    run: () => {
+      const html = renderToStaticMarkup(createElement(PravidlaHubPage));
+      const topicsAt = html.indexOf('id="temata-title"');
+      const situationsAt = html.indexOf('id="situace-title"');
+      assert.ok(topicsAt > 0 && situationsAt > topicsAt, "karty před situacemi");
+      const topics = html.slice(topicsAt, situationsAt);
+      assert.equal(INFO_PAGES.length, 7);
+      assert.equal((topics.match(/<li class="info-hub-card"/g) ?? []).length, 7, "7 karet");
+      assert.equal((topics.match(/<a /g) ?? []).length, 7, "jeden odkaz na kartu, žádné vnořené");
+      for (const page of INFO_PAGES) {
+        assert.ok(topics.includes(`href="/pravidla/${page.slug}"`), `karta ${page.slug}`);
+        const src = page.hero?.src ?? (page.slug === "role" ? "/pravidla/komiksy/role-r10-2.webp" : undefined);
+        assert.ok(src && topics.includes(`src="${src}"`), `obrázek ${page.slug}`);
+      }
+      assert.equal((topics.match(/<img /g) ?? []).length, 7, "obrázek u všech 7 karet");
+      assert.ok(!/<img [^>]*alt="[^"]+"/.test(topics), "alt prázdný, název je pod obrázkem");
+      assert.ok(/<img [^>]*loading="lazy"/.test(topics), "lazy");
+      assert.equal((topics.match(/<img [^>]*class="info-hub-card-image"/g) ?? []).length, 7, "třída jednotného poměru stran u všech karet");
+      assert.ok(/\.info-hub-card-image\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9[^}]*object-fit:\s*cover/.test(readFileSync(join(process.cwd(), "app/pravidla/pravidla.css"), "utf8")), "CSS 16/9 cover");
+      for (const card of topics.split('<li class="info-hub-card"').slice(1)) {
+        if (card.includes("<img")) assert.ok(card.indexOf("<img") < card.indexOf("<h3"), "obrázek nad titulkem");
+      }
+      const situations = html.slice(situationsAt);
+      const groups = INFO_PAGES.filter((p) => p.situations.length > 0).length;
+      assert.equal((situations.match(/<details /g) ?? []).length, groups, "skupina = details");
+      assert.ok(!/<details [^>]*\bopen\b/.test(situations), "zavřené");
+      assert.ok(!situations.includes("<h3"), "bez h3 skupin");
+      const printAt = situations.indexOf("info-hub-print");
+      assert.ok(printAt > 0 && /info-print-only/.test(situations.slice(printAt - 40, printAt + 20)), "tiskový blok");
+      const printBlock = situations.slice(printAt);
+      const total = INFO_PAGES.reduce((n, p) => n + p.situations.length, 0);
+      assert.equal((printBlock.match(/<a /g) ?? []).length, total, "tiskový blok má všechny odkazy situací");
+      for (const s of INFO_PAGES.flatMap((p) => p.situations)) assert.ok(printBlock.includes(`>${s.label}</a>`), `tisk: ${s.label}`);
+      assert.ok(!printBlock.includes("<details"), "tiskový blok bez details");
+    },
+  },
+  {
+    name: "81. nove stranky: zadne zavazne/doporucene/navrh v ceskem textu, obligation ani draft v datech",
+    run: () => {
+      const drafts = new Set(CHAPTER_NOTES.filter((n) => n.status === "draft").map((n) => n.id));
+      for (const page of INFO_PAGES.filter((p) => p.slug !== "role" && p.slug !== "absence")) {
+        const html = renderPage(page).replace(/<blockquote lang="en"[\s\S]*?<\/blockquote>/g, "");
+        const text = textContent(html);
+        for (const re of [/závazn/i, /doporučen[éáýo]/i, /doporuču/i, /(?<!\p{L})návrh/iu, /MUSÍ/, /DOPORUČENO/]) {
+          assert.ok(!re.test(text), `[${page.slug}] ${re}`);
+        }
+        assert.ok(!html.includes("info-tag"), page.slug);
+        for (const fact of allFactsOf(page)) assert.equal(fact.obligation, undefined, `[${page.slug}] ${fact.text}`);
+        const used = [
+          ...page.steps.flatMap((s) => (s.type === "scene" ? s.chapterNotes ?? [] : s.options.flatMap((o) => o.chapterNotes ?? []))),
+          ...(page.sections ?? []).flatMap((s) => s.chapterNotes ?? []),
+          ...(page.reference?.chapterNotes ?? []),
+        ];
+        for (const id of used) assert.ok(!drafts.has(id), `[${page.slug}] ${id} je draft`);
+      }
+      // „doporučení" (referral) projde, sloveso a přídavné jméno ne.
+      assert.ok(!/doporučen[éáýo]|doporuču/i.test("Předávání doporučení a doporučením."));
+    },
+  },
+  {
+    name: "82. role: textContent shodny s fixture z HEAD 2da25d2 po odebrani novych popisku L4 az L7, L10, L13",
+    run: () => {
+      const fixture = readFileSync(join(process.cwd(), "scripts", "fixtures", "role-iter-030.txt"), "utf8");
+      let text = articleText(renderPage(getInfoPage("role")!));
+      for (const label of ROLE_NEW_LABELS) {
+        assert.equal(text.split(label).length - 1, 1, `popisek „${label}" právě jednou`);
+        text = text.replace(label, "");
+      }
+      assert.equal(text, fixture, "text stránky rolí se proti iter-030 změnil");
+    },
+  },
+  {
+    name: "83. U nas v chapteru C15 az C17: C15 podle gate T-012p, C16 podle T-006d, C17 uzivatel 13. 10., approved, C16 jen s franšizantem",
+    run: () => {
+      const note = (id: string) => CHAPTER_NOTES.find((n) => n.id === id)!;
+      assert.equal(
+        note("C15").text,
+        "Každá druhá čtvrteční schůzka je u nás interní, bez hostů. Na otevřené schůzce se věnujeme hostům. Na interní pracujeme na vlastním růstu, víc se propojujeme mezi sebou a probíráme, jak dopadla schůzka s hosty. Na jejím konci se schází členský výbor a rozhoduje o přihláškách."
+      );
+      assert.equal(note("C16").text, "Střídání otevřených a interních schůzek je u nás výjimka, kterou schválil franšízant. Ostatní chaptery se jím inspirují.");
+      assert.equal(note("C17").text, "Výsledek přihlášky hostovi oznámí vybraný člen chapteru.");
+      for (const id of ["C15", "C16", "C17"]) {
+        assert.equal(note(id).status, "approved");
+        assert.equal(note(id).enabled, true);
+      }
+      assert.ok(!CHAPTER_NOTES.some((n) => n.id === "C14"));
+      assert.ok(!/ředitel|konzultant/.test(note("C16").text));
+    },
+  },
+  {
+    name: "84. CSS iter-031: tisk adresy u odkazu /pravidla/ mimo role a PDF, styly vizualu, comicWide, sekce",
+    run: () => {
+      const css = readFileSync(join(process.cwd(), "app", "pravidla", "pravidla.css"), "utf8");
+      assert.ok(css.includes('.info-article a[href^="/pravidla/"]:not(.info-role-link):not([href^="/pravidla/zdroje/"])::after'));
+      assert.ok(css.includes('content: " (" attr(href) ")";'));
+      for (const selector of [".info-pt--sticky .info-pt-position", ".info-agenda-list", ".info-comic--wide", ".info-root .info-sections [id]"]) {
+        assert.ok(css.includes(selector), selector);
+      }
+      assert.ok(/line-clamp: 2/.test(css), "pozice na mobilu nejvýš dva řádky");
+    },
+  },
+  {
+    name: "85. absence: L1 az L3 jen obali existujici text (textContent beze zmeny, odkazy v HTML)",
+    run: () => {
+      const html = renderPage(basePage);
+      for (const [href, text] of [
+        ["/pravidla/schuzka#nahradnik", "Náhradník"],
+        ["/pravidla/stiznosti#zkusebni-doba", "zkušební doby"],
+        ["/pravidla/obor#uvolneni-oboru", "Místo se smí uvolnit"],
+      ]) {
+        assert.ok(html.includes(`<a href="${href}"`) && html.includes(`>${text}</a>`), href);
+      }
+      const fixture = readFileSync(join(process.cwd(), "scripts", "fixtures", "absence-iter-029.txt"), "utf8");
+      const note = `<p class="info-print-only">${TEMPLATE_TEXTS.roleLinks.printNote} /pravidla/role.</p>`;
+      assert.equal(articleText(html.replace(note, "")), fixture);
+    },
+  },
+  {
+    name: "86. package.json: test:iter-031 spousti test:info-pages",
+    run: () => {
+      const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as { scripts: Record<string, string> };
+      assert.equal(pkg.scripts["test:iter-031"], "npm run test:info-pages");
+    },
+  },
+  {
+    name: "87. sections: fakta pod seznamem, factsFirst nad seznamem, tisk ve stejnem poradi; stiznosti: respekt M58 pod, sekce eticky-kodex zanikla",
+    run: () => {
+      const order = (html: string, id: string) => {
+        const start = html.indexOf(`<section id="${id}"`);
+        const end = html.indexOf("</section>", start);
+        const part = html.slice(start, end);
+        return { facts: part.indexOf('class="info-facts'), list: part.search(/<[ou]l class="info-rights/) };
+      };
+      // Tisk: citace faktu a položek v pořadí obrazovky (fakt má vlastní citaci).
+      const printOrder = (html: string) => {
+        const print = html.slice(html.indexOf('class="info-print-only info-print-sources'));
+        return { fact: print.indexOf("Fact quote."), item: print.indexOf("Test quote for the code of ethics.") };
+      };
+      const withFactQuote = (factsFirst: boolean) => {
+        const p = sectionsPage();
+        p.sections![0].facts![0].sources = [{ ...SECTION_REF, quoteEn: "Fact quote." }];
+        if (factsFirst) p.sections![0].factsFirst = true;
+        return p;
+      };
+      // Fiktivní stránka: výchozí pořadí = fakta pod seznamem, factsFirst = nad ním.
+      const belowHtml = renderPage(withFactQuote(false));
+      const below = order(belowHtml, "kodex");
+      assert.ok(below.list >= 0 && below.facts > below.list, "fakta pod seznamem");
+      const belowPrint = printOrder(belowHtml);
+      assert.ok(belowPrint.item >= 0 && belowPrint.fact > belowPrint.item, "tisk: citace položek před faktem");
+      const first = withFactQuote(true);
+      assert.deepEqual(errorsOf(first), []);
+      const aboveHtml = renderPage(first);
+      const above = order(aboveHtml, "kodex");
+      assert.ok(above.facts >= 0 && above.facts < above.list, "factsFirst: fakta nad seznamem");
+      const abovePrint = printOrder(aboveHtml);
+      assert.ok(abovePrint.fact >= 0 && abovePrint.item > abovePrint.fact, "tisk factsFirst: citace faktu první");
+      const noFacts = sectionsPage();
+      noFacts.sections![1].factsFirst = true;
+      assertHasError(errorsOf(noFacts), /sekce respekt: factsFirst bez faktů/);
+
+      // Stránka stížností podle textů T-005c, sekce kodexu se přesunula na /pravidla/kodex (T-007e).
+      const page = getInfoPage("stiznosti")!;
+      const html = renderPage(page);
+      const respekt = order(html, "respekt");
+      assert.ok(respekt.list >= 0 && respekt.facts > respekt.list, "respekt: M58 pod seznamem");
+      assert.ok(!html.includes('id="eticky-kodex"'), "sekce eticky-kodex na stížnostech zanikla");
+    },
+  },
+  // --- iter-031 T-012r (opravné kolo po náhledu v1) ---
+  {
+    name: "88. T-012r MAJOR-1: jednopanelovy pruh ma info-comic--single (23 na 5 strankach) s max-width 480 px, vicepanelove a comicWide ne",
+    run: () => {
+      const css = readFileSync(join(process.cwd(), "app", "pravidla", "pravidla.css"), "utf8");
+      assert.match(css, /\.info-comic--single \{\s*max-width: 480px;\s*\}/);
+      const expected: Record<string, number> = { clenstvi: 9, obor: 3, schuzka: 3, stiznosti: 1, kodex: 7, absence: 0, role: 0 };
+      for (const page of INFO_PAGES) {
+        const html = renderPage(page);
+        const figures = Array.from(html.matchAll(/<figure class="info-comic([^"]*)"[^>]*>([\s\S]*?)<\/figure>/g));
+        let singles = 0;
+        for (const [, cls, body] of figures) {
+          const imgs = (body.match(/<img /g) ?? []).length;
+          const single = cls.includes("info-comic--single");
+          if (single) singles++;
+          if (cls.includes("info-comic--wide") || cls.includes("info-comic--illustration") || imgs > 1) {
+            assert.ok(!single, `${page.slug}: ${cls.trim()} bez --single`);
+          }
+          if (single) assert.equal(imgs, 1, `${page.slug}: --single má jeden panel`);
+        }
+        assert.equal(singles, expected[page.slug], page.slug);
+      }
+    },
+  },
+  {
+    name: "89. T-012r: paticka bez vety o ceske verzi (7 stranek), C17 u odmitnuti clenstvi, M76 se na clenstvi nepouziva",
+    run: () => {
+      for (const page of INFO_PAGES) {
+        assert.equal(page.disclaimer[0], "Tahle stránka je výklad našeho chapteru.", page.slug);
+        assert.ok(!renderPage(page).includes("Oficiální česká verze"), page.slug);
+      }
+      const clenstvi = getInfoPage("clenstvi")!;
+      const odmitnuti = branch(clenstvi, "vysledek").options.find((o) => o.id === "odmitnuti")!;
+      assert.deepEqual(odmitnuti.chapterNotes, ["C17"]);
+      const html = renderPage(clenstvi);
+      assert.ok(html.includes("Výsledek přihlášky hostovi oznámí vybraný člen chapteru."));
+      assert.ok(!JSON.stringify(clenstvi).includes("In all cases, these letters"), "M76 se na clenstvi nepoužívá");
+    },
+  },
+  // --- iter-031 T-007e: stránka Etický kodex ---
+  {
+    name: "90. kodex: data podle textu a gate (none, hero K0, kroky slib/kodex-1 az 7/v-praxi, 7 bodu KG1 az KG7 doslova, hodnoty KM5 az KM11, C22 jen u slib, bez QM9)",
+    run: () => {
+      const page = getInfoPage("kodex")!;
+      assert.ok(page);
+      assert.deepEqual(errorsOf(page), []);
+      assert.equal(page.visual, "none");
+      assert.equal(page.hero?.src, "/pravidla/komiksy/kodex-k0.webp");
+      assert.deepEqual(page.contacts, []);
+      assert.deepEqual(
+        page.steps.map((s) => s.id),
+        ["slib", "kodex-1", "kodex-2", "kodex-3", "kodex-4", "kodex-5", "kodex-6", "kodex-7", "v-praxi"]
+      );
+      assert.equal(page.intro.lead.length, 1, "úvod má jeden odstavec (gate T-006e 3.1)");
+      // Znění bodů beze změny oproti schválenému textu na stížnostech (T-005c, gate T-006c).
+      const wording = [
+        "Poskytnu služby v kvalitě a za ceny, které jsem nabídl.",
+        "Budu jednat pravdivě se členy i s lidmi, které od nich dostanu jako doporučení.",
+        "Budu budovat dobré vztahy a důvěru se členy i s lidmi z jejich doporučení.",
+        "Na doporučení, která dostanu, se ozvu. Je to moje odpovědnost.",
+        "Budu mít pozitivní a vstřícný přístup.",
+        "Budu dodržovat etická pravidla své profese.",
+        "Když má moje profese vlastní kodex s přísnějšími pravidly, řídím se tím přísnějším.",
+      ];
+      wording.forEach((text, i) => {
+        const step = scene(page, `kodex-${i + 1}`);
+        assert.equal(step.chapter.length, 1, `kodex-${i + 1}: jediný fakt`);
+        assert.equal(step.chapter[0].text, text);
+        assert.deepEqual(step.chapter[0].sources.map((r) => r.quoteEn), [KODEX_SOURCES[`KG${i + 1}`].quoteEn]);
+        assert.ok(step.comic && step.comic.panels.length === 1, `kodex-${i + 1}: jeden panel`);
+        assert.equal(step.comic!.panels[0].src, `/pravidla/komiksy/kodex-k${i + 1}.webp`);
+      });
+      const slib = scene(page, "slib");
+      assert.deepEqual(slib.chapterNotes, ["C22"]);
+      assert.equal(slib.comic, undefined, "K0 je hero, slib komiks nemá");
+      assert.equal(slib.chapter[0].text, "Při přijetí do BNI se každý člen zavazuje kodex dodržovat.");
+      const withNotes = page.steps.filter((s) => s.type === "scene" && (s.chapterNotes ?? []).length > 0).map((s) => s.id);
+      assert.deepEqual(withNotes, ["slib"], "chapterNotes jen u slib");
+      assert.ok(!(page.sections ?? []).some((sec) => (sec.chapterNotes ?? []).length > 0));
+      // v-praxi: dva fakty, jediný odkaz, zkušební doba -> stížnosti#posouzeni.
+      const praxe = scene(page, "v-praxi");
+      assert.equal(praxe.chapter.length, 2);
+      assert.equal(praxe.chapter[0].text, "Kodex není výčet konkrétních situací. Výbor ho v principu použije skoro na každý spor.");
+      assert.deepEqual(factLinksOf(page), [{ text: "zkušební dobu", href: "/pravidla/stiznosti#posouzeni" }]);
+      // hodnoty
+      const hodnoty = page.sections!.find((sec) => sec.id === "hodnoty")!;
+      assert.equal(page.sections!.length, 1);
+      assert.equal(hodnoty.ordered, true);
+      assert.equal(hodnoty.facts, undefined, "gate T-004e 3.2: bez faktu");
+      assert.equal(hodnoty.lead, undefined, "gate T-004e 3.2: bez úvodu");
+      assert.equal(hodnoty.items.length, 7);
+      hodnoty.items.forEach((item, i) => {
+        assert.equal(item.id, `hodnota-${i + 1}`);
+        assert.deepEqual(item.sources.map((r) => r.quoteEn), [KODEX_SOURCES[`KM${i + 5}`].quoteEn]);
+      });
+      // Žádný zdroj QM9 a žádný anglický název hodnoty 6 v českém textu.
+      const json = JSON.stringify(page);
+      assert.ok(!json.includes("Quick Rundown") && !json.includes("Value of the Week"), "QM9 se na kodexu nepoužívá");
+      assert.ok(!/Accountability/.test(json.replace(/"quoteEn":"[^"]*"/g, "")));
+      assert.ok(!/obligation/.test(json));
+      // Odkazy: stížnosti posouzení -> hodnoty BNI, nic nevede na zaniklou kotvu.
+      const stiznosti = getInfoPage("stiznosti")!;
+      const posouzeni = scene(stiznosti, "posouzeni");
+      const g2 = posouzeni.chapter.find((f) => f.sources.some((r) => r.quoteEn.startsWith("Membership Committees may put")))!;
+      assert.deepEqual(g2.link, { text: "hodnoty BNI", href: "/pravidla/kodex#hodnoty" });
+      for (const p of INFO_PAGES) {
+        assert.ok(!JSON.stringify(p).includes("stiznosti#eticky-kodex"), `${p.slug}: odkaz na zaniklou kotvu`);
+        assert.ok(!factLinksOf(p).some((l) => l.href.endsWith("#eticky-kodex")), p.slug);
+      }
+      const prijeti = branch(getInfoPage("clenstvi")!, "vysledek").options.find((o) => o.id === "prijeti")!;
+      assert.ok(prijeti.chapter.some((f) => f.link?.href === "/pravidla/kodex"));
+      // Situace "Co je etický kodex BNI" je jen u kodexu.
+      const owners = INFO_PAGES.filter((p) => p.situations.some((s) => s.label === "Co je etický kodex BNI")).map((p) => p.slug);
+      assert.deepEqual(owners, ["kodex"]);
+      // Vykreslená stránka: osm obrázků, sedm bodů a sedm hodnot, bez em dash.
+      const html = renderPage(page);
+      assert.equal((html.match(/kodex-k\d\.webp/g) ?? []).length, 8);
+      assert.ok(!html.includes("\u2014"), "bez em dash");
     },
   },
 ];

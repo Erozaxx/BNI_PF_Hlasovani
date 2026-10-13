@@ -6,6 +6,11 @@
  * `leadership-chart`, referenční část (karty rolí, tabulka situací, práva)
  * a glosář rolí napříč registrem.
  *
+ * iter-031 (T-007s, arch_iter-031_T-003s sekce 2, X2): vizuály `process-track`
+ * a `meeting-agenda`, `comicWide`, referenční seznamy `sections` a odkazy
+ * mezi stránkami. `validateInfoPage` odkaz `/pravidla/…` jen uloží
+ * (`crossLinks`), cíl ověří `validateRegistry` proti `ids` cílové stránky.
+ *
  * Hlídá jen obecné věci šablony. Jména ani detaily žádného konkrétního
  * případu sem nepatří (repo je veřejné), kontrola prosaku běží mimo repo.
  */
@@ -13,6 +18,7 @@ import { ROLE_GLOSSARY, type RoleGlossaryEntry } from "@/content/pravidla/role-g
 import { normalizeForm, ROLE_PAGE_SLUG } from "./glossary";
 import { SOURCE_DOCS } from "./sources";
 import {
+  AGENDA_BLOCKS,
   REFERENCE_ANCHORS,
   ROLE_CARD_FIELD_KINDS,
   ROLE_IDS,
@@ -24,9 +30,12 @@ import type {
   ChapterNote,
   ComicPanel,
   Fact,
+  InfoListSection,
   InfoPage,
   InfoReference,
   LeadershipChartState,
+  MeetingAgendaState,
+  ProcessTrackState,
   SourceLocation,
   SourceRef,
   VisualKind,
@@ -37,6 +46,20 @@ export interface ValidationResult {
   /** Informace, ne chyby (vypnuté a nepotvrzené položky „u nás v chapteru"). */
   infos: string[];
 }
+
+/** Výsledek jedné stránky: navíc její kotvy a odkazy na jiné stránky série. */
+export interface PageValidationResult extends ValidationResult {
+  /** Všechny kotvy stránky (kroky, možnosti, reference, sekce, shrnutí). */
+  ids: Set<string>;
+  /** Odkazy `/pravidla/…`, cíl ověří `validateRegistry`. */
+  crossLinks: { where: string; href: string }[];
+}
+
+/** Prefix odkazu na stránku série. */
+const SERIES_PREFIX = "/pravidla";
+/** `/pravidla`, `/pravidla/<slug>`, `/pravidla/<slug>#<kotva>`. */
+const CROSS_LINK_RE = /^\/pravidla(?:\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:#([a-z0-9]+(?:-[a-z0-9]+)*))?)?$/;
+const AGENDA_BLOCK_SET = new Set<string>(AGENDA_BLOCKS);
 
 const ANCHOR_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** Adresář kreseb minikomiksů (T-010k). */
@@ -138,6 +161,54 @@ function isLeadershipState(kind: VisualKind, state: unknown): state is Leadershi
   return kind === "leadership-chart" && typeof state === "object" && state !== null;
 }
 
+function isProcessTrackState(kind: VisualKind, state: unknown): state is ProcessTrackState {
+  return kind === "process-track" && typeof state === "object" && state !== null;
+}
+
+function isAgendaState(kind: VisualKind, state: unknown): state is MeetingAgendaState {
+  return kind === "meeting-agenda" && typeof state === "object" && state !== null;
+}
+
+/** Kde stav vizuálu leží: úvod, scéna, nebo možnost rozcestí (s `next` nebo bez). */
+export type VisualPlace = "intro" | "scene" | "option" | "option-next";
+
+/**
+ * Postup v etapách (T-003s 1.1): `current` -1 jen v úvodu, jinak v rozsahu
+ * etap, `ended` jen u možnosti bez `next`. Shodu `stages` napříč stavy
+ * hlídá volající (`validateInfoPage`).
+ */
+function checkProcessTrack(where: string, state: ProcessTrackState, place: VisualPlace, errors: string[]): void {
+  if (!Array.isArray(state.stages) || state.stages.length === 0) {
+    errors.push(`${where}: stages je prázdné`);
+    return;
+  }
+  const max = state.stages.length - 1;
+  if (!Number.isInteger(state.current) || state.current < -1 || state.current > max) {
+    errors.push(`${where}: current ${state.current} mimo rozsah -1 až ${max}`);
+  } else if (state.current === -1 && place !== "intro") {
+    errors.push(`${where}: current -1 smí jen intro.visual`);
+  }
+  if (state.ended !== undefined && place !== "option") {
+    errors.push(`${where}: ended smí jen možnost rozcestí bez next`);
+  }
+  if (typeof state.srText !== "string") errors.push(`${where}: chybí srText`);
+}
+
+/** Program schůzky: bloky z `AGENDA_BLOCKS`, každý nejvýš jednou, neprázdný `srText`. */
+function checkMeetingAgenda(where: string, state: MeetingAgendaState, errors: string[]): void {
+  if (!Array.isArray(state.current)) {
+    errors.push(`${where}: current není pole`);
+    return;
+  }
+  const seen = new Set<string>();
+  for (const block of state.current) {
+    if (!AGENDA_BLOCK_SET.has(block)) errors.push(`${where}: neznámý blok programu „${String(block)}"`);
+    if (seen.has(block)) errors.push(`${where}: blok ${block} je ve stavu víckrát`);
+    seen.add(block);
+  }
+  if (typeof state.srText !== "string") errors.push(`${where}: chybí srText`);
+}
+
 /** Stav schématu vedení: platné role a vztahy, každá role nejvýš jednou. */
 function checkLeadership(where: string, state: LeadershipChartState, errors: string[]): void {
   if (!Array.isArray(state.roles)) {
@@ -155,9 +226,20 @@ function checkLeadership(where: string, state: LeadershipChartState, errors: str
   if (typeof state.srText !== "string") errors.push(`${where}: chybí srText`);
 }
 
-export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): ValidationResult {
+export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): PageValidationResult {
   const errors: string[] = [];
   const infos: string[] = [];
+  const crossLinks: { where: string; href: string }[] = [];
+  /** Odkazy `#…` z karet a řádků tabulky, ověří se až nad všemi kotvami. */
+  const anchorLinks: { where: string; href: string }[] = [];
+  /** Odkaz z dat: `/pravidla/…` jde do křížové kontroly, `#…` proti kotvám stránky. */
+  const routeLink = (where: string, href: string): boolean => {
+    if (href === SERIES_PREFIX || href.startsWith(`${SERIES_PREFIX}/`) || href.startsWith(`${SERIES_PREFIX}#`)) {
+      crossLinks.push({ where, href });
+      return true;
+    }
+    return false;
+  };
   const texts: { where: string; text: string }[] = [];
   const addText = (where: string, text: string | undefined) => {
     if (text !== undefined) texts.push({ where, text });
@@ -172,7 +254,23 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
   addText("title", page.title);
   addText("description", page.description);
 
-  const checkVisual = (where: string, state: unknown) => {
+  let trackStages: string | undefined;
+  const checkVisual = (where: string, state: unknown, place: VisualPlace = "scene") => {
+    if (isProcessTrackState(page.visual, state)) {
+      checkProcessTrack(where, state, place, errors);
+      if (Array.isArray(state.stages)) {
+        const key = JSON.stringify(state.stages);
+        if (trackStages === undefined) trackStages = key;
+        else if (key !== trackStages) errors.push(`${where}: stages se liší od ostatních stavů stránky`);
+        state.stages.forEach((stage, i) => addText(`${where}.stages[${i}]`, stage));
+      }
+      addText(`${where}.outcome`, state.outcome);
+      addText(`${where}.srText`, typeof state.srText === "string" ? state.srText : "");
+    }
+    if (isAgendaState(page.visual, state)) {
+      checkMeetingAgenda(where, state, errors);
+      addText(`${where}.srText`, typeof state.srText === "string" ? state.srText : "");
+    }
     if (isTimelineState(page.visual, state)) {
       checkTimeline(where, state, errors);
       addText(`${where}.statusLabel`, state.statusLabel);
@@ -201,7 +299,7 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
     });
   }
   page.intro.lead.forEach((t, i) => addText(`intro.lead[${i}]`, t));
-  checkVisual("intro.visual", page.intro.visual);
+  checkVisual("intro.visual", page.intro.visual, "intro");
 
   // Id a kotvy
   const ids = new Set<string>([SUMMARY_ANCHOR]);
@@ -269,9 +367,11 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
       chapterNotes?: string[];
       sourcesSummary?: string;
       comic?: { panels: ComicPanel[] };
+      comicWide?: ComicPanel;
       visual: unknown;
     },
-    allowEmptyCaption = false
+    allowEmptyCaption = false,
+    place: VisualPlace = "scene"
   ) => {
     if (step.comic) {
       if (step.comic.panels.length === 0) errors.push(`${where}.comic: žádný panel`);
@@ -282,6 +382,12 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
         addText(`${pw}.alt`, panel.alt);
       });
     }
+    if (step.comicWide) {
+      // Široký panel jako hero: rozměry, alt i caption povinné (T-003s X2).
+      checkComicPanel(`${where}.comicWide`, step.comicWide, false, errors);
+      addText(`${where}.comicWide.caption`, step.comicWide.caption);
+      addText(`${where}.comicWide.alt`, step.comicWide.alt);
+    }
     addText(`${where}.label`, step.label);
     addText(`${where}.title`, step.title);
     addText(`${where}.sourcesSummary`, step.sourcesSummary);
@@ -289,7 +395,7 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
     step.story.forEach((t, i) => addText(`${where}.story[${i}]`, t));
     checkFacts(where, step.chapter);
     checkNoteIds(where, step.chapterNotes);
-    checkVisual(`${where}.visual`, step.visual);
+    checkVisual(`${where}.visual`, step.visual, place);
   };
 
   for (const step of page.steps) {
@@ -315,7 +421,7 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
     for (const option of step.options) {
       registerId(option.id);
       const ow = `${where}/${option.id}`;
-      checkContent(ow, option, true);
+      checkContent(ow, option, true, option.next ? "option-next" : "option");
       addText(`${ow}.nextLabel`, option.nextLabel);
       if (option.next) {
         nexts.push({ from: ow, next: option.next });
@@ -326,23 +432,34 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
     }
   }
 
-  if (page.reference) {
-    checkReference(page.reference, {
-      registerId,
-      addText,
-      checkFacts,
-      checkSources,
-      checkNoteIds,
-      checkComic,
-      errors,
-    });
-  }
+  const checks: ReferenceChecks = {
+    registerId,
+    addText,
+    checkFacts,
+    checkSources,
+    checkNoteIds,
+    checkComic,
+    checkLink: (where, link) => {
+      addText(`${where}.link.label`, link.label);
+      if (routeLink(where, link.href)) return;
+      if (link.href.startsWith("#")) anchorLinks.push({ where, href: link.href });
+      else errors.push(`${where}: odkaz „${link.href}" nevede na /pravidla ani na kotvu`);
+    },
+    errors,
+  };
+  if (page.reference) checkReference(page.reference, checks);
+  if (page.sections) checkSections(page.sections, checks);
 
   for (const { where, text, link } of factLinks) {
     if (link.text === "" || !text.includes(link.text)) errors.push(`${where}: link.text není v textu faktu`);
+    if (routeLink(where, link.href)) continue;
     if (!link.href.startsWith("#") || !ids.has(link.href.slice(1))) {
       errors.push(`${where}: odkaz „${link.href}" nemíří na kotvu stránky`);
     }
+  }
+
+  for (const { where, href } of anchorLinks) {
+    if (!ids.has(href.slice(1))) errors.push(`${where}: odkaz „${href}" nemíří na kotvu stránky`);
   }
 
   for (const { from, next } of nexts) {
@@ -411,7 +528,7 @@ export function validateInfoPage(page: InfoPage, notes: ChapterNote[]): Validati
 
   for (const { where, text } of texts) errors.push(...findTextIssues(where, text));
 
-  return { errors, infos };
+  return { errors, infos, ids, crossLinks };
 }
 
 export { REFERENCE_ANCHORS, SUMMARY_ANCHOR };
@@ -423,18 +540,13 @@ interface ReferenceChecks {
   checkSources: (where: string, sources: SourceRef[]) => void;
   checkNoteIds: (where: string, noteIds: string[] | undefined) => void;
   checkComic: (where: string, comic: { panels: ComicPanel[] } | undefined) => void;
+  /** Odkaz karty nebo řádku: `/pravidla/…` do křížové kontroly, `#…` proti kotvám. */
+  checkLink: (where: string, link: { href: string; label: string }) => void;
   errors: string[];
 }
 
 /** Pole, která nesmí být prázdná (ostatní ukážou větu šablony, gate T-006). */
 const REQUIRED_FIELDS = new Set<string>(["does", "notDecides"]);
-
-function checkLink(where: string, link: { href: string; label: string }, c: ReferenceChecks): void {
-  c.addText(`${where}.link.label`, link.label);
-  if (!/^(\/pravidla(\/|$|#)|#)/.test(link.href)) {
-    c.errors.push(`${where}: odkaz „${link.href}" nevede na /pravidla ani na kotvu`);
-  }
-}
 
 /** Fakta referenční části nenesou `obligation` (arch_iter-030 sekce 2.1 a 10). */
 function checkNoObligation(where: string, facts: Fact[], errors: string[]): void {
@@ -486,7 +598,7 @@ function checkReference(ref: InfoReference, c: ReferenceChecks): void {
       if (!field || field.facts.length === 0) errors.push(`${where}: chybí pole ${kind} s aspoň jedním faktem`);
     }
     c.checkComic(where, card.comic);
-    if (card.link) checkLink(where, card.link, c);
+    if (card.link) c.checkLink(where, card.link);
     for (const sub of card.subAnchors ?? []) {
       const sw = `${where}/${sub.id}`;
       c.registerId(sub.id);
@@ -507,7 +619,7 @@ function checkReference(ref: InfoReference, c: ReferenceChecks): void {
     }
     if (row.sources.length === 0) errors.push(`${where}: řádek nemá zdroj`);
     c.checkSources(where, row.sources);
-    if (row.link) checkLink(where, row.link, c);
+    if (row.link) c.checkLink(where, row.link);
   });
 
   ref.rights.forEach((item) => {
@@ -517,6 +629,35 @@ function checkReference(ref: InfoReference, c: ReferenceChecks): void {
     if (item.sources.length === 0) errors.push(`${where}: položka nemá zdroj`);
     c.checkSources(where, item.sources);
   });
+}
+
+/**
+ * Referenční seznamy (arch_iter-031_T-001c SC3): kotvy sekcí a položek ve
+ * stejné množině jako kroky, zdroj u každé položky, texty, komiks, poznámky,
+ * fakta bez `obligation`.
+ */
+function checkSections(sections: InfoListSection[], c: ReferenceChecks): void {
+  for (const section of sections) {
+    const where = `sekce ${section.id}`;
+    c.registerId(section.id);
+    c.addText(`${where}.title`, section.title);
+    (section.lead ?? []).forEach((t, i) => c.addText(`${where}.lead[${i}]`, t));
+    c.checkFacts(where, section.facts ?? [], "facts");
+    checkNoObligation(`${where}.facts`, section.facts ?? [], c.errors);
+    if (section.factsFirst && (section.facts ?? []).length === 0) {
+      c.errors.push(`${where}: factsFirst bez faktů`);
+    }
+    if (section.items.length === 0) c.errors.push(`${where}: sekce nemá žádnou položku`);
+    for (const item of section.items) {
+      const iw = `${where}/${item.id}`;
+      c.registerId(item.id);
+      c.addText(`${iw}.text`, item.text);
+      if (item.sources.length === 0) c.errors.push(`${iw}: položka nemá zdroj`);
+      c.checkSources(iw, item.sources);
+    }
+    c.checkNoteIds(where, section.chapterNotes);
+    c.checkComic(where, section.comic);
+  }
 }
 
 /**
@@ -559,7 +700,32 @@ export function validateGlossary(glossary: RoleGlossaryEntry[], pages: InfoPage[
   return errors;
 }
 
-/** Kontrola celé série: unikátní slugy + validace každé stránky. */
+/**
+ * Odkaz na jinou stránku série (T-003s 1.2): tvar `/pravidla`, `/pravidla/<slug>`
+ * nebo `/pravidla/<slug>#<kotva>`, slug v registru, kotva v `ids` cílové
+ * stránky. Plná cesta na vlastní stránku je chyba (stačí `#kotva`).
+ */
+export function checkCrossLink(
+  selfSlug: string,
+  href: string,
+  idsBySlug: Map<string, Set<string>>
+): string | undefined {
+  const m = CROSS_LINK_RE.exec(href);
+  if (!m) return `odkaz „${href}" není ve tvaru /pravidla/<slug>#<kotva>`;
+  const [, slug, anchor] = m;
+  if (slug === undefined) return undefined;
+  if (slug === selfSlug) return `odkaz „${href}" míří na vlastní stránku, použij jen „#${anchor ?? ""}"`;
+  const target = idsBySlug.get(slug);
+  if (!target) return `odkaz „${href}" míří na stránku ${slug}, která není v registru`;
+  if (anchor !== undefined && !target.has(anchor)) return `odkaz „${href}" míří na kotvu ${anchor}, kterou stránka ${slug} nemá`;
+  return undefined;
+}
+
+/**
+ * Kontrola celé série: unikátní slugy, validace každé stránky, odkazy mezi
+ * stránkami proti kotvám cíle (iter-031) a unikátní popisky situací napříč
+ * rozcestníkem (gate T-004, K S2).
+ */
 export function validateRegistry(
   pages: InfoPage[],
   notes: ChapterNote[],
@@ -573,12 +739,31 @@ export function validateRegistry(
     if (noteIds.has(note.id)) errors.push(`položka „u nás v chapteru" ${note.id} není unikátní`);
     noteIds.add(note.id);
   }
+  const results: { slug: string; result: PageValidationResult }[] = [];
+  const idsBySlug = new Map<string, Set<string>>();
   for (const page of pages) {
     if (slugs.has(page.slug)) errors.push(`slug „${page.slug}" není unikátní`);
     slugs.add(page.slug);
     const result = validateInfoPage(page, notes);
+    results.push({ slug: page.slug, result });
+    if (!idsBySlug.has(page.slug)) idsBySlug.set(page.slug, result.ids);
     errors.push(...result.errors.map((e) => `[${page.slug}] ${e}`));
     infos.push(...result.infos.map((e) => `[${page.slug}] ${e}`));
+  }
+  for (const { slug, result } of results) {
+    for (const { where, href } of result.crossLinks) {
+      const error = checkCrossLink(slug, href, idsBySlug);
+      if (error) errors.push(`[${slug}] ${where}: ${error}`);
+    }
+  }
+  const labels = new Map<string, string>();
+  for (const page of pages) {
+    for (const s of page.situations) {
+      const key = s.label.trim().toLowerCase();
+      const owner = labels.get(key);
+      if (owner !== undefined) errors.push(`[${page.slug}] situace „${s.label}" je v rozcestníku i u stránky ${owner}`);
+      else labels.set(key, page.slug);
+    }
   }
   return { errors, infos };
 }

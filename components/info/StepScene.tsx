@@ -3,7 +3,7 @@ import { createRoleLinker, linkFact, type RoleLinkOptions } from "@/lib/info-pag
 import type { ChapterNote, Scene, VisualKind } from "@/lib/info-pages/types";
 import { ChapterNotes } from "./ChapterNoteBox";
 import { ChapterSide } from "./ChapterSide";
-import { ComicStrip } from "./ComicStrip";
+import { ComicStrip, ComicWide } from "./ComicStrip";
 import { InlineVisual } from "./InlineVisual";
 import { RichText } from "./RichText";
 import { SourceNote } from "./SourceNote";
@@ -41,6 +41,7 @@ export function StepScene<K extends VisualKind>({
         {scene.title}
       </h2>
       {scene.comic && <ComicStrip comic={scene.comic} />}
+      {scene.comicWide && <ComicWide panel={scene.comicWide} />}
       <div className="mt-4 space-y-4 text-lg leading-relaxed text-text-main">
         {story.map((segments, i) => (
           <p key={i}>

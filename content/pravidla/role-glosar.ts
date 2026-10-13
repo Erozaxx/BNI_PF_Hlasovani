@@ -137,7 +137,19 @@ export const ROLE_GLOSSARY: RoleGlossaryEntry[] = [
   },
   {
     id: "hostitele",
-    forms: ["tým hostitelů", "týmu hostitelů", "týmem hostitelů", "hostitelé", "hostitelů", "hostitelům"],
+    // iter-031 (T-007s, X12): i jednotné číslo, stránka clenstvi mluví o jednom hostiteli.
+    forms: [
+      "tým hostitelů",
+      "týmu hostitelů",
+      "týmem hostitelů",
+      "hostitelé",
+      "hostitelů",
+      "hostitelům",
+      "hostitel",
+      "hostitele",
+      "hostiteli",
+      "hostitelem",
+    ],
     en: "Visitor Host Team",
   },
   {

@@ -19,6 +19,7 @@ import { BranchBlock } from "./BranchBlock";
 import { ComicHero, ComicStrip } from "./ComicStrip";
 import { ContactRoles } from "./ContactRoles";
 import { InlineVisual } from "./InlineVisual";
+import { ListSections } from "./ListSections";
 import { PrintButton } from "./PrintButton";
 import { PageToc } from "./PageToc";
 import { PrintSources } from "./PrintSources";
@@ -118,7 +119,7 @@ export function InfoPageView<K extends VisualKind>({
               ))}
             </div>
             {page.toc && <PageToc items={page.toc} />}
-            <InlineVisual kind={page.visual} state={page.intro.visual} keep={keepsIntro(page.visual)} />
+            <InlineVisual kind={page.visual} state={page.intro.visual} keep={keepsIntro(page.visual)} intro />
             <Legend kind={page.visual} />
           </section>
 
@@ -133,6 +134,7 @@ export function InfoPageView<K extends VisualKind>({
       </div>
 
       {page.reference && <ReferenceSection reference={page.reference} links={links} notes={notes} />}
+      {page.sections && <ListSections sections={page.sections} links={links} notes={notes} />}
 
       <Summary page={page} links={links} />
       <ContactRoles contacts={page.contacts} links={links} />
