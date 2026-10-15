@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InterviewDueSection } from "@/components/interviews/InterviewDueSection";
+import { DashboardMastermind } from "@/components/mastermind/DashboardMastermind";
 
 export default async function DashboardPage() {
   const session = await requirePageSession();
@@ -51,6 +52,9 @@ export default async function DashboardPage() {
           </div>
         </Card>
       ) : null}
+
+      {/* 5 minut pro ostatni (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
+      <DashboardMastermind memberId={session.memberId} isManagement={isManagement} />
 
       {/* Quick actions for management */}
       {isManagement && (

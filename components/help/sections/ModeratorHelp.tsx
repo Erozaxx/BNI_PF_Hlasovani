@@ -244,6 +244,58 @@ export function ModeratorHelp() {
       </section>
 
       <section>
+        <h2 className="text-lg font-semibold mb-3">
+          5 minut pro ostatní: zařazování
+        </h2>
+        <p className="text-sm text-text-muted mb-3">
+          Interní schůzky se v aplikaci nezakládají. Případ ze zásobníku
+          zařadíte na čtvrtek a pořadí zásobníku podle zájmu je jen podklad,
+          o programu rozhoduje vedení.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
+          <li>
+            Otevřete <strong>5 minut</strong>. U každého případu v zásobníku
+            je hned vidět panel <strong>Zařadit na</strong>, rozbalovat nic
+            nemusíte.
+          </li>
+          <li>
+            V panelu vyberte čtvrtek. Čtvrtek s
+            otevřenou schůzkou nebo s jiným případem vybrat nejde.
+          </li>
+          <li>
+            Klikněte na <strong>Zařadit</strong>. Datum interní uvidí všichni
+            na kartě případu.
+          </li>
+          <li>
+            Po interní klikněte u případu na <strong>Odprezentováno</strong>.
+          </li>
+        </ol>
+        <ul className="text-sm space-y-1">
+          <li>
+            <strong>Jak je to s lhůtou?</strong> Téma ohlašujeme 14 dní předem.
+            Aplikace kratší lhůtu nezakáže, jen ji při zařazení ukáže.
+          </li>
+          <li>
+            <strong>Co když případ přesunu?</strong> Přesun na jiný čtvrtek
+            znamená <strong>Vrátit do zásobníku</strong> a pak znovu{" "}
+            <strong>Zařadit</strong>.
+          </li>
+          <li>
+            <strong>Případ za člena, který se přihlásil ústně.</strong> V
+            formuláři Přihlásit případ vyberte přednášejícího. Limit 5
+            otevřených případů platí i tady.
+          </li>
+          <li>
+            <strong>Změna přednášejícího.</strong> U zapsaného případu jde jen
+            smazat a zapsat znovu, zájmy se přitom ztratí.
+          </li>
+          <li>
+            <strong>Vrátit potvrzení.</strong> Slouží jen na opravu překlepu.
+          </li>
+        </ul>
+      </section>
+
+      <section>
         <h2 className="text-lg font-semibold mb-3">Omezení role Moderátora</h2>
         <p className="text-sm text-text-muted mb-3">
           Role moderátora je určena pro řízení schůzek a hlasování. Některé
