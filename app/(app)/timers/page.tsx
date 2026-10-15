@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { listTimers } from "@/lib/db/queries/timers";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -7,8 +6,7 @@ import { CreateTimerForm } from "./CreateTimerForm";
 import { TimerCard } from "./TimerCard";
 
 export default async function AdminTimersPage() {
-  const session = await getSession();
-  if (!session.managementRole) redirect("/dashboard");
+  const session = await requirePageSession({ role: "management" });
   const timers = await listTimers();
 
   return (

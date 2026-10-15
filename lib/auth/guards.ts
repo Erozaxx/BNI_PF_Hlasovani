@@ -7,6 +7,9 @@ type AuthFailure = { success: false; error: string };
  * Require an authenticated session.
  * Returns session data on success, or { success: false, error } on failure.
  * Never throws for auth failures.
+ *
+ * iter-032 (7.2): getSession() už vrací ověřenou session (verze a role
+ * proti DB), sesazený člen tu neprojde.
  */
 export async function requireAuth(): Promise<AuthSuccess | AuthFailure> {
   const session = await getSession();
@@ -15,15 +18,7 @@ export async function requireAuth(): Promise<AuthSuccess | AuthFailure> {
     return { success: false, error: "Not authenticated" };
   }
 
-  return {
-    success: true,
-    session: {
-      memberId: session.memberId,
-      managementRole: session.managementRole,
-      authMethod: session.authMethod,
-      name: session.name,
-    },
-  };
+  return { success: true, session };
 }
 
 /**

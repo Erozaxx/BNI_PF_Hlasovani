@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getGuestWithNotes } from "@/lib/db/queries/guests";
 import { getCategories } from "@/lib/db/queries/categories";
 import { getLastMeetingDateForGuest } from "@/lib/db/queries/meetings";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -29,7 +29,7 @@ export default async function GuestDetailPage({
     notFound();
   }
 
-  const session = await getSession();
+  const session = await requirePageSession();
   const [categories, lastMeetingDate] = await Promise.all([
     getCategories(),
     getLastMeetingDateForGuest(id),

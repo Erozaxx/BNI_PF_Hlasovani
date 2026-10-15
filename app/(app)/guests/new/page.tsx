@@ -1,19 +1,10 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getCategories } from "@/lib/db/queries/categories";
 import { getActiveMeeting } from "@/lib/db/queries/meetings";
 import { GuestForm } from "@/components/guests/GuestForm";
 
 export default async function NewGuestPage() {
-  const session = await getSession();
-
-  // Only admin/moderator can add guests
-  if (
-    session.managementRole !== "admin" &&
-    session.managementRole !== "moderator"
-  ) {
-    redirect("/guests");
-  }
+  const session = await requirePageSession({ role: "management", denyTo: "/guests" });
 
   const [categories, activeMeeting] = await Promise.all([
     getCategories(),

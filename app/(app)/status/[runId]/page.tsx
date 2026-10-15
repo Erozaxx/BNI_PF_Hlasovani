@@ -1,8 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getEventsByRunId } from "@/lib/db/queries/ops-events";
 import { deriveRunStatus } from "@/lib/ops/run-status";
 import { Card } from "@/components/ui/Card";
@@ -57,12 +56,7 @@ export default async function RunDetailPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const { runId } = await params;
 

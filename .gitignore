@@ -45,3 +45,6 @@ next-env.d.ts
 
 # QA větev Neonu (iter-026), dočasné
 .env.qa
+
+# QA pomocné skripty iterací (necommitovat)
+scripts/qa-tmp-*/

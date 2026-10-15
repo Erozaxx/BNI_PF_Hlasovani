@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import {
   getEventById,
   getEventOptions,
@@ -21,15 +21,8 @@ export default async function EventDetailPage({
 }) {
   const { eventId } = await params;
 
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
+  const session = await requirePageSession({ role: "management" });
   const isAdmin = session.managementRole === "admin";
-
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
 
   const [ev, options, participants, votes] = await Promise.all([
     getEventById(eventId),

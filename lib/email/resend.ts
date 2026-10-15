@@ -542,3 +542,177 @@ export async function sendVotingReminderEmail(
     return { success: false, error: msg };
   }
 }
+
+// ============================================================
+// iter-032 (arch 6.5, 5.3, 9.5): přihlášení člena odkazem a odkaz
+// „nastav si heslo" pro vedení. HTML i textová část.
+//
+// Logování (9.5, F8): do konzole jen memberId a třída chyby, nikdy adresa,
+// odkaz ani token. Bez RESEND_API_KEY se odkaz vypíše do konzole JEN mimo
+// produkci (QA na větvi Neonu). V produkci bez klíče vrátí chybu bez obsahu.
+// ============================================================
+
+type AccessEmailResult = { success: boolean; error?: string };
+
+function accessEmailHtml(opts: {
+  heading: string;
+  paragraphs: string[];
+  buttonLabel: string;
+  url: string;
+  footer: string[];
+}): string {
+  const paragraphs = opts.paragraphs
+    .map((p) => `<p style="margin:0 0 12px;">${escapeHtml(p)}</p>`)
+    .join("\n  ");
+  const footer = opts.footer
+    .map((p) => `<p style="color:#666;font-size:13px;margin:0 0 8px;">${escapeHtml(p)}</p>`)
+    .join("\n  ");
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
+  <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">${escapeHtml(opts.heading)}</h1>
+  </div>
+  ${paragraphs}
+  <div style="text-align:center;margin:24px 0;">
+    <a href="${escapeHtml(opts.url)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">${escapeHtml(opts.buttonLabel)}</a>
+  </div>
+  <p style="color:#666;font-size:13px;margin:0 0 16px;word-break:break-all;">Když tlačítko nefunguje, zkopíruj si do prohlížeče tenhle odkaz:<br>${escapeHtml(opts.url)}</p>
+  ${footer}
+</body>
+</html>`;
+}
+
+async function sendAccessEmail(opts: {
+  logTag: string;
+  memberId: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  url: string;
+}): Promise<AccessEmailResult> {
+  if (!process.env.RESEND_API_KEY) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[${opts.logTag}] RESEND_API_KEY chybí, odkaz jen do konzole (mimo produkci)`);
+      console.log(`[${opts.logTag}] memberId=${opts.memberId}: ${opts.url}`);
+      return { success: true };
+    }
+    console.error(`[${opts.logTag}] RESEND_API_KEY chybí memberId=${opts.memberId}`);
+    return { success: false, error: "RESEND_API_KEY chybí" };
+  }
+
+  try {
+    const { error } = await resend.emails.send({
+      from: `BNI Plzeň <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      to: [opts.to],
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text,
+    });
+    if (error) {
+      console.error(`[${opts.logTag}] resend error memberId=${opts.memberId}: ${error.name}`);
+      return { success: false, error: "Mail se nepodařilo odeslat." };
+    }
+    return { success: true };
+  } catch (err) {
+    const cls = err instanceof Error ? err.name : typeof err;
+    console.error(`[${opts.logTag}] exception memberId=${opts.memberId}: ${cls}`);
+    return { success: false, error: "Mail se nepodařilo odeslat." };
+  }
+}
+
+/**
+ * Přihlašovací odkaz člena (6.5). Platí 15 minut a jednou, přihlášení
+ * vydrží 12 hodin. Člen vedení dostane navíc větu o heslu (6.4, K6).
+ */
+export async function sendLoginLinkEmail(opts: {
+  memberId: string;
+  to: string;
+  name: string;
+  url: string;
+  isManagement: boolean;
+}): Promise<AccessEmailResult> {
+  const greeting = `Ahoj ${opts.name},`;
+  const lines = [
+    greeting,
+    "tady je tvůj odkaz pro přihlášení do aplikace BNI Plzeň.",
+    "Odkaz platí 15 minut a jde použít jen jednou. Přihlášení pak vydrží 12 hodin.",
+    ...(opts.isManagement ? ["Pro správu se přihlas heslem."] : []),
+  ];
+  const footer = ["Pokud jsi o přihlášení nežádal(a), mail ignoruj."];
+  const text = [
+    ...lines,
+    "",
+    `Přihlásit se: ${opts.url}`,
+    "",
+    ...footer,
+  ].join("\n");
+
+  return sendAccessEmail({
+    logTag: "sendLoginLinkEmail",
+    memberId: opts.memberId,
+    to: opts.to,
+    subject: "BNI Plzeň: přihlášení do aplikace",
+    html: accessEmailHtml({
+      heading: "BNI Plzeň",
+      paragraphs: lines,
+      buttonLabel: "Přihlásit se",
+      url: opts.url,
+      footer,
+    }),
+    text,
+    url: opts.url,
+  });
+}
+
+/**
+ * Odkaz „nastav si heslo" pro vedení (5.3). Odesílá se přímo (`await`),
+ * admin potřebuje výsledek.
+ */
+export async function sendSetPasswordLinkEmail(opts: {
+  memberId: string;
+  to: string;
+  name: string;
+  url: string;
+  reason: "promoted" | "reset" | "resend";
+  role: "admin" | "moderator";
+  actorName: string;
+  appUrl: string;
+}): Promise<AccessEmailResult> {
+  const roleLabel = opts.role === "admin" ? "admin" : "moderátor";
+  const reasonLine =
+    opts.reason === "promoted"
+      ? `${opts.actorName} ti v aplikaci BNI Plzeň dal(a) roli ${roleLabel}. Pro správu si nastav vlastní heslo.`
+      : opts.reason === "reset"
+        ? `${opts.actorName} ti zrušil(a) heslo do aplikace BNI Plzeň a posílá odkaz pro nové.`
+        : `${opts.actorName} ti posílá znovu odkaz pro nastavení hesla do aplikace BNI Plzeň (role ${roleLabel}). Předchozí odkaz už neplatí.`;
+  const loginUrl = `${opts.appUrl.replace(/\/+$/, "")}/login`;
+  const lines = [
+    `Ahoj ${opts.name},`,
+    reasonLine,
+    "Odkaz platí 24 hodin a jde použít jen jednou. Po nastavení hesla budeš rovnou přihlášený(á).",
+    `Příště se přihlásíš na ${loginUrl} e-mailem a heslem. Tvůj přihlašovací e-mail je ${opts.to}.`,
+  ];
+  const footer = [
+    "Pokud jsi tuhle změnu nečekal(a), ozvi se adminovi chapteru.",
+  ];
+  const text = [...lines, "", `Nastavit heslo: ${opts.url}`, "", ...footer].join("\n");
+
+  return sendAccessEmail({
+    logTag: "sendSetPasswordLinkEmail",
+    memberId: opts.memberId,
+    to: opts.to,
+    subject: "BNI Plzeň: nastav si heslo pro vedení",
+    html: accessEmailHtml({
+      heading: "BNI Plzeň",
+      paragraphs: lines,
+      buttonLabel: "Nastavit heslo",
+      url: opts.url,
+      footer,
+    }),
+    text,
+    url: opts.url,
+  });
+}

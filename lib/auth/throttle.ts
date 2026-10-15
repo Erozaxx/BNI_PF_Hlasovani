@@ -2,6 +2,7 @@ import { eq, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { authThrottle } from "@/lib/db/schema";
+import { THROTTLE_WINDOW_MINUTES } from "@/lib/auth/login-link-core";
 
 function getDb() {
   return drizzle(getSql());
@@ -20,7 +21,7 @@ function getDb() {
  * iteration only requires changing this file, not call sites.
  */
 
-export const THROTTLE_WINDOW_MINUTES = 10;
+export { THROTTLE_WINDOW_MINUTES };
 export const THROTTLE_MAX_ATTEMPTS = 20;
 
 /**
@@ -66,6 +67,42 @@ export async function throttleFail(key: string): Promise<void> {
                         THEN NOW() ELSE ${authThrottle.windowStart} END`,
       },
     });
+}
+
+/**
+ * iter-032 (arch 9.3, F2): zapíše pokus pro všechny klíče a vrátí jejich
+ * počty jedním atomickým `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`.
+ * Souběžné požadavky se řadí na řádkovém zámku UPSERTu, každý dostane jiné
+ * číslo, limit tak neobejde ani paralelní volání (na rozdíl od
+ * throttleCheck + throttleFail). Rozhodnutí `count > max` dělá volající
+ * (`findBlockedRule` v login-link-core.ts). Okno jde jako bind parametr,
+ * ne přes sql.raw. Bez transakcí (LL-003).
+ */
+export async function throttleHit(
+  keys: string[],
+  windowMinutes: number
+): Promise<{ key: string; count: number }[]> {
+  if (keys.length === 0) return [];
+  const values = sql.join(
+    keys.map((k) => sql`(${k}, now(), 1)`),
+    sql`, `
+  );
+  const result = await getDb().execute<{ key: string; count: number }>(sql`
+    INSERT INTO auth_throttle (key, window_start, count)
+    VALUES ${values}
+    ON CONFLICT (key) DO UPDATE SET
+      count = CASE WHEN auth_throttle.window_start < now() - make_interval(mins => ${windowMinutes}::int)
+                   THEN 1 ELSE auth_throttle.count + 1 END,
+      window_start = CASE WHEN auth_throttle.window_start < now() - make_interval(mins => ${windowMinutes}::int)
+                   THEN now() ELSE auth_throttle.window_start END
+    RETURNING key, count
+  `);
+  return result.rows.map((r) => ({ key: r.key, count: Number(r.count) }));
+}
+
+/** Smaže jeden klíč (po úspěšném přihlášení heslem jen klíč dvojice, 9.3). */
+export async function throttleClear(key: string): Promise<void> {
+  await getDb().delete(authThrottle).where(eq(authThrottle.key, key));
 }
 
 /**

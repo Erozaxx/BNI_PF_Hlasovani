@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { notFound } from "next/navigation";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import {
   getInterviewDetail,
   getMemberInterviewsForCompare,
@@ -8,6 +8,7 @@ import {
   type PairedQuestionRow,
 } from "@/lib/db/queries/interviews";
 import { getMemberById, getMembers } from "@/lib/db/queries/members";
+import { sortMembersByName } from "@/lib/interviews/list-filters";
 import { buildInterviewCompareReportHtml } from "@/lib/email/interview-report";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
@@ -165,12 +166,7 @@ export default async function InterviewComparePage({
 }) {
   const { memberId } = await params;
 
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const member = await getMemberById(memberId);
   if (!member) {
@@ -202,7 +198,8 @@ export default async function InterviewComparePage({
     onlyIn10,
   });
 
-  const recipients = members
+  // iter-032 T-001b 5.2: příjemci porovnání (D5) abecedně.
+  const recipients = sortMembersByName(members)
     .filter((m) => Boolean(m.email))
     .map((m) => ({ id: m.id, name: m.name }));
 

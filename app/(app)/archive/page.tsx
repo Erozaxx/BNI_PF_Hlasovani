@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getCategories } from "@/lib/db/queries/categories";
 import {
   getArchivedMeetings,
@@ -21,8 +21,7 @@ export default async function ArchivePage({
     category?: string;
   }>;
 }) {
-  // Auth check
-  await getSession();
+  await requirePageSession();
 
   const params = await searchParams;
 

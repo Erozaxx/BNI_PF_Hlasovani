@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getEvents } from "@/lib/db/queries/events";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -44,14 +43,7 @@ export default async function EventsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const { filter: filterParam } = await searchParams;
   const validStatuses: EventStatus[] = ["draft", "active", "closed", "done"];

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getCategoriesWithGuests } from "@/lib/db/queries/categories";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
 import { PromoteGuestButton } from "@/components/guests/PromoteGuestButton";
@@ -16,7 +16,7 @@ export default async function GuestsPage({
   searchParams: Promise<{ category?: string }>;
 }) {
   const params = await searchParams;
-  const session = await getSession();
+  const session = await requirePageSession();
   const categoryFilter = params.category;
   const guests = await getGuests(categoryFilter);
   const categories = await getCategoriesWithGuests();

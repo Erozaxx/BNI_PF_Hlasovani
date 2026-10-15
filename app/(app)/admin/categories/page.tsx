@@ -5,8 +5,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateCategoryForm } from "./CreateCategoryForm";
 import { RenameCategoryForm } from "./RenameCategoryForm";
 import { DeleteCategoryButton } from "./DeleteCategoryButton";
+import { requirePageSession } from "@/lib/auth/page-guard";
 
 export default async function AdminCategoriesPage() {
+  await requirePageSession({ role: "admin" });
   const categories = await getCategories();
 
   return (

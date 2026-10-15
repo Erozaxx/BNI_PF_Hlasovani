@@ -1,6 +1,7 @@
 import { getInterviewDueList } from "@/lib/db/queries/interviews";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { compareMemberNames } from "@/lib/interviews/list-filters";
 
 /**
  * "Pohovory k zalozeni" widget (arch section 7.2, T-006d) — admin/moderator
@@ -12,7 +13,11 @@ import { Badge } from "@/components/ui/Badge";
  * Caller is responsible for only rendering this for admin/moderator sessions.
  */
 export async function InterviewDueSection() {
-  const entries = await getInterviewDueList();
+  // iter-032 T-001b 5.4: SQL ORDER BY name závisí na collation DB, pořadí
+  // proto přeřadí JS po česku (Ch za H, háčky za základním písmenem).
+  const entries = [...(await getInterviewDueList())].sort((a, b) =>
+    compareMemberNames(a.memberName, b.memberName)
+  );
 
   const due = entries.filter((e) => e.due5 || e.due10);
   const upcoming = entries.filter(

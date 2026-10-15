@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getAllQuestions } from "@/lib/db/queries/interview-questions";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -17,13 +16,7 @@ import { SortableQuestionList } from "./SortableQuestionList";
  * client-side nav hiding alone).
  */
 export default async function InterviewQuestionsPage() {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const questions = await getAllQuestions();
 

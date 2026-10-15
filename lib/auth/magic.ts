@@ -53,12 +53,15 @@ export async function verifyMagicToken(rawToken: string): Promise<VerifyResult> 
   const currentMember = await getMemberByTokenHash(tokenHash);
   if (currentMember) {
     // Create session
-    await createSession({
-      memberId: currentMember.id,
-      managementRole: null,
-      authMethod: "magic_link",
-      name: currentMember.name,
-    });
+    await createSession(
+      {
+        memberId: currentMember.id,
+        managementRole: null,
+        authMethod: "magic_link",
+        name: currentMember.name,
+      },
+      currentMember.sessionVersion // iter-032 (F1): verze z řádku člena
+    );
 
     return { status: "ok", memberId: currentMember.id };
   }

@@ -12,6 +12,7 @@ import {
   unique,
   check,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -64,9 +65,23 @@ export const member = pgTable(
     // dedicated, admin-editable column. DATE (not timestamp): entry is a
     // calendar day, month arithmetic without timezone concerns.
     joinedAt: date("joined_at").notNull().default(sql`CURRENT_DATE`),
+    // iter-032 (arch 7.2): revokace session. Zvyšuje se při změně role,
+    // resetu a nastavení hesla, změně vlastního hesla a změně e-mailu člena
+    // vedení. getSession() ji porovná s `sv` v cookie, neshoda = odhlášení.
+    sessionVersion: integer("session_version").notNull().default(0),
   },
   (table) => ({
     emailUnique: unique("member_email_unique").on(table.email),
+    // iter-032 (K13): e-mail bez ohledu na velikost písmen, přísnější než
+    // member_email_unique (přesná shoda), který zůstává.
+    emailLowerUnique: uniqueIndex("member_email_lower_unique").on(
+      sql`lower(${table.email})`
+    ),
+    // iter-032 (K5): heslo jen u vedení, odebrání role heslo maže.
+    passwordOnlyForManagement: check(
+      "member_password_only_for_management",
+      sql`${table.passwordHash} IS NULL OR ${table.managementRole} IS NOT NULL`
+    ),
     magicTokenHashUnique: unique().on(table.magicTokenHash),
     managementRequiresCredentials: check(
       "member_management_requires_credentials",
@@ -713,6 +728,48 @@ export const interviewLink = pgTable(
 // key formát: "<scope>:<ip>" např. "i-verify:203.0.113.5"
 // Jediný atomický UPSERT per failed pokus — bezpečné v serverless bez transakce.
 // ============================================================
+// ============================================================
+// MEMBER_LOGIN_LINK — iter-032 (arch 8.1). Jednorázové odkazy: přihlášení
+// člena z mailu (purpose 'login', 15 min) a nastavení hesla vedení
+// (purpose 'set-password', 24 h). Spotřebování je atomický UPDATE
+// ... WHERE used_at IS NULL AND expires_at > now() RETURNING. Úklid ve
+// fázi 6 cronu close-voting (řádky prošlé víc než 1 den).
+// ============================================================
+export const memberLoginLink = pgTable(
+  "member_login_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (table) => ({
+    purposeCheck: check(
+      "mll_purpose_check",
+      sql`${table.purpose} IN ('login', 'set-password')`
+    ),
+    tokenHashUnique: unique("mll_token_hash_unique").on(table.tokenHash),
+    expiresAfterCreated: check(
+      "mll_expires_after_created",
+      sql`${table.expiresAt} > ${table.createdAt}`
+    ),
+    memberIdIdx: index("idx_mll_member_id").on(table.memberId),
+    // T-006r (security L-4): nejvýš jeden nepoužitý odkaz `set-password` na
+    // člena. Vystavení je UPSERT nad tímto indexem (login-links.ts), takže
+    // souběh dvou požadavků nenechá platné dva odkazy.
+    oneActiveSetPassword: uniqueIndex("mll_one_active_set_password")
+      .on(table.memberId)
+      .where(sql`${table.purpose} = 'set-password' AND ${table.usedAt} IS NULL`),
+  })
+);
+
 export const authThrottle = pgTable("auth_throttle", {
   key: text("key").primaryKey(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),

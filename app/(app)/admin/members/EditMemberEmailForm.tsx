@@ -13,15 +13,26 @@ export function EditMemberEmailForm({ memberId, initialEmail }: Props) {
   const [email, setEmail] = useState(initialEmail ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
     const result = await updateMemberEmailAction(memberId, email);
     setLoading(false);
     if (result.success) {
       setOpen(false);
+      // iter-032 (security M-1): odkazy poslané na starou adresu přestaly platit.
+      if ((result.data?.revokedLinks ?? 0) > 0) {
+        setNotice(
+          "Odkazy poslané na starou adresu přestaly platit." +
+            (result.data?.isManagement
+              ? " Jestli si člen ještě nenastavil heslo, pošli mu nový odkaz pro heslo."
+              : "")
+        );
+      }
     } else {
       setError(result.error ?? "Chyba");
     }
@@ -29,12 +40,15 @@ export function EditMemberEmailForm({ memberId, initialEmail }: Props) {
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs text-primary hover:underline mt-1"
-      >
-        Upravit
-      </button>
+      <>
+        <button
+          onClick={() => { setOpen(true); setNotice(null); }}
+          className="text-xs text-primary hover:underline mt-1"
+        >
+          Upravit
+        </button>
+        {notice && <p className="text-xs text-text-muted mt-1">{notice}</p>}
+      </>
     );
   }
 

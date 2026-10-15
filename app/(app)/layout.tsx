@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -12,7 +12,9 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
+  // iter-032 (7.3): plné načtení bez ověřené session -> /login. Rozhodující
+  // je volání ve stránce, layout se při měkké navigaci nevykresluje.
+  const session = await requirePageSession();
   const isAdmin = session.managementRole === "admin";
   const isManagement =
     session.managementRole === "admin" ||
@@ -81,7 +83,7 @@ export default async function AppLayout({
       </aside>
 
       {/* Mobile header */}
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <header className="md:hidden flex items-center justify-between p-4 bg-surface border-b border-border">
           <Link href="/dashboard" className="text-lg font-bold text-primary">
             BNI Hlasovani

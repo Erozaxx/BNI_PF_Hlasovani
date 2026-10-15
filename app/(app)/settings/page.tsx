@@ -1,17 +1,10 @@
-import { redirect } from "next/navigation";
-import { requireManagementRole } from "@/lib/auth/guards";
 import { getMemberById } from "@/lib/db/queries/members";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { Card } from "@/components/ui/Card";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 
 export default async function SettingsPage() {
-  const auth = await requireManagementRole(["admin", "moderator"]);
-  if (!auth.success) {
-    redirect("/dashboard");
-  }
-
-  const session = await getSession();
+  const session = await requirePageSession({ role: "management" });
   const member = session.memberId ? await getMemberById(session.memberId) : null;
   const hasPassword = !!member?.passwordHash;
 
