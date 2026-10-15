@@ -8,6 +8,7 @@ import {
   interviewQuestion,
   interviewQuestionSnapshot,
   interviewAnswer,
+  interviewLink,
   member,
 } from "@/lib/db/schema";
 
@@ -423,7 +424,10 @@ export async function getInterviewDetail(id: string) {
 
 /**
  * List interviews (for the /interviews admin page), newest first, with member +
- * leader display names. Optional status filter.
+ * leader display names and the link columns (iter-032 T-001b 4.2, sloupec
+ * Odkaz). LEFT JOIN interview_link gives at most one row per interview
+ * (interview_id is UNIQUE); no link row -> all three link columns are null.
+ * Optional status filter.
  */
 export async function getInterviewsList(filter?: InterviewStatus) {
   // Self-join on member (once for the interviewee, once for the leader) needs a
@@ -442,10 +446,14 @@ export async function getInterviewsList(filter?: InterviewStatus) {
       leaderName: leader.name,
       createdAt: interview.createdAt,
       submittedAt: interview.submittedAt,
+      linkLastSentAt: interviewLink.lastSentAt,
+      linkRevokedAt: interviewLink.revokedAt,
+      linkExpiresAt: interviewLink.expiresAt,
     })
     .from(interview)
     .innerJoin(member, eq(interview.memberId, member.id))
     .leftJoin(leader, eq(interview.leaderId, leader.id))
+    .leftJoin(interviewLink, eq(interviewLink.interviewId, interview.id))
     .where(filter ? eq(interview.status, filter) : undefined)
     .orderBy(desc(interview.createdAt));
 }

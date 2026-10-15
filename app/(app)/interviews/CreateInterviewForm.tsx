@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
@@ -9,8 +9,8 @@ import { createInterviewAction } from "@/actions/interviews";
 import type { InterviewType } from "@/lib/db/queries/interviews";
 
 const TYPE_OPTIONS: Array<{ value: InterviewType; label: string }> = [
-  { value: "month_5", label: "5 mesicu" },
-  { value: "month_10", label: "10 mesicu" },
+  { value: "month_5", label: "5 měsíců" },
+  { value: "month_10", label: "10 měsíců" },
 ];
 
 interface MemberOption {
@@ -27,7 +27,9 @@ interface CreateInterviewFormProps {
    *  comfort hint only — the DB partial UNIQUE is the real authority (8a). */
   existingByMember: Record<string, { month5: boolean; month10: boolean }>;
   /** Pre-fill from a due-chip click on /admin/members (arch iter-023 T-001 §3.3).
-   *  Caller passes a `key` so the form remounts when these change. */
+   *  Bez `key` (M3): formulář se nevytváří znovu při obnovení stránky, takže
+   *  rozepsaný výběr přežije změnu filtru. Nová neprázdná předvolba se přenese
+   *  přes efekt níže. */
   initialMemberId?: string;
   initialType?: InterviewType;
 }
@@ -47,6 +49,13 @@ export function CreateInterviewForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // M3: předvyplnění z URL jen při změně na neprázdnou hodnotu. Smazání
+  // parametrů filtrem (prázdné hodnoty) výběr neresetuje.
+  useEffect(() => {
+    if (initialMemberId) setMemberId(initialMemberId);
+    if (initialType) setType(initialType);
+  }, [initialMemberId, initialType]);
+
   const memberOptions = members.map((m) => ({ value: m.id, label: m.name }));
   const leaderOptions = members.map((m) => ({
     value: m.id,
@@ -56,11 +65,11 @@ export function CreateInterviewForm({
   const existing = memberId ? existingByMember[memberId] : undefined;
   const hint =
     existing?.month5 && existing?.month10
-      ? "Tento clen jiz ma zalozene oba pohovory (5 i 10 mesicu)."
+      ? "Tento člen už má založené oba pohovory (5 i 10 měsíců)."
       : existing?.month5
-        ? "Tento clen jiz ma zalozeny pohovor 5 mesicu."
+        ? "Tento člen už má založený pohovor 5 měsíců."
         : existing?.month10
-          ? "Tento clen jiz ma zalozeny pohovor 10 mesicu."
+          ? "Tento člen už má založený pohovor 10 měsíců."
           : null;
 
   // Disable a type already occupied by a non-cancelled interview for the
@@ -73,7 +82,7 @@ export function CreateInterviewForm({
       (opt.value === "month_10" && existing?.month10);
     return {
       ...opt,
-      label: isTaken ? `${opt.label} (jiz zalozeno)` : opt.label,
+      label: isTaken ? `${opt.label} (už založeno)` : opt.label,
       disabled: Boolean(isTaken),
     };
   });
@@ -97,7 +106,7 @@ export function CreateInterviewForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!memberId) {
-      setError("Vyberte clena.");
+      setError("Vyberte člena.");
       return;
     }
     if (!type) {
@@ -105,7 +114,7 @@ export function CreateInterviewForm({
       return;
     }
     if (!leaderId) {
-      setError("Vyberte vedouciho.");
+      setError("Vyberte vedoucího.");
       return;
     }
 
@@ -118,12 +127,12 @@ export function CreateInterviewForm({
         setError(result.error);
         showToast("error", result.error);
       } else if (result.data) {
-        showToast("success", "Pohovor byl zalozen.");
+        showToast("success", "Pohovor byl založen.");
         router.push(`/interviews/${result.data.id}`);
       }
     } catch {
-      setError("Nepodarilo se zalozit pohovor.");
-      showToast("error", "Nepodarilo se zalozit pohovor.");
+      setError("Nepodařilo se založit pohovor.");
+      showToast("error", "Nepodařilo se založit pohovor.");
     } finally {
       setLoading(false);
     }
@@ -133,12 +142,12 @@ export function CreateInterviewForm({
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Select
-          label="Clen"
+          label="Člen"
           name="memberId"
           value={memberId}
           onChange={handleMemberChange}
           options={memberOptions}
-          placeholder="Vyberte clena..."
+          placeholder="Vyberte člena…"
         />
         <Select
           label="Typ pohovoru"
@@ -146,29 +155,35 @@ export function CreateInterviewForm({
           value={type}
           onChange={(e) => setType(e.target.value as InterviewType)}
           options={typeOptions}
-          placeholder="Vyberte typ..."
+          placeholder="Vyberte typ…"
         />
         <Select
-          label="Vedouci pohovoru"
+          label="Vedoucí pohovoru"
           name="leaderId"
           value={leaderId}
           onChange={(e) => setLeaderId(e.target.value)}
           options={leaderOptions}
-          placeholder="Vyberte vedouciho..."
+          placeholder="Vyberte vedoucího…"
         />
       </div>
 
       {hint && <p className="text-sm text-warning">{hint}</p>}
       {selectedLeader && !selectedLeader.email && (
         <p className="text-sm text-warning">
-          Vybrany vedouci nema email — odkaz na vyplneni pujde poslat az po
-          doplneni emailu.
+          Vybraný vedoucí nemá e-mail. Odkaz na vyplnění půjde poslat až po
+          doplnění e-mailu.
         </p>
       )}
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Zalozit pohovor
+      <Button
+        type="submit"
+        variant="primary"
+        size="sm"
+        loading={loading}
+        className="min-h-[44px] sm:min-h-0"
+      >
+        Založit pohovor
       </Button>
     </form>
   );

@@ -38,8 +38,8 @@ import type { ActionResult } from "@/lib/types";
 const INTERVIEWS_PATH = "/interviews";
 
 const TYPE_LABELS: Record<InterviewType, string> = {
-  month_5: "5 mesicu",
-  month_10: "10 mesicu",
+  month_5: "5 měsíců",
+  month_10: "10 měsíců",
 };
 
 // Anti-spam guard (arch section 5, M-2 analogy): minimum time between two
@@ -62,23 +62,23 @@ export async function createInterviewAction(
   if (!auth.success) return auth;
 
   if (!memberId) {
-    return { success: false, error: "Vyberte clena." };
+    return { success: false, error: "Vyberte člena." };
   }
   if (type !== "month_5" && type !== "month_10") {
-    return { success: false, error: "Neplatny typ pohovoru." };
+    return { success: false, error: "Neplatný typ pohovoru." };
   }
   if (!leaderId) {
-    return { success: false, error: "Vyberte vedouciho pohovoru." };
+    return { success: false, error: "Vyberte vedoucího pohovoru." };
   }
 
   try {
     const memberExists = await getMemberById(memberId);
     if (!memberExists) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
     const leaderExists = await getMemberById(leaderId);
     if (!leaderExists) {
-      return { success: false, error: "Vedouci nebyl nalezen." };
+      return { success: false, error: "Vedoucí nebyl nalezen." };
     }
 
     const result = await createInterviewWithSnapshot({
@@ -102,13 +102,13 @@ export async function createInterviewAction(
         // Readable dedup error (T-004a delta 3, arch 8a) — never a 500.
         return {
           success: false,
-          error: `Pohovor ${TYPE_LABELS[type]} pro tohoto clena uz existuje. Nejdrive smazte stavajici pohovor.`,
+          error: `Pohovor ${TYPE_LABELS[type]} pro tohoto člena už existuje. Nejdřív smažte stávající pohovor.`,
         };
       case "empty_question_set":
         return {
           success: false,
           error:
-            "Sada otazek pro pohovory je prazdna. Pred zalozenim pridejte alespon jednu otazku v sekci Pohovory > Sprava otazek.",
+            "Sada otázek pro pohovory je prázdná. Před založením přidejte aspoň jednu otázku v sekci Pohovory > Správa otázek.",
         };
       case "no_applicable_questions":
         // iter-021 (arch T-003 MAJOR-2): zivá sada nema pro tento typ pohovoru
@@ -117,18 +117,18 @@ export async function createInterviewAction(
         // pohovoru timhle statusem nikdy neprojde, viz lib/db/queries/interviews.ts).
         return {
           success: false,
-          error: `Sada neobsahuje zadnou otazku platnou pro pohovor ${TYPE_LABELS[type]}. Upravte sadu otazek v sekci Pohovory > Sprava otazek.`,
+          error: `Sada neobsahuje žádnou otázku platnou pro pohovor ${TYPE_LABELS[type]}. Upravte sadu otázek v sekci Pohovory > Správa otázek.`,
         };
       case "failed":
       default:
         return {
           success: false,
-          error: "Zalozeni pohovoru se nepovedlo, zkuste to prosim znovu.",
+          error: "Založení pohovoru se nepovedlo, zkuste to prosím znovu.",
         };
     }
   } catch (error) {
     console.error("createInterviewAction error:", error);
-    return { success: false, error: "Nepodarilo se zalozit pohovor." };
+    return { success: false, error: "Nepodařilo se založit pohovor." };
   }
 }
 
@@ -146,7 +146,7 @@ export async function updateInterviewLeaderAction(
   if (!auth.success) return auth;
 
   if (!newLeaderId) {
-    return { success: false, error: "Vyberte vedouciho." };
+    return { success: false, error: "Vyberte vedoucího." };
   }
 
   try {
@@ -157,13 +157,13 @@ export async function updateInterviewLeaderAction(
     if (existing.status !== "open") {
       return {
         success: false,
-        error: "Vedouciho lze zmenit jen u otevreneho pohovoru.",
+        error: "Vedoucího lze změnit jen u otevřeného pohovoru.",
       };
     }
 
     const leaderExists = await getMemberById(newLeaderId);
     if (!leaderExists) {
-      return { success: false, error: "Vedouci nebyl nalezen." };
+      return { success: false, error: "Vedoucí nebyl nalezen." };
     }
 
     // Revoke first (arch 8b ordering): the previous leader's link must die
@@ -176,7 +176,7 @@ export async function updateInterviewLeaderAction(
       return {
         success: false,
         error:
-          "Pohovor mezitim prestal byt otevreny, vedouciho se nepodarilo zmenit.",
+          "Pohovor mezitím přestal být otevřený, vedoucího se nepodařilo změnit.",
       };
     }
 
@@ -185,7 +185,7 @@ export async function updateInterviewLeaderAction(
     return { success: true };
   } catch (error) {
     console.error("updateInterviewLeaderAction error:", error);
-    return { success: false, error: "Nepodarilo se zmenit vedouciho." };
+    return { success: false, error: "Nepodařilo se změnit vedoucího." };
   }
 }
 

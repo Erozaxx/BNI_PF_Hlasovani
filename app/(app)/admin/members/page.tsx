@@ -8,8 +8,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMemberForm } from "./CreateMemberForm";
 import { ImportMembersForm } from "./ImportMembersForm";
 import { SortableMemberList } from "./SortableMemberList";
+import { requirePageSession } from "@/lib/auth/page-guard";
 
 export default async function AdminMembersPage() {
+  const session = await requirePageSession({ role: "admin" });
   const [members, interviewCounts, dueList] = await Promise.all([
     getMembers(),
     getInterviewCountsByMember(),
@@ -44,6 +46,7 @@ export default async function AdminMembersPage() {
         </h2>
         {members.length > 0 ? (
           <SortableMemberList
+            currentMemberId={session.memberId}
             members={members.map((m) => ({
               id: m.id,
               name: m.name,
@@ -51,6 +54,7 @@ export default async function AdminMembersPage() {
               company: m.company ?? null,
               obor: m.obor ?? null,
               managementRole: m.managementRole ?? null,
+              hasPassword: Boolean(m.passwordHash),
               magicTokenHash: m.magicTokenHash ?? null,
               tokenUsed: m.tokenUsed,
               joinedAt: m.joinedAt,

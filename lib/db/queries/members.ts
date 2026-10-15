@@ -2,8 +2,18 @@ import { eq, asc, and, isNotNull, ne, gte, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { member } from "@/lib/db/schema";
+import { normalizeEmailForStorage } from "@/lib/auth/login-link-core";
 
 function getDb() { return drizzle(getSql()); }
+
+/**
+ * Postgres 23505 (unique_violation), typicky unikátní index
+ * `member_email_lower_unique` (iter-032, K13). Stejný vzor jako ostatní
+ * akce v repu (`err.code`).
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string } | null)?.code === "23505";
+}
 
 /**
  * Get all members ordered by drag&drop display order, then creation time.
@@ -41,20 +51,19 @@ export async function getMemberById(id: string) {
  */
 export async function createMember(data: {
   name: string;
-  email?: string;
-  managementRole?: string | null;
-  passwordHash?: string | null;
+  email?: string | null;
   company?: string | null;
   obor?: string | null;
   joinedAt?: string | null;
 }) {
+  // iter-032 (K8): nový člen vzniká vždy bez role a hesla, roli dostane jen
+  // přes setMemberRoleGuarded. U3 (K13): e-mail jen normalizovaně, prázdný
+  // jako NULL.
   const results = await getDb()
     .insert(member)
     .values({
       name: data.name,
-      email: data.email || null,
-      managementRole: data.managementRole || null,
-      passwordHash: data.passwordHash || null,
+      email: normalizeEmailForStorage(data.email),
       company: data.company || null,
       obor: data.obor || null,
       ...(data.joinedAt ? { joinedAt: data.joinedAt } : {}),
@@ -82,14 +91,51 @@ export async function updateMemberCompany(
     .where(eq(member.id, memberId));
 }
 
+/**
+ * Změna e-mailu (iter-032, 4.4, U3). Ukládá `lower(trim(email))`, prázdný
+ * jako NULL. U člena vedení se změnou e-mailu (přihlašovací jméno) zvýší
+ * `session_version`. Člen vedení bez e-mailu neprojde CHECKem
+ * `member_management_requires_credentials`, akce to hlídá hláškou předem.
+ *
+ * Security M-1: když se adresa opravdu změní, všechny nepoužité odkazy
+ * člena (`login` i `set-password`) přestanou platit v tomtéž příkazu. Odkaz
+ * poslaný na překlep v adrese tak po opravě nikoho nepřihlásí. Jeden
+ * příkaz s datově modifikujícím CTE, bez transakce (LL-003). Vrací, jestli
+ * se adresa změnila a kolik odkazů přestalo platit; `null` = člen neexistuje.
+ * CTE se jmenuje `prev`, ne `old`: PostgreSQL 18 má v RETURNING vlastní
+ * alias `old` a jméno by se s ním potkalo.
+ */
 export async function updateMemberEmail(
   memberId: string,
   email: string | null
-) {
-  await getDb()
-    .update(member)
-    .set({ email })
-    .where(eq(member.id, memberId));
+): Promise<{ changed: boolean; revokedLinks: number } | null> {
+  const normalized = normalizeEmailForStorage(email);
+  const result = await getDb().execute<{ changed: boolean; revoked_links: number }>(sql`
+    WITH prev AS (
+      SELECT id, email FROM member WHERE id = ${memberId}::uuid FOR UPDATE
+    ), upd AS (
+      UPDATE member m SET
+        email = ${normalized}::text,
+        session_version = CASE
+          WHEN m.management_role IS NOT NULL
+           AND prev.email IS DISTINCT FROM ${normalized}::text
+          THEN m.session_version + 1
+          ELSE m.session_version END
+      FROM prev
+      WHERE m.id = prev.id
+      RETURNING m.id, (prev.email IS DISTINCT FROM ${normalized}::text) AS changed
+    ), revoked AS (
+      UPDATE member_login_link SET used_at = now()
+      WHERE member_id IN (SELECT id FROM upd WHERE changed)
+        AND used_at IS NULL
+      RETURNING id
+    )
+    SELECT upd.changed, (SELECT count(*)::int FROM revoked) AS revoked_links
+    FROM upd
+  `);
+  const row = result.rows[0];
+  if (!row) return null;
+  return { changed: !!row.changed, revokedLinks: Number(row.revoked_links) };
 }
 
 /**
@@ -108,14 +154,15 @@ export async function updateMemberJoinedAt(
 }
 
 /**
- * Find a member by email address.
- * Used for admin/moderator password login.
+ * Find a member by email address, case-insensitive (iter-032, K13, N9).
+ * Used for admin/moderator password login and the member login link request.
+ * Unikátní index `member_email_lower_unique` drží shodu nejvýš jednu.
  */
 export async function getMemberByEmail(email: string) {
   const results = await getDb()
     .select()
     .from(member)
-    .where(eq(member.email, email))
+    .where(sql`lower(${member.email}) = lower(trim(${email}))`)
     .limit(1);
 
   return results[0] ?? null;
@@ -215,20 +262,201 @@ export async function updateTokenUsed(memberId: string) {
 }
 
 /**
- * Update password hash for a member (used for password change).
- */
-export async function updatePasswordHash(memberId: string, passwordHash: string) {
-  await getDb()
-    .update(member)
-    .set({ passwordHash })
-    .where(eq(member.id, memberId));
-}
-
-/**
- * Delete a member by ID.
+ * Delete a member by ID. Bez pojistek, jen pro skripty. Akce používá
+ * `deleteMemberGuarded` (iter-032, N4).
  */
 export async function deleteMember(id: string) {
   await getDb().delete(member).where(eq(member.id, id));
+}
+
+// ============================================================
+// iter-032: role, hesla vedení, revokace session (arch 4.3, 5, 7.2)
+// Bez transakcí (LL-003): každá změna je jeden příkaz s pojistkami
+// ve WHERE. Pojistku posledního admina drží CTE s FOR UPDATE (F11).
+// ============================================================
+
+/** `session_version` a role pro `getSession()`, jeden SELECT podle PK. */
+export async function getMemberAuthState(
+  memberId: string
+): Promise<{ sessionVersion: number; managementRole: string | null } | null> {
+  const rows = await getDb()
+    .select({
+      sessionVersion: member.sessionVersion,
+      managementRole: member.managementRole,
+    })
+    .from(member)
+    .where(eq(member.id, memberId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function countAdmins(): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(member)
+    .where(eq(member.managementRole, "admin"));
+  return rows[0]?.value ?? 0;
+}
+
+type GuardedMemberRow = { id: string; email: string | null; name: string };
+
+/**
+ * Změna role jedním příkazem (4.3 krok 5). Vrátí `null`, když neprošla
+ * některá pojistka: cíl je volající, role se mezitím změnila
+ * (`expectedOldRole`), povýšení bez e-mailu, nebo by zmizel poslední admin.
+ *
+ * `password`: `promote` = zámkový hash, `keep` = beze změny (switch),
+ * `clear` = NULL (demote, K5). `session_version` se zvýší vždy.
+ *
+ * CTE `admins` se vyhodnotí jen tam, kde se na něj podmínka odkazuje, tedy
+ * když nová role není admin. Jen tehdy hrozí ztráta posledního admina.
+ *
+ * `IS NOT DISTINCT FROM 'admin'` místo `= 'admin'` z návrhu 4.3: u člena
+ * bez role je `NULL = 'admin'` NULL, `NOT (NULL AND true)` je taky NULL a
+ * WHERE by řádek vyřadil. Povýšení by pak při jediném adminovi vždy
+ * vrátilo 0 řádků.
+ *
+ * Security L-5: povýšení i sesazení (`promote`, `clear`) zneplatní
+ * nepoužité odkazy `set-password` v tomtéž příkazu, ne až v kroku mailu.
+ * Přepnutí role (`keep`) odkazy nechává: člen, který heslo ještě nenastavil,
+ * by jinak zůstal se zámkovým hashem bez odkazu.
+ */
+export async function setMemberRoleGuarded(input: {
+  targetId: string;
+  actorId: string;
+  expectedOldRole: "admin" | "moderator" | null;
+  newRole: "admin" | "moderator" | null;
+  password: { mode: "promote"; hash: string } | { mode: "keep" } | { mode: "clear" };
+}): Promise<GuardedMemberRow | null> {
+  const { targetId, actorId, expectedOldRole, newRole, password } = input;
+
+  const roleValue = newRole === null ? sql`NULL` : sql`${newRole}::text`;
+  const passwordValue =
+    password.mode === "promote"
+      ? sql`${password.hash}::text`
+      : password.mode === "clear"
+        ? sql`NULL`
+        : sql`password_hash`;
+  const expectedRoleCond =
+    expectedOldRole === null
+      ? sql`management_role IS NULL`
+      : sql`management_role = ${expectedOldRole}::text`;
+  const emailCond =
+    newRole === null ? sql`` : sql`AND email IS NOT NULL AND email <> ''`;
+  const lastAdminCond =
+    newRole === "admin"
+      ? sql``
+      : sql`AND NOT (management_role IS NOT DISTINCT FROM 'admin'
+                     AND (SELECT count(*) FROM admins) <= 1)`;
+
+  const revokeLinks =
+    password.mode === "keep"
+      ? sql``
+      : sql`, revoked AS (
+          UPDATE member_login_link SET used_at = now()
+          WHERE member_id IN (SELECT id FROM upd)
+            AND purpose = 'set-password'
+            AND used_at IS NULL
+        )`;
+
+  const result = await getDb().execute<GuardedMemberRow>(sql`
+    WITH admins AS (
+      SELECT id FROM member WHERE management_role = 'admin' ORDER BY id FOR UPDATE
+    ), upd AS (
+      UPDATE member SET
+        management_role = ${roleValue},
+        password_hash   = ${passwordValue},
+        session_version = session_version + 1
+      WHERE id = ${targetId}::uuid
+        AND id <> ${actorId}::uuid
+        AND ${expectedRoleCond}
+        ${emailCond}
+        ${lastAdminCond}
+      RETURNING id, email, name
+    )${revokeLinks}
+    SELECT id, email, name FROM upd
+  `);
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Smazání člena s pojistkami (4.3, N4): ne sám sebe, ne posledního admina.
+ * Vrací `true`, když řádek zmizel.
+ */
+export async function deleteMemberGuarded(
+  targetId: string,
+  actorId: string
+): Promise<boolean> {
+  const result = await getDb().execute<{ id: string }>(sql`
+    WITH admins AS (
+      SELECT id FROM member WHERE management_role = 'admin' ORDER BY id FOR UPDATE
+    )
+    DELETE FROM member
+    WHERE id = ${targetId}::uuid
+      AND id <> ${actorId}::uuid
+      AND NOT (management_role IS NOT DISTINCT FROM 'admin'
+               AND (SELECT count(*) FROM admins) <= 1)
+    RETURNING id
+  `);
+  return result.rows.length > 0;
+}
+
+/**
+ * Reset hesla vedení (5.3): zámkový hash, nová verze session. Jen člen
+ * s rolí, nikdy volající. Staré heslo i všechny session končí hned.
+ *
+ * Security L-5: nepoužité odkazy `set-password` přestanou platit v tomtéž
+ * příkazu. Reset tak funguje jako nouzové zablokování i tehdy, když
+ * následné vystavení odkazu nebo mail selže.
+ */
+export async function resetPasswordGuarded(
+  targetId: string,
+  actorId: string,
+  lockHash: string
+): Promise<GuardedMemberRow | null> {
+  const result = await getDb().execute<GuardedMemberRow>(sql`
+    WITH upd AS (
+      UPDATE member SET
+        password_hash   = ${lockHash}::text,
+        session_version = session_version + 1
+      WHERE id = ${targetId}::uuid
+        AND id <> ${actorId}::uuid
+        AND management_role IS NOT NULL
+      RETURNING id, email, name
+    ), revoked AS (
+      UPDATE member_login_link SET used_at = now()
+      WHERE member_id IN (SELECT id FROM upd)
+        AND purpose = 'set-password'
+        AND used_at IS NULL
+    )
+    SELECT id, email, name FROM upd
+  `);
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Uloží hash hesla člena vedení a zvýší verzi session (5.2 bod 5, 5.4).
+ * Nula řádků = člen mezitím přišel o roli (nebo neexistuje).
+ */
+export async function setOwnPassword(
+  memberId: string,
+  passwordHash: string
+): Promise<{ sessionVersion: number; managementRole: string; name: string } | null> {
+  const rows = await getDb()
+    .update(member)
+    .set({
+      passwordHash,
+      sessionVersion: sql`${member.sessionVersion} + 1`,
+    })
+    .where(and(eq(member.id, memberId), isNotNull(member.managementRole)))
+    .returning({
+      sessionVersion: member.sessionVersion,
+      managementRole: member.managementRole,
+      name: member.name,
+    });
+  const row = rows[0];
+  if (!row || !row.managementRole) return null;
+  return { sessionVersion: row.sessionVersion, managementRole: row.managementRole, name: row.name };
 }
 
 /**

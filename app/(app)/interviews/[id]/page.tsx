@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { notFound } from "next/navigation";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import {
   getInterviewDetail,
   getInterviewQuestionsWithAnswers,
 } from "@/lib/db/queries/interviews";
 import { getMembers } from "@/lib/db/queries/members";
+import { sortMembersByName } from "@/lib/interviews/list-filters";
 import { getInterviewLinkStatus } from "@/lib/auth/interview-magic";
 import { buildInterviewReportHtml } from "@/lib/email/interview-report";
 import { Card } from "@/components/ui/Card";
@@ -41,23 +42,20 @@ export default async function InterviewDetailPage({
 }) {
   const { id } = await params;
 
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const detail = await getInterviewDetail(id);
   if (!detail) {
     notFound();
   }
 
-  const [questions, members, linkStatus] = await Promise.all([
+  const [questions, allMembers, linkStatus] = await Promise.all([
     getInterviewQuestionsWithAnswers(id),
     getMembers(),
     getInterviewLinkStatus(id),
   ]);
+  // iter-032 T-001b 5.2: výběr vedoucího (D3) a příjemce reportu (D4) abecedně.
+  const members = sortMembersByName(allMembers);
 
   const leaderMember = detail.leaderId
     ? members.find((m) => m.id === detail.leaderId)

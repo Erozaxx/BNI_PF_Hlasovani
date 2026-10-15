@@ -22,14 +22,31 @@ const sessionOptions = {
 /** Exact paths that do not require authentication (no prefix matching). */
 const PUBLIC_PATHS_EXACT = new Set([
   "/login",
+  // iter-032 (arch 6.2, 7.5, LL-005): mezistránky jednorázových odkazů.
+  // Přesná shoda platí i pro POST Server Action na téže cestě. Záměrně i
+  // tady, i když je větev TOKEN_LINK_PATHS níž chytí dřív (review F-08):
+  // seznam veřejných cest má být úplný sám o sobě (LL-005, test 9b).
+  "/login/odkaz",
+  "/login/heslo",
   "/api/auth/magic",
   "/api/cron/close-voting",
   "/api/cron/renew-tokens",
   "/api/report",
 ]);
 
+/** Veřejné stránky s jednorázovým tokenem v `?t=` (iter-032). */
+const TOKEN_LINK_PATHS = new Set(["/login/odkaz", "/login/heslo"]);
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // iter-032 (N-c): stránky s tokenem v URL se necachují a neposílají Referer.
+  if (TOKEN_LINK_PATHS.has(pathname)) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
 
   // Allow public paths (exact match only — no prefix matching)
   if (PUBLIC_PATHS_EXACT.has(pathname)) {

@@ -49,6 +49,12 @@ export const KIND_LABELS: Record<string, string> = {
   "reminder.sent": "Pripominka odeslana",
   "reminder.failed": "Pripominka selhala",
   "reminder.round": "Kolo pripominek",
+  // iter-032 (K9, review F-04): změny přístupu z /admin/members a /login/heslo
+  "access.role-changed": "Zmena role",
+  "access.password-reset": "Heslo zruseno",
+  "access.password-set": "Heslo nastaveno",
+  "access.password-link-copied": "Odkaz ke zkopirovani",
+  "access.password-link-resent": "Odkaz poslan znovu",
 };
 
 export function kindLabel(kind: string): string {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getMeetings } from "@/lib/db/queries/meetings";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +9,7 @@ import { CreateMeetingForm } from "./CreateMeetingForm";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 
 export default async function MeetingsPage() {
-  const session = await getSession();
+  const session = await requirePageSession();
   const meetings = await getMeetings();
   const isManagement =
     session.managementRole === "admin" ||

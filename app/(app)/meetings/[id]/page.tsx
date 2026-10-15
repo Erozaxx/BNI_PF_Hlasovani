@@ -5,7 +5,7 @@ import { getGuests } from "@/lib/db/queries/guests";
 import { getVotingResults } from "@/lib/db/queries/votes";
 import { getMembers } from "@/lib/db/queries/members";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -33,7 +33,7 @@ export default async function MeetingDetailPage({
     notFound();
   }
 
-  const session = await getSession();
+  const session = await requirePageSession();
   const isManagement =
     session.managementRole === "admin" ||
     session.managementRole === "moderator";

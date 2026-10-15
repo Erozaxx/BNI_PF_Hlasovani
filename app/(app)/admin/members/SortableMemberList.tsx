@@ -27,6 +27,7 @@ import { DeleteMemberButton } from "./DeleteMemberButton";
 import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
 import { EditMemberEmailForm } from "./EditMemberEmailForm";
 import { EditMemberJoinedAtForm } from "./EditMemberJoinedAtForm";
+import { MemberAccessControls } from "./MemberAccessControls";
 
 export interface MemberRow {
   id: string;
@@ -35,6 +36,8 @@ export interface MemberRow {
   company: string | null;
   obor: string | null;
   managementRole: string | null;
+  /** iter-032: jen příznak, hash se do klienta nikdy neposílá. */
+  hasPassword: boolean;
   magicTokenHash: string | null;
   tokenUsed: boolean;
   /** "YYYY-MM-DD" (arch 7.1, iter-020) — BNI entry date, admin-editable. */
@@ -75,6 +78,8 @@ function DueChip({
 
 interface SortableMemberListProps {
   members: MemberRow[];
+  /** iter-032 (4.2): řádek přihlášeného admina má výběr role zakázaný. */
+  currentMemberId: string;
 }
 
 /** Drag handle icon (≡). */
@@ -98,7 +103,15 @@ function DragHandle({
   );
 }
 
-function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
+function SortableMemberRow({
+  m,
+  index,
+  currentMemberId,
+}: {
+  m: MemberRow;
+  index: number;
+  currentMemberId: string;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: m.id });
 
@@ -145,14 +158,19 @@ function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
         <div>{new Date(`${m.joinedAt}T00:00:00Z`).toLocaleDateString("cs-CZ")}</div>
         <EditMemberJoinedAtForm memberId={m.id} initialJoinedAt={m.joinedAt} />
       </td>
-      <td className="px-4 py-3">
-        {m.managementRole ? (
-          <Badge variant={m.managementRole === "admin" ? "danger" : "info"}>
-            {m.managementRole}
-          </Badge>
-        ) : (
-          <Badge variant="neutral">clen</Badge>
-        )}
+      <td className="px-4 py-3 align-top">
+        <MemberAccessControls
+          memberId={m.id}
+          memberName={m.name}
+          email={m.email}
+          managementRole={
+            m.managementRole === "admin" || m.managementRole === "moderator"
+              ? m.managementRole
+              : null
+          }
+          hasPassword={m.hasPassword}
+          isSelf={m.id === currentMemberId}
+        />
       </td>
       <td className="px-4 py-3">
         {m.tokenUsed ? (
@@ -177,7 +195,7 @@ function SortableMemberRow({ m, index }: { m: MemberRow; index: number }) {
   );
 }
 
-export function SortableMemberList({ members }: SortableMemberListProps) {
+export function SortableMemberList({ members, currentMemberId }: SortableMemberListProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<MemberRow[]>(members);
@@ -250,7 +268,12 @@ export function SortableMemberList({ members }: SortableMemberListProps) {
               strategy={verticalListSortingStrategy}
             >
               {items.map((m, i) => (
-                <SortableMemberRow key={m.id} m={m} index={i} />
+                <SortableMemberRow
+                  key={m.id}
+                  m={m}
+                  index={i}
+                  currentMemberId={currentMemberId}
+                />
               ))}
             </SortableContext>
           </tbody>

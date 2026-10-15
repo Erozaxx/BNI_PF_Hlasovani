@@ -6,27 +6,30 @@ import {
   createMember as dbCreateMember,
   getMemberById,
   updateTokenUsed,
-  deleteMember as dbDeleteMember,
+  deleteMemberGuarded,
+  isUniqueViolation,
   updateMemberCompany as dbUpdateMemberCompany,
   updateMemberEmail as dbUpdateMemberEmail,
   updateMemberJoinedAt as dbUpdateMemberJoinedAt,
 } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
-import { hash } from "bcryptjs";
 import type { ActionResult } from "@/lib/types";
+
+const EMAIL_TAKEN_TEXT = "Tenhle e-mail už má jiný člen.";
 
 /**
  * Create a new member. Requires admin role.
  *
- * - Regular members (no managementRole): auto-generate magic token for voting access
- * - Admin/moderator: require password, hash it (bcrypt cost 12); no magic token generated
+ * iter-032 (K8, N7): nový člen vzniká vždy bez role a hesla, roli dostane
+ * jen přes setMemberRoleAction (actions/member-access.ts). Parametry
+ * managementRole a password akce nepřijímá, jinak by zůstala druhá cesta
+ * přímým voláním. Magic token se generuje jako dřív. E-mail ukládá query
+ * vrstva normalizovaně (U3).
  */
 export async function createMemberAction(
   name: string,
   email?: string,
-  managementRole?: string | null,
-  password?: string,
   company?: string,
   obor?: string
 ): Promise<ActionResult<{ id: string }>> {
@@ -37,40 +40,23 @@ export async function createMemberAction(
     return { success: false, error: "Jmeno clena je povinne." };
   }
 
-  const isManagement = !!managementRole;
-
-  if (isManagement) {
-    if (!email?.trim()) {
-      return { success: false, error: "Pro admin/moderator roli je nutny email." };
-    }
-    if (!password || password.length < 8) {
-      return { success: false, error: "Pro admin/moderator roli je nutne zadat heslo (min. 8 znaku)." };
-    }
-  }
-
   try {
-    let passwordHash: string | null = null;
-    if (isManagement && password) {
-      passwordHash = await hash(password, 12);
-    }
-
     const newMember = await dbCreateMember({
       name: name.trim(),
-      email: email?.trim() || undefined,
-      managementRole: managementRole || null,
-      passwordHash,
+      email: email ?? null,
       company: company?.trim() || null,
       obor: obor?.trim() || null,
     });
 
-    if (!isManagement) {
-      // Regular members use magic link for voting access
-      await generateMagicToken(newMember.id);
-    }
+    // Members use magic link for voting access
+    await generateMagicToken(newMember.id);
 
     revalidatePath("/admin/members");
     return { success: true, data: { id: newMember.id } };
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { success: false, error: EMAIL_TAKEN_TEXT };
+    }
     console.error("createMemberAction error:", error);
     return { success: false, error: "Nepodarilo se vytvorit clena." };
   }
@@ -207,11 +193,20 @@ export async function updateMemberCompanyAction(
 
 /**
  * Update email for a member. Requires admin role.
+ *
+ * iter-032 (4.4, N5, K13): query vrstva ukládá `lower(trim(email))` a u
+ * člena vedení se změnou zvýší `session_version`. Člen vedení bez e-mailu
+ * je odmítnutý srozumitelnou hláškou (dřív obecná chyba z CHECKu),
+ * duplicitu chytí unikátní index `lower(email)`.
+ *
+ * Security M-1: změna adresy zneplatní nepoužité odkazy člena v témže
+ * příkazu. `revokedLinks` řekne formuláři, že má adminovi připomenout nový
+ * odkaz pro heslo.
  */
 export async function updateMemberEmailAction(
   memberId: string,
   email: string
-): Promise<ActionResult> {
+): Promise<ActionResult<{ revokedLinks: number; isManagement: boolean }>> {
   const auth = await requireAdmin();
   if (!auth.success) return auth;
 
@@ -221,11 +216,27 @@ export async function updateMemberEmailAction(
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    await dbUpdateMemberEmail(memberId, email.trim() || null);
+    if (memberData.managementRole && !(email ?? "").trim()) {
+      return {
+        success: false,
+        error: "Člen vedení musí mít e-mail. Nejdřív mu odeber roli.",
+      };
+    }
+
+    const updated = await dbUpdateMemberEmail(memberId, email ?? null);
+    if (!updated) {
+      return { success: false, error: "Clen nebyl nalezen." };
+    }
 
     revalidatePath("/admin/members");
-    return { success: true };
+    return {
+      success: true,
+      data: { revokedLinks: updated.revokedLinks, isManagement: !!memberData.managementRole },
+    };
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { success: false, error: EMAIL_TAKEN_TEXT };
+    }
     console.error("updateMemberEmailAction error:", error);
     return { success: false, error: "Nepodarilo se aktualizovat email." };
   }
@@ -275,6 +286,10 @@ export async function updateMemberJoinedAtAction(
 
 /**
  * Delete a member. Requires admin role.
+ *
+ * iter-032 (4.3, N4): sebe ani posledního admina smazat nejde. Hláška
+ * vychází z načteného řádku, správnost drží `deleteMemberGuarded` (jeden
+ * DELETE s CTE `FOR UPDATE`).
  */
 export async function deleteMemberAction(
   memberId: string
@@ -282,13 +297,27 @@ export async function deleteMemberAction(
   const auth = await requireAdmin();
   if (!auth.success) return auth;
 
+  const actorId = auth.session.memberId;
+  if (memberId === actorId) {
+    return { success: false, error: "Sám sebe smazat nejde." };
+  }
+
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    await dbDeleteMember(memberId);
+    const deleted = await deleteMemberGuarded(memberId, actorId);
+    if (!deleted) {
+      return {
+        success: false,
+        error:
+          memberData.managementRole === "admin"
+            ? "Posledního admina smazat nejde."
+            : "Clena se nepodarilo smazat, obnov stranku.",
+      };
+    }
 
     revalidatePath("/admin/members");
     return { success: true };

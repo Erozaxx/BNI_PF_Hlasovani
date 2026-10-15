@@ -1,28 +1,26 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
-import { getInterviewsList, type InterviewType } from "@/lib/db/queries/interviews";
+import { requirePageSession } from "@/lib/auth/page-guard";
+import {
+  getInterviewDueList,
+  getInterviewsList,
+  type InterviewType,
+} from "@/lib/db/queries/interviews";
 import { getMembers } from "@/lib/db/queries/members";
+import {
+  buildInterviewListRows,
+  isDueRelevant,
+  sortDueEntries,
+  sortMembersByName,
+} from "@/lib/interviews/list-filters";
 import { Card } from "@/components/ui/Card";
-import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { InterviewDueSection } from "@/components/interviews/InterviewDueSection";
 import { CreateInterviewForm } from "./CreateInterviewForm";
-
-const TYPE_LABELS: Record<string, string> = {
-  month_5: "5 mesicu",
-  month_10: "10 mesicu",
-};
-
-const STATUS_BADGE: Record<string, { label: string; variant: BadgeVariant }> = {
-  open: { label: "Otevreny", variant: "info" },
-  submitted: { label: "Odeslany", variant: "success" },
-  cancelled: { label: "Zruseny", variant: "neutral" },
-};
+import { InterviewDueTable } from "./InterviewDueTable";
+import { InterviewListTable } from "./InterviewListTable";
 
 /**
- * Interview management landing page (arch section 8a/8f, T-007). Mod/admin
+ * Interview management landing page (arch section 8a/8f, T-007; iter-032
+ * T-001b: filtr u hlaviček, vedoucí v řádku, chip zakládá pohovor). Mod/admin
  * only — middleware only session-gates this route (like /interviews/questions,
  * T-004a delta 1), so the role check happens here, page-level (R-9), same as
  * every action in actions/interviews.ts re-checks it independently.
@@ -32,18 +30,42 @@ export default async function InterviewsPage({
 }: {
   searchParams: Promise<{ memberId?: string; type?: string }>;
 }) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const session = await requirePageSession({ role: "management" });
 
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
-
-  const [interviews, members] = await Promise.all([
+  const [interviews, allMembers, dueList] = await Promise.all([
     getInterviewsList(),
     getMembers(),
+    getInterviewDueList(),
   ]);
+
+  // iter-032 T-001b 5: členové abecedně (Intl.Collator "cs") pro všechny
+  // výběry na stránce (D1, D2, D6, D7, D8). getMembers() dál řadí podle
+  // display_order, to potřebuje konzole členů.
+  const members = sortMembersByName(allMembers);
+  const memberOptions = members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    email: m.email ?? null,
+  }));
+
+  // Gate T-004b U1: datumy i stav odkazu počítá server s jedním `now`
+  // a v Europe/Prague, do klienta jdou jen řetězce a výčty (hydratace).
+  const now = new Date();
+  const listRows = buildInterviewListRows(interviews, now);
+
+  // Horní tabulka (4.3): jen členové, u kterých něco svítí nebo se blíží,
+  // svítící nahoře, uvnitř abecedně. Filtrování z_* běží v klientu.
+  const dueEntries = sortDueEntries(dueList.filter(isDueRelevant)).map((e) => ({
+    memberId: e.memberId,
+    memberName: e.memberName,
+    joinedAtUnverified: e.joinedAtUnverified,
+    due5: e.due5,
+    due10: e.due10,
+    due5SinceDays: e.due5SinceDays,
+    due10SinceDays: e.due10SinceDays,
+    upcoming5: e.upcoming5,
+    upcoming10: e.upcoming10,
+  }));
 
   // memberId -> which types already have a non-cancelled interview — comfort
   // hint for the founding form only, the DB partial UNIQUE stays the authority.
@@ -86,24 +108,19 @@ export default async function InterviewsPage({
         <h1 className="text-2xl font-bold text-text-main">Pohovory</h1>
         <Link href="/interviews/questions">
           <Button variant="secondary" size="sm">
-            Sprava otazek
+            Správa otázek
           </Button>
         </Link>
       </div>
 
-      <InterviewDueSection />
+      <InterviewDueTable entries={dueEntries} members={memberOptions} />
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Zalozit pohovor
+          Založit pohovor
         </h2>
         <CreateInterviewForm
-          key={`${initialMemberId ?? ""}-${initialType ?? ""}`}
-          members={members.map((m) => ({
-            id: m.id,
-            name: m.name,
-            email: m.email ?? null,
-          }))}
+          members={memberOptions}
           currentMemberId={session.memberId}
           existingByMember={existingByMember}
           initialMemberId={initialMemberId}
@@ -111,73 +128,7 @@ export default async function InterviewsPage({
         />
       </Card>
 
-      <section>
-        <h2 className="text-lg font-semibold text-text-main mb-4">
-          Seznam pohovoru ({interviews.length})
-        </h2>
-        {interviews.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b-2 border-primary text-left">
-                  <th className="px-4 py-3 font-semibold">Clen</th>
-                  <th className="px-4 py-3 font-semibold">Typ</th>
-                  <th className="px-4 py-3 font-semibold">Stav</th>
-                  <th className="px-4 py-3 font-semibold">Vedouci</th>
-                  <th className="px-4 py-3 font-semibold">Zalozeno</th>
-                  <th className="px-4 py-3 font-semibold">Odeslano</th>
-                  <th className="px-4 py-3 font-semibold" aria-label="Akce"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {interviews.map((i, idx) => {
-                  const badge = STATUS_BADGE[i.status] ?? {
-                    label: i.status,
-                    variant: "neutral" as const,
-                  };
-                  return (
-                    <tr
-                      key={i.id}
-                      className={`border-b border-border ${idx % 2 === 1 ? "bg-background" : ""}`}
-                    >
-                      <td className="px-4 py-3 font-medium">{i.memberName}</td>
-                      <td className="px-4 py-3">{TYPE_LABELS[i.type] ?? i.type}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={badge.variant}>{badge.label}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-text-muted">
-                        {i.leaderName ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-text-muted">
-                        {new Date(i.createdAt).toLocaleDateString("cs-CZ")}
-                      </td>
-                      <td className="px-4 py-3 text-text-muted">
-                        {i.submittedAt
-                          ? new Date(i.submittedAt).toLocaleDateString("cs-CZ")
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/interviews/${i.id}`}>
-                          <Button variant="secondary" size="sm">
-                            Detail
-                          </Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <Card>
-            <EmptyState
-              title="Zatim zadne pohovory"
-              description="Zalozte prvni pohovor pomoci formulare vyse."
-            />
-          </Card>
-        )}
-      </section>
+      <InterviewListTable rows={listRows} members={memberOptions} />
     </div>
   );
 }

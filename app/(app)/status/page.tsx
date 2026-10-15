@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/page-guard";
 import { getMembers } from "@/lib/db/queries/members";
 import { getMeetings } from "@/lib/db/queries/meetings";
 import {
@@ -65,12 +64,7 @@ export default async function StatusPage({
 }: {
   searchParams: Promise<StatusPageSearchParams>;
 }) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    redirect("/dashboard");
-  }
+  const session = await requirePageSession({ role: "management" });
 
   const params = await searchParams;
   const severity = isSeverity(params.severity) ? params.severity : undefined;

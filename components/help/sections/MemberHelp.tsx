@@ -4,34 +4,41 @@ export function MemberHelp() {
       <section>
         <h2 className="text-lg font-semibold mb-3">Přihlášení</h2>
         <p className="text-sm text-text-muted mb-3">
-          Jako člen se přihlašujete pomocí tzv. magic linku — přihlašovacího
-          odkazu zaslaného na váš e-mail. Není potřeba si pamatovat žádné heslo.
+          Jako člen se přihlašujete odkazem, který vám přijde e-mailem. Heslo si
+          pamatovat nemusíte. Vedení chapteru s nastaveným heslem se po zadání
+          e-mailu zeptáme na heslo.
         </p>
         <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
           <li>Otevřete přihlašovací stránku aplikace.</li>
           <li>
             Zadejte svou e-mailovou adresu a klikněte na tlačítko{" "}
-            <strong>Odeslat odkaz</strong>.
+            <strong>Pokračovat</strong>. Odkaz vám pošleme automaticky.
           </li>
           <li>Otevřete e-mail a klikněte na přihlašovací odkaz.</li>
           <li>
-            Aplikace vás automaticky přihlásí a přesměruje na Dashboard.
+            Na stránce, která se otevře, klikněte na <strong>Přihlásit se</strong>.
+            Aplikace vás přesměruje na Dashboard.
           </li>
         </ol>
         <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm mb-3">
-          Přihlašovací odkaz je platný <strong>7 dní</strong> od odeslání a lze
-          ho použít opakovaně. Pokud odkaz vyprší, jednoduše si nechte zaslat
-          nový.
+          Odkaz z přihlašovací stránky platí <strong>15 minut</strong> a jde
+          použít jen <strong>jednou</strong>. Přihlášení pak vydrží 12 hodin.
+          Osobní odkaz, který vám poslal admin, platí dál 7 dní.
         </div>
         <ul className="text-sm space-y-1">
           <li>
-            <strong>E-mail s odkazem mi nepřišel.</strong> — Zkontrolujte složku
-            Spam nebo Hromadná pošta. Pokud tam odkaz také není, požádejte
-            administrátora o opětovné zaslání.
+            <strong>E-mail s odkazem mi nepřišel.</strong> Zkontrolujte složku
+            Spam nebo Hromadná pošta. Pokud tam není, nechte si poslat nový
+            odkaz, případně se ozvěte administrátorovi.
           </li>
           <li>
-            <strong>Mohu se přihlásit z jiného zařízení?</strong> — Ano, odkaz
-            funguje na libovolném zařízení a prohlížeči.
+            <strong>Odkaz píše, že už neplatí.</strong> Uplynulo 15 minut, nebo
+            jste ho už jednou použili. Nechte si poslat nový.
+          </li>
+          <li>
+            <strong>Mohu se přihlásit z jiného zařízení?</strong> Ano. Na každém
+            zařízení si ale nechte poslat vlastní odkaz, každý funguje jen
+            jednou.
           </li>
         </ul>
       </section>

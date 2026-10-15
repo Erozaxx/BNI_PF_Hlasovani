@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { createMemberAction } from "@/actions/members";
 
@@ -15,33 +14,13 @@ export function CreateMemberForm() {
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
   const [obor, setObor] = useState("");
-  const [role, setRole] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const roleOptions = [
-    { value: "", label: "Clen (bez management role)" },
-    { value: "moderator", label: "Moderator" },
-    { value: "admin", label: "Admin" },
-  ];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       setError("Jmeno je povinne.");
-      return;
-    }
-    if (role && !email.trim()) {
-      setError("Pro admin/moderator roli je nutny email.");
-      return;
-    }
-    if (role && password.length > 0 && password.length < 8) {
-      setError("Heslo musi mit alespon 8 znaku.");
-      return;
-    }
-    if (role && !password) {
-      setError("Pro admin/moderator roli je nutne zadat heslo.");
       return;
     }
 
@@ -52,8 +31,6 @@ export function CreateMemberForm() {
       const result = await createMemberAction(
         name,
         email || undefined,
-        role || null,
-        role ? password : undefined,
         company || undefined,
         obor || undefined
       );
@@ -65,8 +42,6 @@ export function CreateMemberForm() {
         setEmail("");
         setCompany("");
         setObor("");
-        setRole("");
-        setPassword("");
         showToast("success", "Clen byl pridan.");
         router.refresh();
       }
@@ -114,25 +89,9 @@ export function CreateMemberForm() {
         onChange={(e) => setObor(e.target.value)}
         placeholder="Obor cinnosti"
       />
-      <Select
-        label="Role"
-        name="role"
-        value={role}
-        onChange={(e) => { setRole(e.target.value); setPassword(""); }}
-        options={roleOptions}
-      />
-      {role && (
-        <Input
-          label="Heslo (pro prihlaseni do administrace) *"
-          name="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="new-password"
-          minLength={8}
-          placeholder="Min. 8 znaku"
-        />
-      )}
+      <p className="text-xs text-text-muted">
+        Nový člen vzniká bez role. Roli moderátora nebo admina mu dáš v seznamu členů níž.
+      </p>
       <Button type="submit" variant="primary" size="sm" loading={loading}>
         Pridat clena
       </Button>

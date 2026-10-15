@@ -20,6 +20,7 @@ import {
 } from "@/lib/meetings/morning-dispatch";
 import { decideThursdayWarning, type WarningInput } from "@/lib/meetings/warning-plan";
 import { cleanupStaleThrottleRows } from "@/lib/auth/throttle";
+import { cleanupStaleLoginLinks } from "@/lib/db/queries/login-links";
 import { runReminders, type ReminderRunResult } from "@/lib/meetings/reminder-run";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import { retentionCutoff } from "@/lib/ops/retention";
@@ -598,11 +599,14 @@ async function handler(request: NextRequest) {
     // ── Fáze 6: stale auth_throttle row cleanup ──
     // Best-effort, sequential DELETE (no db.transaction() — LL-003). Own
     // try/catch so a failure here never fails the cron's main logic above.
+    // iter-032 (arch 6.6): ve stejném try/catch i úklid member_login_link
+    // (odkazy prošlé víc než 1 den). Nový cron nevzniká (Vercel Hobby).
     try {
       await cleanupStaleThrottleRows();
+      await cleanupStaleLoginLinks();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      console.error("close-voting cron: throttle cleanup failed:", msg);
+      console.error("close-voting cron: throttle/login-link cleanup failed:", msg);
     }
 
     // ── Fáze 7 (nová, iter-027 T-005, arch 10): retence ops_event ──

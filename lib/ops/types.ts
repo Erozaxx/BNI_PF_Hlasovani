@@ -42,7 +42,17 @@ export type OpsEventKind =
   // pozdější `cron.finished` v `deriveRunStatus` (7).
   | "reminder.sent"
   | "reminder.failed"
-  | "reminder.round";
+  | "reminder.round"
+  // iter-032 (arch 9.5, K9, U1): změny přístupu z /admin/members a
+  // /login/heslo. Každá je jednorázová událost s vlastním runId, proto
+  // všechny v TERMINAL_KINDS (jinak by je /status po 5 minutách ukázal
+  // jako zaseklý běh). Nikdy nenesou heslo ani odkaz.
+  | "access.role-changed"
+  | "access.password-reset"
+  | "access.password-set"
+  | "access.password-link-copied"
+  // T-006r (review F-02): „Poslat znovu" jen vymění token nepoužitého odkazu.
+  | "access.password-link-resent";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).
@@ -57,6 +67,11 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "dispatch.finished",
   "dispatch.guard-failed",
   "dispatch.failed",
+  "access.role-changed",
+  "access.password-reset",
+  "access.password-set",
+  "access.password-link-copied",
+  "access.password-link-resent",
 ];
 
 /**

@@ -14,6 +14,7 @@ import { addGuestToMeeting, isGuestInVotingMeeting } from "@/lib/db/queries/meet
 import {
   createMember as dbCreateMember,
   findMemberByEmailInsensitive,
+  isUniqueViolation,
   findMemberByNameInsensitive,
 } from "@/lib/db/queries/members";
 import type { ActionResult } from "@/lib/types";
@@ -350,6 +351,15 @@ export async function promoteGuestToMemberAction(
 
     return { success: true, memberId, repaired };
   } catch (error) {
+    // iter-032 (U3): kolize s unikátním indexem lower(email), typicky souběh
+    // s jiným založením člena. Nic se nesmazalo, host zůstal.
+    if (isUniqueViolation(error)) {
+      return {
+        success: false,
+        error:
+          "Clen s timto emailem uz existuje. Host zustal beze zmeny, zkontrolujte email hosta.",
+      };
+    }
     console.error("promoteGuestToMemberAction error:", error);
     return {
       success: false,
