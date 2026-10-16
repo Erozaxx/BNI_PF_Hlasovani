@@ -55,12 +55,12 @@ export const KIND_LABELS: Record<string, string> = {
   "access.password-set": "Heslo nastaveno",
   "access.password-link-copied": "Odkaz ke zkopirovani",
   "access.password-link-resent": "Odkaz poslan znovu",
-  // iter-033 (arch 10.1): zasobnik "5 minut pro ostatni"
-  "mastermind.scheduled": "5 minut: zarazeno",
-  "mastermind.unscheduled": "5 minut: vraceno do zasobniku",
-  "mastermind.presented": "5 minut: odprezentovano",
-  "mastermind.presented-undone": "5 minut: potvrzeni vraceno",
-  "mastermind.removed": "5 minut: pripad odstranen",
+  // iter-033 (arch 10.1): zásobník Master mind
+  "mastermind.scheduled": "Master mind: zařazeno",
+  "mastermind.unscheduled": "Master mind: vráceno do zásobníku",
+  "mastermind.presented": "Master mind: proběhlo",
+  "mastermind.presented-undone": "Master mind: potvrzení vráceno",
+  "mastermind.removed": "Master mind: případ odstraněn",
 };
 
 export function kindLabel(kind: string): string {

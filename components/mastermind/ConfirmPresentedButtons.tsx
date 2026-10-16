@@ -11,8 +11,8 @@ import {
 } from "@/actions/mastermind";
 
 /**
- * Tlačítka vedení u zařazeného a odprezentovaného případu (K13, 7.2).
- * - `scheduled`: „Odprezentováno“ (jen když je `canConfirm`, tj. v den interní
+ * Tlačítka vedení u zařazeného a proběhlého případu (K13, 7.2).
+ * - `scheduled`: „Proběhlo“ (jen když je `canConfirm`, tj. v den interní
  *   nebo po ní) a „Vrátit do zásobníku“.
  * - `presented`: „Vrátit potvrzení“ s potvrzovacím dotazem, jen na opravu
  *   překlepu (v logu `warn`).
@@ -61,7 +61,7 @@ export function ConfirmPresentedButtons({
         disabled={busy !== null}
         className="min-h-[44px]"
         onClick={() => {
-          if (!window.confirm("Vrátit potvrzení odprezentování? Používej jen na opravu překlepu.")) {
+          if (!window.confirm("Vrátit potvrzení, že proběhlo? Používej jen na opravu překlepu.")) {
             return;
           }
           void run("undo", () => undoPresentedAction(caseId), "Potvrzení je vrácené.");
@@ -81,9 +81,9 @@ export function ConfirmPresentedButtons({
           loading={busy === "confirm"}
           disabled={busy !== null}
           className="min-h-[44px]"
-          onClick={() => void run("confirm", () => confirmPresentedAction(caseId), "Odprezentováno je potvrzené.")}
+          onClick={() => void run("confirm", () => confirmPresentedAction(caseId), "Potvrzeno, že proběhlo.")}
         >
-          Odprezentováno
+          Proběhlo
         </Button>
       )}
       <Button

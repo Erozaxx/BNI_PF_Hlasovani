@@ -79,7 +79,7 @@ export function unscheduledEvent(ctx: MastermindEventCtx): OpsEventInput {
 export function presentedEvent(ctx: MastermindEventCtx): OpsEventInput {
   return {
     ...base("mastermind.presented", ctx),
-    message: `Odprezentováno potvrzeno (interní ${dm(ctx.internalDate)})`,
+    message: `Proběhlo potvrzeno (interní ${dm(ctx.internalDate)})`,
   };
 }
 
@@ -87,7 +87,7 @@ export function presentedUndoneEvent(ctx: MastermindEventCtx): OpsEventInput {
   return {
     ...base("mastermind.presented-undone", ctx),
     severity: "warn",
-    message: `Potvrzení odprezentování vráceno (interní ${dm(ctx.internalDate)})`,
+    message: `Potvrzení, že proběhlo, vráceno (interní ${dm(ctx.internalDate)})`,
   };
 }
 

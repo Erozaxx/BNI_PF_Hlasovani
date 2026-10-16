@@ -9,7 +9,7 @@ export default async function NewMastermindCasePage() {
   const isManagement =
     session.managementRole === "admin" || session.managementRole === "moderator";
 
-  // Výběr přednášejícího vidí jen vedení (zápis za člena, který se přihlásil ústně).
+  // Výběr člena, který téma přináší, vidí jen vedení (zápis za člena, který se přihlásil ústně).
   const members = isManagement
     ? sortMembersByName((await getMembers()).map((m) => ({ id: m.id, name: m.name })))
     : undefined;
@@ -18,7 +18,7 @@ export default async function NewMastermindCasePage() {
     <div className="space-y-6">
       <div>
         <Link href="/mastermind" className="inline-flex min-h-[44px] items-center text-sm text-navy hover:underline">
-          Zpět na 5 minut
+          Zpět na Master mind
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-text-main">Přihlásit případ</h1>
       </div>

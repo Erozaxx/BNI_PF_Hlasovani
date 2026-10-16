@@ -53,7 +53,7 @@ export default async function DashboardPage() {
         </Card>
       ) : null}
 
-      {/* 5 minut pro ostatni (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
+      {/* Master mind (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
       <DashboardMastermind memberId={session.memberId} isManagement={isManagement} />
 
       {/* Quick actions for management */}
