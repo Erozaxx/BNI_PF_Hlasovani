@@ -25,6 +25,8 @@
     "test:iter-031": "npm run test:info-pages",
     "test:iter-032-access": "tsx scripts/test-iter-032-access.ts",
     "test:iter-032-interviews": "tsx scripts/test-iter-032-interviews.ts",
+    "test:iter-033-mastermind": "tsx scripts/test-iter-033-mastermind.ts",
+    "test:iter-033": "npm run test:iter-033-mastermind && npm run test:iter-028 && npm run test:iter-032-access",
     "test:iter-032": "npm run test:iter-032-access && npm run test:iter-032-interviews && npm run test:iter-028",
     "test:iter-028": "npm run test:voting-window && npm run test:warning-plan && npm run test:morning-dispatch && npm run test:ops-events && npm run test:reminder-plan && npm run test:reminder-template && npm run test:meeting-token",
     "db:push": "drizzle-kit push",

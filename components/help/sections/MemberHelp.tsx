@@ -226,6 +226,61 @@ export function MemberHelp() {
           </li>
         </ul>
       </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3">5 minut pro ostatní</h2>
+        <p className="text-sm text-text-muted mb-3">
+          Na interní schůzce ukáže jeden člen případ ze své praxe. Má 5 minut a
+          pak 3 minuty na otázky. Případy čekají v zásobníku a vedení z něj
+          vybírá.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
+          <li>
+            Otevřete v navigaci <strong>5 minut</strong> a klikněte na{" "}
+            <strong>Přihlásit případ</strong>.
+          </li>
+          <li>
+            Vyplňte téma a první bod osnovy. Další body jdou doplnit později.
+            Klienta popište obecně, bez jména.
+          </li>
+          <li>
+            Klikněte na <strong>Přihlásit případ</strong>.
+          </li>
+        </ol>
+        <ul className="text-sm space-y-1">
+          <li>
+            <strong>Kolik případů můžu mít?</strong> Nejvýš 5 otevřených, tedy
+            navržených a zařazených. Odprezentovaný se do limitu nepočítá.
+          </li>
+          <li>
+            <strong>Co znamená Mám zájem?</strong> Případ se v zásobníku posune
+            výš, karty jsou seřazené podle počtu zájemců. Vlastnímu případu
+            zájem dát nejde.
+          </li>
+          <li>
+            <strong>Co se stane po zařazení?</strong> Váš zájem se změní na
+            přihlášku posluchače. Datum interní uvidíte na kartě případu. Odhlásit se můžete
+            tlačítkem <strong>Odhlásit se</strong> u případu. Přihláška je
+            ohlášení, ne evidence docházky.
+          </li>
+          <li>
+            <strong>Kdo vidí jména zájemců?</strong> Všichni přihlášení.
+          </li>
+          <li>
+            <strong>Kdo může případ upravit?</strong> Autor navržený případ
+            kdykoli a zařazený do dne před interní. Vedení kdykoli před
+            odprezentováním.
+          </li>
+          <li>
+            <strong>Jak případ stáhnu?</strong> Tlačítkem{" "}
+            <strong>Stáhnout</strong>, dokud není zařazený. Zařazený případ
+            stáhne vedení.
+          </li>
+          <li>
+            <strong>Termín mi nesedí.</strong> Dejte vědět vedení chapteru.
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }

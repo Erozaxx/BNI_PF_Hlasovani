@@ -63,14 +63,21 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
           onClick={() => setOpen(false)}
         >
-          Hoste
+          Hosté
         </Link>
         <Link
           href="/meetings"
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
           onClick={() => setOpen(false)}
         >
-          Schuzky
+          Schůzky
+        </Link>
+        <Link
+          href="/mastermind"
+          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+          onClick={() => setOpen(false)}
+        >
+          5 minut
         </Link>
         {isManagement && (
           <Link
@@ -87,7 +94,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
             onClick={() => setOpen(false)}
           >
-            Casovace
+            Časovače
           </Link>
         )}
         {isManagement && (
@@ -130,7 +137,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
               className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
               onClick={() => setOpen(false)}
             >
-              Clenove
+              Členové
             </Link>
             <Link
               href="/admin/categories"
@@ -149,7 +156,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
               className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
               onClick={() => setOpen(false)}
             >
-              Nastaveni
+              Nastavení
             </Link>
           </>
         )}
@@ -160,7 +167,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             type="submit"
             className="w-full text-left px-3 py-2 rounded-lg text-sm text-danger hover:bg-danger-light"
           >
-            Odhlasit se
+            Odhlásit se
           </button>
         </form>
       </div>

@@ -889,3 +889,117 @@ export const meetingMemberReminder = pgTable(
     memberIdIdx: index("idx_mmr_member_id").on(table.memberId),
   })
 );
+
+// ============================================================
+// MASTERMIND_CASE / MASTERMIND_INTEREST — iter-033 (T-005, arch T-001 sekce 4):
+// zásobník případů „5 minut pro ostatní“. Pravdou je migrační skript
+// scripts/migrate-iter-033-mastermind.ts (konvence iter-027, 028), tohle
+// schéma slouží jen typům. `meeting` se nemění a mezi `meeting` a případy
+// není cizí klíč (U13): interní schůzka v aplikaci není, případ nese datum
+// interní (čtvrtek) sám. Dotazy a přechody jsou jednopříkazové SQL v
+// lib/db/queries/mastermind.ts (LL-003).
+//
+// status: proposed (v zásobníku), scheduled (zařazený na internal_date),
+// presented (vedení potvrdilo odprezentování). DELETE místo "withdrawn".
+// mmc_date_by_status drží stav a datum spolu, mmc_one_per_date nejvýš jeden
+// případ na datum interní, i po odprezentování (U1).
+// ============================================================
+export const mastermindCase = pgTable(
+  "mastermind_case",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // navrhovatel = přednášející, nemění se
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    situation: text("situation").notNull(),
+    path: text("path"),
+    takeaway: text("takeaway"),
+    ask: text("ask"),
+    status: text("status").notNull().default("proposed"),
+    internalDate: date("internal_date"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    scheduledBy: uuid("scheduled_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    presentedAt: timestamp("presented_at", { withTimezone: true }),
+    presentedConfirmedBy: uuid("presented_confirmed_by").references(
+      () => member.id,
+      { onDelete: "set null" }
+    ),
+    createdBy: uuid("created_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    statusCheck: check(
+      "mmc_status_check",
+      sql`${table.status} IN ('proposed','scheduled','presented')`
+    ),
+    titleLen: check(
+      "mmc_title_len",
+      sql`char_length(btrim(${table.title})) BETWEEN 1 AND 120`
+    ),
+    situationLen: check(
+      "mmc_situation_len",
+      sql`char_length(btrim(${table.situation})) BETWEEN 1 AND 2000`
+    ),
+    pathLen: check("mmc_path_len", sql`char_length(${table.path}) <= 2000`),
+    takeawayLen: check(
+      "mmc_takeaway_len",
+      sql`char_length(${table.takeaway}) <= 2000`
+    ),
+    askLen: check("mmc_ask_len", sql`char_length(${table.ask}) <= 2000`),
+    dateByStatus: check(
+      "mmc_date_by_status",
+      sql`(${table.status} = 'proposed') = (${table.internalDate} IS NULL)`
+    ),
+    presentedComplete: check(
+      "mmc_presented_complete",
+      sql`${table.status} <> 'presented' OR ${table.presentedAt} IS NOT NULL`
+    ),
+    onePerDate: uniqueIndex("mmc_one_per_date")
+      .on(table.internalDate)
+      .where(sql`${table.internalDate} IS NOT NULL`),
+    memberStatusIdx: index("idx_mmc_member_status").on(
+      table.memberId,
+      table.status
+    ),
+    statusCreatedIdx: index("idx_mmc_status_created").on(
+      table.status,
+      table.createdAt
+    ),
+  })
+);
+
+// Zájem o případ. Před zařazením řadí zásobník, po zařazení je to přihláška
+// posluchače, po odprezentování zůstává zamrzlý (K10). Význam plyne ze stavu
+// případu (U10), jedna tabulka.
+export const mastermindInterest = pgTable(
+  "mastermind_interest",
+  {
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => mastermindCase.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "mastermind_interest_pkey",
+      columns: [table.caseId, table.memberId],
+    }),
+    memberIdx: index("idx_mmi_member").on(table.memberId),
+  })
+);
