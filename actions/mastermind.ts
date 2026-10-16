@@ -41,8 +41,8 @@ import type { SessionData } from "@/lib/auth/session";
 import type { ActionResult } from "@/lib/types";
 
 /**
- * iter-033 (T-005, arch T-001 sekce 6, gate Z1, Z2): zásobník „5 minut pro
- * ostatní“. `memberId` aktéra je vždy ze session, nikdy z klienta.
+ * iter-033 (T-005, arch T-001 sekce 6, gate Z1, Z2): zásobník „Master mind“.
+ * `memberId` aktéra je vždy ze session, nikdy z klienta.
  *
  * Guard na začátku každé akce je závazný a hlídá ho statický test
  * (scripts/test-iter-033-mastermind.ts): `requireAuth` pro create, update,
@@ -380,7 +380,7 @@ export async function confirmPresentedAction(caseId: string): Promise<ActionResu
     return { success: true };
   } catch (err) {
     console.error(`[confirmPresentedAction] failed: ${errClass(err)}`);
-    return { success: false, error: "Odprezentování se nepodařilo potvrdit." };
+    return { success: false, error: "Potvrzení se nepodařilo uložit." };
   }
 }
 

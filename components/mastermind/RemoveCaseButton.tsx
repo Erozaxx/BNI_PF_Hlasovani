@@ -21,7 +21,7 @@ export function RemoveCaseButton({
   async function handleRemove() {
     const confirmed = window.confirm(
       scheduled
-        ? "Opravdu stáhnout zařazený případ? Přihlášení posluchači o něm přijdou."
+        ? "Opravdu stáhnout zařazený případ? Přihlášení účastníci o něm přijdou."
         : "Opravdu stáhnout případ? Zájem ostatních se smaže."
     );
     if (!confirmed) return;

@@ -1,6 +1,6 @@
 /**
- * iter-033 (T-005, arch T-001 sekce 4, 8, 11): DB vrstva zásobníku „5 minut
- * pro ostatní“ (`mastermind_case`, `mastermind_interest`).
+ * iter-033 (T-005, arch T-001 sekce 4, 8, 11): DB vrstva zásobníku „Master mind“
+ * (`mastermind_case`, `mastermind_interest`).
  *
  * Bez transakcí (LL-003): každý přechod je JEDEN SQL příkaz, jehož WHERE
  * drží podmínky (stav, autorita, limit 5, kolize data). Autorita je tady, ne

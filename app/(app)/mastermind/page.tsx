@@ -71,9 +71,9 @@ export default async function MastermindPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-text-main">5 minut pro ostatní</h1>
+        <h1 className="text-2xl font-bold text-text-main">Master mind</h1>
         <p className="mt-2 text-sm text-text-muted">
-          Na interní schůzce ukáže jeden člen případ ze své praxe. Má 5 minut a pak 3 minuty na otázky.
+          Na interní schůzce přinese jeden člen téma ze své praxe a probereme ho u kulatého stolu. Témata čekají v zásobníku, vedení z něj vybírá.
         </p>
         <div className="mt-4">
           <Link
@@ -160,7 +160,7 @@ export default async function MastermindPage() {
               id="mm-presented"
               className="cursor-pointer select-none py-2 text-lg font-semibold text-text-main focus:outline-none focus:shadow-focus rounded"
             >
-              Odprezentované ({presented.length})
+              Proběhlé ({presented.length})
             </summary>
             <div className="mt-3 space-y-4">
               {presented.map((r) => (

@@ -245,7 +245,7 @@ export function ModeratorHelp() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">
-          5 minut pro ostatní: zařazování
+          Master mind: zařazování
         </h2>
         <p className="text-sm text-text-muted mb-3">
           Interní schůzky se v aplikaci nezakládají. Případ ze zásobníku
@@ -254,7 +254,7 @@ export function ModeratorHelp() {
         </p>
         <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
           <li>
-            Otevřete <strong>5 minut</strong>. U každého případu v zásobníku
+            Otevřete <strong>Master mind</strong>. U každého případu v zásobníku
             je hned vidět panel <strong>Zařadit na</strong>, rozbalovat nic
             nemusíte.
           </li>
@@ -267,7 +267,7 @@ export function ModeratorHelp() {
             na kartě případu.
           </li>
           <li>
-            Po interní klikněte u případu na <strong>Odprezentováno</strong>.
+            Po interní klikněte u případu na <strong>Proběhlo</strong>.
           </li>
         </ol>
         <ul className="text-sm space-y-1">
@@ -282,11 +282,11 @@ export function ModeratorHelp() {
           </li>
           <li>
             <strong>Případ za člena, který se přihlásil ústně.</strong> V
-            formuláři Přihlásit případ vyberte přednášejícího. Limit 5
+            formuláři Přihlásit případ vyberte člena, který téma přináší. Limit 5
             otevřených případů platí i tady.
           </li>
           <li>
-            <strong>Změna přednášejícího.</strong> U zapsaného případu jde jen
+            <strong>Změna člena, který téma přináší.</strong> U zapsaného případu jde jen
             smazat a zapsat znovu, zájmy se přitom ztratí.
           </li>
           <li>

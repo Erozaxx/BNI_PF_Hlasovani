@@ -228,20 +228,20 @@ export function MemberHelp() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">5 minut pro ostatní</h2>
+        <h2 className="text-lg font-semibold mb-3">Master mind</h2>
         <p className="text-sm text-text-muted mb-3">
-          Na interní schůzce ukáže jeden člen případ ze své praxe. Má 5 minut a
-          pak 3 minuty na otázky. Případy čekají v zásobníku a vedení z něj
-          vybírá.
+          Na interní schůzce přinese jeden člen téma ze své praxe a probereme ho
+          u kulatého stolu. Témata čekají v zásobníku a vedení z něj vybírá.
         </p>
         <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
           <li>
-            Otevřete v navigaci <strong>5 minut</strong> a klikněte na{" "}
+            Otevřete v navigaci <strong>Master mind</strong> a klikněte na{" "}
             <strong>Přihlásit případ</strong>.
           </li>
           <li>
-            Vyplňte téma a první bod osnovy. Další body jdou doplnit později.
-            Klienta popište obecně, bez jména.
+            Vyplňte téma a v poli <strong>O čem to bude</strong> napište dvě až
+            tři věty, ať ostatní vědí, jestli se přidat. Klienta popište
+            obecně, bez jména.
           </li>
           <li>
             Klikněte na <strong>Přihlásit případ</strong>.
@@ -250,7 +250,7 @@ export function MemberHelp() {
         <ul className="text-sm space-y-1">
           <li>
             <strong>Kolik případů můžu mít?</strong> Nejvýš 5 otevřených, tedy
-            navržených a zařazených. Odprezentovaný se do limitu nepočítá.
+            navržených a zařazených. Případ, který už proběhl, se do limitu nepočítá.
           </li>
           <li>
             <strong>Co znamená Mám zájem?</strong> Případ se v zásobníku posune
@@ -259,7 +259,7 @@ export function MemberHelp() {
           </li>
           <li>
             <strong>Co se stane po zařazení?</strong> Váš zájem se změní na
-            přihlášku posluchače. Datum interní uvidíte na kartě případu. Odhlásit se můžete
+            přihlášku účastníka. Datum interní uvidíte na kartě případu. Odhlásit se můžete
             tlačítkem <strong>Odhlásit se</strong> u případu. Přihláška je
             ohlášení, ne evidence docházky.
           </li>
@@ -268,8 +268,8 @@ export function MemberHelp() {
           </li>
           <li>
             <strong>Kdo může případ upravit?</strong> Autor navržený případ
-            kdykoli a zařazený do dne před interní. Vedení kdykoli před
-            odprezentováním.
+            kdykoli a zařazený do dne před interní. Vedení kdykoli, dokud
+            případ neproběhl.
           </li>
           <li>
             <strong>Jak případ stáhnu?</strong> Tlačítkem{" "}

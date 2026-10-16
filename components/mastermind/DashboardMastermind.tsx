@@ -5,8 +5,8 @@ import { formatDM, formatWeekdayDM, interestLabels, summarizeDashboard } from "@
 import { todayInPrague } from "@/lib/meetings/voting-window";
 
 /**
- * Samostatný řádek 5 minut na dashboardu (8.1, Z5), pod kartou schůzky.
- * Pro všechny: nejbližší zařazený případ, případně „prezentuješ ty“ a
+ * Samostatný řádek Master mind na dashboardu (8.1, Z5), pod kartou schůzky.
+ * Pro všechny: nejbližší zařazený případ, případně „přinášíš téma ty“ a
  * „Jsi přihlášený(á)“. Vedení navíc „Čeká na potvrzení: N“, jen když N > 0
  * (počet zásobníku se nezobrazuje). Selhání dotazu dashboard nesrazí.
  */
@@ -34,7 +34,7 @@ export async function DashboardMastermind({
         {summary.next ? (
           <p>
             <Link href="/mastermind" className="font-medium text-navy hover:underline">
-              Příští 5 minut: {formatWeekdayDM(summary.next.internalDate)}
+              Příští Master mind: {formatWeekdayDM(summary.next.internalDate)}
             </Link>
             , {summary.next.presenterName}, {summary.next.title},{" "}
             {labels.countText(summary.next.listenerCount)}
@@ -42,18 +42,18 @@ export async function DashboardMastermind({
         ) : (
           <p>
             <Link href="/mastermind" className="font-medium text-navy hover:underline">
-              5 minut pro ostatní
+              Master mind
             </Link>
             : zatím není nic zařazeno.
           </p>
         )}
         {summary.mine && (
-          <p className="font-medium">Na interní {formatDM(summary.mine.internalDate)} prezentuješ ty.</p>
+          <p className="font-medium">Na interní {formatDM(summary.mine.internalDate)} přinášíš téma ty.</p>
         )}
         {summary.listening && (
           <p>
             <Link href="/mastermind" className="text-navy hover:underline">
-              Jsi přihlášený(á) na 5 minut {formatDM(summary.listening.internalDate)}
+              Jsi přihlášený(á) na Master mind {formatDM(summary.listening.internalDate)}
             </Link>
           </p>
         )}

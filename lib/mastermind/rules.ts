@@ -1,6 +1,6 @@
 /**
  * iter-033 (T-005, arch T-001 sekce 4, 6, 7, 8): čistá pravidla zásobníku
- * „5 minut pro ostatní“.
+ * „Master mind“.
  *
  * Čistý modul: žádný import DB, Next ani Resend. Jde spustit v holém Node
  * (tsx) bez DATABASE_URL, viz scripts/test-iter-033-mastermind.ts.
@@ -21,10 +21,11 @@ export const CASE_LIMIT = 5;
 export const NOTICE_DAYS = 14;
 /** Nabídka čtvrtků k zařazení (K17): 12 týdnů = 84 dní = přesně 12 čtvrtků. */
 export const SCHEDULE_WEEKS = 12;
-/** Kolik odprezentovaných se ukáže na přehledu. */
+/** Kolik proběhlých se ukáže na přehledu. */
 export const PRESENTED_LIMIT = 20;
 export const TITLE_MAX = 120;
-export const OUTLINE_MAX = 1000;
+/** Popis „O čem to bude“: dvě až tři věty, nejvýš tolik znaků. */
+export const DESCRIPTION_MAX = 600;
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -117,7 +118,7 @@ export function formatWeekdayDM(iso: string): string {
 
 // ── Limit a lhůta ──
 
-/** Do limitu se počítá navržený a zařazený případ, odprezentovaný ne (U14). */
+/** Do limitu se počítá navržený a zařazený případ, proběhlý ne (U14). */
 export function countsTowardLimit(status: CaseStatus): boolean {
   return status === "proposed" || status === "scheduled";
 }
@@ -133,7 +134,7 @@ export function isShortNotice(internalDate: string, todayPrague: string): boolea
 
 // ── Kdo smí co (4.3) ──
 
-/** Zájem smí dát každý mimo autora, dokud případ není odprezentovaný (U5, K10). */
+/** Zájem smí dát každý mimo autora, dokud případ neproběhl (U5, K10). */
 export function canSetInterest(actor: Actor, c: CaseLike): boolean {
   if (c.memberId === actor.memberId) return false;
   return c.status === "proposed" || c.status === "scheduled";
@@ -141,7 +142,7 @@ export function canSetInterest(actor: Actor, c: CaseLike): boolean {
 
 /**
  * Úprava: autor navržený kdykoli a zařazený do dne před interní, vedení
- * cokoli neodprezentovaného (K3 A).
+ * cokoli, co ještě neproběhlo (K3 A).
  */
 export function canEdit(actor: Actor, c: CaseLike, todayPrague: string): boolean {
   if (c.status === "presented") return false;
@@ -166,7 +167,7 @@ export function canUnschedule(actor: Actor, c: CaseLike): boolean {
   return actor.isManagement && c.status === "scheduled";
 }
 
-/** Potvrzení „Odprezentováno“ až v den interní nebo po ní. */
+/** Potvrzení „Proběhlo“ až v den interní nebo po ní. */
 export function canConfirm(actor: Actor, c: CaseLike, todayPrague: string): boolean {
   return (
     actor.isManagement &&
@@ -275,22 +276,22 @@ export function interestLabels(status: CaseStatus): InterestLabels {
   }
   if (status === "scheduled") {
     return {
-      countText: (n) => `${n} ${plural(n, "posluchač", "posluchači", "posluchačů")}`,
+      countText: (n) => `${n} ${plural(n, "účastník", "účastníci", "účastníků")}`,
       buttonOn: "Přihlásit se",
       buttonOff: "Odhlásit se",
       stateText: "Jsi přihlášený(á)",
       namesLabel: "Přihlášení",
-      summaryText: "Popis a posluchači",
+      summaryText: "Popis a účastníci",
       editable: true,
     };
   }
   return {
-    countText: (n) => `${n} ${plural(n, "posluchač", "posluchači", "posluchačů")}`,
+    countText: (n) => `${n} ${plural(n, "účastník", "účastníci", "účastníků")}`,
     buttonOn: null,
     buttonOff: null,
     stateText: null,
     namesLabel: "Přihlášení",
-    summaryText: "Popis a posluchači",
+    summaryText: "Popis a účastníci",
     editable: false,
   };
 }
@@ -299,80 +300,66 @@ export function interestLabels(status: CaseStatus): InterestLabels {
 
 export interface CaseInput {
   title: string;
+  /** Popis „O čem to bude“ (sloupec `situation`). */
   situation: string;
-  path: string;
-  takeaway: string;
-  ask: string;
 }
 
+/** `path`, `takeaway` a `ask` se ukládají vždy jako NULL (iter-034). */
 export interface CleanCaseInput {
   title: string;
   situation: string;
-  path: string | null;
-  takeaway: string | null;
-  ask: string | null;
+  path: null;
+  takeaway: null;
+  ask: null;
 }
 
 export type CaseInputResult =
   | { ok: true; value: CleanCaseInput }
   | { ok: false; error: string };
 
-export const OUTLINE_LABELS = {
-  situation: "Případ",
-  path: "Cesta k řešení",
-  takeaway: "Co si vezmete",
-  ask: "Doporučení",
-} as const;
-
 const TITLE_LINK_RE = /(https?:\/\/|www\.)/i;
 const MESSAGES_TITLE_LINK = "Do tématu nepatří odkaz.";
 
-/** `trim`, povinné téma a bod 1, délky 120 a 1000. Prázdný nepovinný bod = null. */
+/**
+ * `trim`, povinné téma a popis, délky 120 a 600. Čte jen `title` a
+ * `situation`: cokoli jiného z formuláře (staré body osnovy) se zahodí.
+ */
 export function validateCaseInput(input: Partial<CaseInput> | null | undefined): CaseInputResult {
   const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
   // Téma je jednořádkové: všechny bílé znaky a nové řádky splynou v jednu mezeru (L-3).
   const title = str(input?.title).replace(/\s+/g, " ");
   const situation = str(input?.situation);
-  const path = str(input?.path);
-  const takeaway = str(input?.takeaway);
-  const ask = str(input?.ask);
 
   if (title.length === 0) return { ok: false, error: "Vyplň téma případu." };
   if (title.length > TITLE_MAX) {
     return { ok: false, error: `Téma může mít nejvýš ${TITLE_MAX} znaků.` };
   }
   if (TITLE_LINK_RE.test(title)) return { ok: false, error: MESSAGES_TITLE_LINK };
-  if (situation.length === 0) return { ok: false, error: "Popiš případ: co se dělo a pro koho." };
-  for (const [label, value] of [
-    [OUTLINE_LABELS.situation, situation],
-    [OUTLINE_LABELS.path, path],
-    [OUTLINE_LABELS.takeaway, takeaway],
-    [OUTLINE_LABELS.ask, ask],
-  ] as const) {
-    if (value.length > OUTLINE_MAX) {
-      return { ok: false, error: `${label}: nejvýš ${OUTLINE_MAX} znaků.` };
-    }
+  if (situation.length === 0) return { ok: false, error: "Napiš, o čem to bude." };
+  if (situation.length > DESCRIPTION_MAX) {
+    return { ok: false, error: `O čem to bude: nejvýš ${DESCRIPTION_MAX} znaků.` };
   }
   return {
     ok: true,
-    value: {
-      title,
-      situation,
-      path: path || null,
-      takeaway: takeaway || null,
-      ask: ask || null,
-    },
+    value: { title, situation, path: null, takeaway: null, ask: null },
   };
 }
 
-/** Kolik ze 4 bodů osnovy je vyplněno („Osnova 2 ze 4“, jen pro vedení). */
-export function outlineFilled(c: {
+/**
+ * Popis případu k zobrazení a úpravě. Starší případy mají text rozdělený do
+ * čtyř sloupců, nové jen do `situation`. Neprázdné části se spojí prázdným
+ * řádkem, bez nadpisů a bez pomlček u prázdných.
+ */
+export function caseDescription(c: {
   situation: string;
   path: string | null;
   takeaway: string | null;
   ask: string | null;
-}): number {
-  return [c.situation, c.path, c.takeaway, c.ask].filter((v) => (v ?? "").trim().length > 0).length;
+}): string {
+  return [c.situation, c.path, c.takeaway, c.ask]
+    .map((v) => (v ?? "").trim())
+    .filter((v) => v.length > 0)
+    .join("\n\n");
 }
 
 // ── Dashboard (8.1, Z5) ──
@@ -391,9 +378,9 @@ export interface DashboardCaseRow {
 export interface DashboardSummary {
   /** Nejbližší zařazený případ s datem dnes nebo později. */
   next: DashboardCaseRow | null;
-  /** Nejbližší zařazený případ, který prezentuje přihlášený člen. */
+  /** Nejbližší zařazený případ, který přináší přihlášený člen. */
   mine: DashboardCaseRow | null;
-  /** Nejbližší zařazený případ, na který je přihlášený posluchačem (ne vlastní). */
+  /** Nejbližší zařazený případ, na který je přihlášený účastníkem (ne vlastní). */
   listening: DashboardCaseRow | null;
   /** Zařazené případy s datem před dneškem, čekají na potvrzení. */
   awaitingConfirm: number;
@@ -420,23 +407,23 @@ export function summarizeDashboard(
 
 export const MESSAGES = {
   limitSelf:
-    "Máš už 5 otevřených případů. Počkej, až se některý odprezentuje, nebo jeden stáhni.",
+    "Máš už 5 otevřených případů. Počkej, až některý proběhne, nebo jeden stáhni.",
   limitOther: (name: string) => `${name} má už 5 otevřených případů.`,
   notFound: "Případ už neexistuje.",
   cannotEdit: "Případ už nejde upravit.",
   cannotRemove: "Případ už nejde stáhnout.",
   ownInterest: "Vlastní případ nejde označit zájmem.",
-  presentedInterest: "Případ už je odprezentovaný, zájem nejde měnit.",
+  presentedInterest: "Případ už proběhl, zájem nejde měnit.",
   forOtherByManagementOnly: "Případ za jiného člena zapíše jen vedení.",
   takenDate: "Na tenhle čtvrtek už je případ.",
   openMeetingDate: "Na tenhle čtvrtek je otevřená schůzka.",
   badDate: "Vyber čtvrtek v nabídce.",
   notProposed: "Případ už není v zásobníku.",
   notScheduled: "Případ už není zařazený.",
-  cannotConfirm: "Odprezentováno jde potvrdit až v den interní.",
-  notPresented: "Případ není odprezentovaný.",
+  cannotConfirm: "Proběhlo jde potvrdit až v den interní.",
+  notPresented: "Případ ještě neproběhl.",
   undoLimit: (name: string) =>
-    `${name} má už 5 otevřených případů, potvrzení vrátit nejde. Nejdřív některý stáhněte nebo odprezentujte.`,
+    `${name} má už 5 otevřených případů, potvrzení vrátit nejde. Nejdřív některý stáhněte nebo potvrďte, že proběhl.`,
   invalidInput: "Neplatný vstup.",
   denied: "Na tuhle akci nemáš oprávnění.",
   generic: "Akci se nepodařilo provést.",

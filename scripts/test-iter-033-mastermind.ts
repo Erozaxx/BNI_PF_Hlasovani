@@ -1,5 +1,5 @@
 /**
- * Testy iter-033 (T-005): zásobník „5 minut pro ostatní“ (arch iter-033
+ * Testy iter-033 (T-005): zásobník „Master mind“ (arch iter-033
  * T-001 sekce 13, gate T-004 Z1 až Z8). Bez DATABASE_URL, bez sítě, bez
  * Resendu. Testované moduly jsou čisté (rules, sort, events, ops types). Statické kontroly čtou zdrojáky z disku.
  *
@@ -25,7 +25,7 @@ import {
   CASE_LIMIT,
   MESSAGES,
   NOTICE_DAYS,
-  OUTLINE_MAX,
+  DESCRIPTION_MAX,
   TITLE_MAX,
   addDays,
   canConfirm,
@@ -35,6 +35,7 @@ import {
   canSetInterest,
   canUndoPresented,
   canUnschedule,
+  caseDescription,
   countsTowardLimit,
   daysBetween,
   formatDM,
@@ -46,7 +47,6 @@ import {
   isThursday,
   isUuid,
   noticeDays,
-  outlineFilled,
   summarizeDashboard,
   thursdayOptions,
   validateCaseInput,
@@ -347,7 +347,7 @@ const cases: TestCase[] = [
 
   // ── 9. interestLabels ──
   {
-    name: "9. interestLabels: proposed zájemci, scheduled posluchači a přihlášení, presented bez tlačítka",
+    name: "9. interestLabels: proposed zájemci, scheduled účastníci a přihlášení, presented bez tlačítka",
     run: () => {
       const p = interestLabels("proposed");
       assert.equal(p.buttonOn, "Mám zájem");
@@ -361,51 +361,77 @@ const cases: TestCase[] = [
       assert.equal(s.buttonOn, "Přihlásit se");
       assert.equal(s.buttonOff, "Odhlásit se");
       assert.equal(s.stateText, "Jsi přihlášený(á)");
-      assert.equal(s.countText(5), "5 posluchačů");
-      assert.equal(s.countText(2), "2 posluchači");
-      assert.equal(s.countText(1), "1 posluchač");
+      assert.equal(s.countText(5), "5 účastníků");
+      assert.equal(s.countText(2), "2 účastníci");
+      assert.equal(s.countText(1), "1 účastník");
       const d = interestLabels("presented");
       assert.equal(d.buttonOn, null);
       assert.equal(d.buttonOff, null);
       assert.equal(d.stateText, null);
       assert.equal(d.editable, false);
-      assert.equal(d.countText(4), "4 posluchači");
+      assert.equal(d.countText(4), "4 účastníci");
     },
   },
 
   // ── 10. Validace vstupu ──
   {
-    name: "10. validateCaseInput: prázdné a mezerové téma, 121 znaků, bod osnovy 1001 znaků, trim, prázdný bod = null",
+    name: "10. validateCaseInput: prázdné a mezerové téma, 121 znaků, povinný popis, 601 znaků, trim, path/takeaway/ask vždy null",
     run: () => {
-      const ok = { title: "Téma 1", situation: "Případ A", path: "", takeaway: "", ask: "" };
+      const ok = { title: "Téma 1", situation: "Popis A" };
       assert.equal(validateCaseInput({ ...ok, title: "" }).ok, false);
       assert.equal(validateCaseInput({ ...ok, title: "    " }).ok, false);
       assert.equal(validateCaseInput({ ...ok, title: "x".repeat(TITLE_MAX + 1) }).ok, false);
       assert.equal(validateCaseInput({ ...ok, title: "x".repeat(TITLE_MAX) }).ok, true);
       assert.equal(validateCaseInput({ ...ok, situation: "  " }).ok, false);
-      for (const key of ["situation", "path", "takeaway", "ask"] as const) {
-        const r = validateCaseInput({ ...ok, [key]: "y".repeat(OUTLINE_MAX + 1) });
-        assert.equal(r.ok, false, key);
-        assert.equal(validateCaseInput({ ...ok, [key]: "y".repeat(OUTLINE_MAX) }).ok, true, key);
-      }
-      const trimmed = validateCaseInput({
-        title: "  Téma  ",
-        situation: "\n Případ \n",
-        path: "   ",
-        takeaway: " Poučení ",
-        ask: "",
-      });
+      assert.equal(validateCaseInput({ title: "Téma" }).ok, false, "popis je povinný");
+      assert.equal(DESCRIPTION_MAX, 600);
+      const tooLong = validateCaseInput({ ...ok, situation: "y".repeat(DESCRIPTION_MAX + 1) });
+      assert.equal(tooLong.ok, false);
+      if (!tooLong.ok) assert.ok(tooLong.error.includes("600"), "hláška zmiňuje limit");
+      assert.equal(validateCaseInput({ ...ok, situation: "y".repeat(DESCRIPTION_MAX) }).ok, true);
+      const trimmed = validateCaseInput({ title: "  Téma  ", situation: "\n Popis \n" });
       assert.ok(trimmed.ok);
       if (trimmed.ok) {
         assert.equal(trimmed.value.title, "Téma");
-        assert.equal(trimmed.value.situation, "Případ");
+        assert.equal(trimmed.value.situation, "Popis");
         assert.equal(trimmed.value.path, null);
-        assert.equal(trimmed.value.takeaway, "Poučení");
+        assert.equal(trimmed.value.takeaway, null);
         assert.equal(trimmed.value.ask, null);
+      }
+      // Mass assignment: staré body z klienta se zahodí a uloží se NULL.
+      const extra = validateCaseInput({
+        title: "Téma",
+        situation: "Popis",
+        path: "Cesta",
+        takeaway: "Poučení",
+        ask: "Doporučení",
+      } as unknown as Partial<{ title: string; situation: string }>);
+      assert.ok(extra.ok);
+      if (extra.ok) {
+        assert.equal(extra.value.path, null);
+        assert.equal(extra.value.takeaway, null);
+        assert.equal(extra.value.ask, null);
+        assert.equal(extra.value.situation, "Popis");
       }
       assert.equal(validateCaseInput(null).ok, false);
       assert.equal(validateCaseInput({ title: 5 as unknown as string, situation: "x" }).ok, false);
-      assert.equal(outlineFilled({ situation: "a", path: null, takeaway: " ", ask: "d" }), 2);
+    },
+  },
+  {
+    name: "10c. caseDescription: starý případ se 4 body, nový s jedním, prázdné části bez pomlček",
+    run: () => {
+      assert.equal(
+        caseDescription({ situation: "A", path: "B", takeaway: "C", ask: "D" }),
+        "A\n\nB\n\nC\n\nD"
+      );
+      assert.equal(caseDescription({ situation: "Jen popis", path: null, takeaway: null, ask: null }), "Jen popis");
+      assert.equal(caseDescription({ situation: " A ", path: "  ", takeaway: "C", ask: null }), "A\n\nC");
+      assert.ok(!caseDescription({ situation: "A", path: null, takeaway: null, ask: "D" }).includes("–"));
+      // Spojený starý případ se vejde do limitu, delší se odmítne běžnou validací.
+      const joined = caseDescription({ situation: "a".repeat(300), path: "b".repeat(200), takeaway: null, ask: null });
+      assert.equal(validateCaseInput({ title: "T", situation: joined }).ok, true);
+      const tooLong = caseDescription({ situation: "a".repeat(300), path: "b".repeat(300), takeaway: null, ask: null });
+      assert.equal(validateCaseInput({ title: "T", situation: tooLong }).ok, false);
     },
   },
   {
@@ -759,14 +785,14 @@ const cases: TestCase[] = [
       const member = readSrc("components/help/sections/MemberHelp.tsx");
       assert.ok(mod.includes("Téma ohlašujeme 14 dní předem."));
       assert.ok(mod.includes("Aplikace kratší lhůtu nezakáže, jen ji při zařazení ukáže."));
-      assert.ok(!/mail/i.test(mod.slice(mod.indexOf("5 minut pro ostatní: zařazování"), mod.indexOf("Omezení role Moderátora"))), "mail v nápovědě zařazování");
+      assert.ok(!/mail/i.test(mod.slice(mod.indexOf("Master mind: zařazování"), mod.indexOf("Omezení role Moderátora"))), "mail v nápovědě zařazování");
       for (const src of [mod, member]) {
-        const from = src.indexOf("5 minut pro ostatní");
+        const from = src.indexOf("Master mind");
         const section = src.slice(from, src.indexOf("</section>", from));
         assert.ok(!/doporučen/i.test(section), "štítek doporučená");
         assert.ok(!/zaškrt/i.test(section), "zaškrtávátko");
         assert.ok(!/—/.test(section), "em dash");
-        assert.ok(!/mail/i.test(section), "mail v nápovědě 5 minut");
+        assert.ok(!/mail/i.test(section), "mail v nápovědě Master mind");
       }
     },
   },
@@ -811,9 +837,9 @@ const cases: TestCase[] = [
   },
   // ── 17. Opravné kolo T-006r (m-1 až m-8, L-2, L-3) ──
   {
-    name: "17a. L-3: téma se sjednotí na jeden řádek, odkaz (URL, www.) v tématu se odmítne, v osnově smí být",
+    name: "17a. L-3: téma se sjednotí na jeden řádek, odkaz (URL, www.) v tématu se odmítne, v popisu smí být",
     run: () => {
-      const ok = { title: "Téma", situation: "Případ", path: "", takeaway: "", ask: "" };
+      const ok = { title: "Téma", situation: "Popis" };
       const r = validateCaseInput({ ...ok, title: "  Dva\n\n řádky \t a   mezery " });
       assert.ok(r.ok);
       if (r.ok) assert.equal(r.value.title, "Dva řádky a mezery");
@@ -823,7 +849,7 @@ const cases: TestCase[] = [
         if (!bad.ok) assert.equal(bad.error, "Do tématu nepatří odkaz.");
       }
       assert.equal(validateCaseInput({ ...ok, title: "Web a wwwidth" }).ok, true);
-      assert.equal(validateCaseInput({ ...ok, path: "Odkaz https://x.example v osnově" }).ok, true);
+      assert.equal(validateCaseInput({ ...ok, situation: "Odkaz https://x.example v popisu" }).ok, true);
     },
   },
   {
@@ -866,12 +892,92 @@ const cases: TestCase[] = [
     name: "17e. m-8: nápověda vedení říká, že panel Zařadit na je vidět hned, přesun = Vrátit do zásobníku a Zařadit, bez tykání",
     run: () => {
       const mod = readSrc("components/help/sections/ModeratorHelp.tsx");
-      const from = mod.indexOf("5 minut pro ostatní: zařazování");
+      const from = mod.indexOf("Master mind: zařazování");
       const section = mod.slice(from, mod.indexOf("</section>", from));
       assert.ok(!/rozbalte kartu/.test(section));
       assert.ok(section.includes("hned vidět panel"));
       assert.ok(section.includes("Vrátit do zásobníku"));
       assert.ok(!/přesuneš|vyber |dej /.test(section), "tykání");
+    },
+  },
+  // ── 19. iter-034: Master mind ──
+  {
+    name: "19. iter-034: v uživatelských textech Master mind nejsou „5 minut“, „3 minuty“, Přednášející, Odprezentováno, posluchač",
+    run: () => {
+      const banned = /5 minut|3 minuty|Přednášející|Odprezentováno|odprezentován|posluchač|posluchači/;
+      const files = [
+        ...walk(join(ROOT, "app", "(app)", "mastermind")),
+        ...walk(join(ROOT, "components", "mastermind")),
+        ...walk(join(ROOT, "lib", "mastermind")),
+      ].filter((f) => /\.tsx?$/.test(f));
+      for (const rel of [
+        "components/layout/MobileNav.tsx",
+        "app/(app)/layout.tsx",
+        "app/(app)/status/EventTable.tsx",
+      ]) {
+        files.push(join(ROOT, rel));
+      }
+      for (const f of files) {
+        const src = stripComments(readFileSync(f, "utf8"));
+        assert.ok(!banned.test(src), `${relative(ROOT, f)}: zakázaný text`);
+      }
+      // Nápověda: jen sekce Master mind (jinde je „15 minut“ platnost odkazu).
+      for (const rel of ["components/help/sections/MemberHelp.tsx", "components/help/sections/ModeratorHelp.tsx"]) {
+        const src = readSrc(rel);
+        const from = src.indexOf("Master mind");
+        assert.ok(from >= 0, `${rel}: sekce Master mind`);
+        const section = src.slice(from, src.indexOf("</section>", from));
+        assert.ok(!banned.test(section), `${rel}: zakázaný text v sekci`);
+        assert.ok(!/osnov/i.test(section), `${rel}: osnova`);
+        assert.ok(!/minut/.test(section), `${rel}: minuty`);
+      }
+      assert.ok(!/OUTLINE_LABELS|outlineFilled|OUTLINE_MAX/.test(readSrc("lib/mastermind/rules.ts")));
+    },
+  },
+  {
+    name: "19b. iter-034: nadpis, navigace, dashboard a /status říkají Master mind",
+    run: () => {
+      assert.ok(readSrc("app/(app)/mastermind/page.tsx").includes(">Master mind</h1>"));
+      assert.ok(readSrc("app/(app)/layout.tsx").includes('<NavLink href="/mastermind">Master mind</NavLink>'));
+      assert.ok(/Master mind\s*\n/.test(readSrc("components/layout/MobileNav.tsx")));
+      for (const rel of ["app/(app)/mastermind/new/page.tsx", "app/(app)/mastermind/[id]/edit/page.tsx"]) {
+        assert.ok(readSrc(rel).includes("Zpět na Master mind"), rel);
+      }
+      const dash = readSrc("components/mastermind/DashboardMastermind.tsx");
+      assert.ok(dash.includes("Příští Master mind: "));
+      assert.ok(dash.includes("přinášíš téma ty"));
+      assert.ok(dash.includes("Jsi přihlášený(á) na Master mind "));
+      const ev = readSrc("app/(app)/status/EventTable.tsx");
+      for (const label of [
+        "Master mind: zařazeno",
+        "Master mind: vráceno do zásobníku",
+        "Master mind: proběhlo",
+        "Master mind: potvrzení vráceno",
+        "Master mind: případ odstraněn",
+      ]) {
+        assert.ok(ev.includes(`"${label}"`), label);
+      }
+      // Interní kindy se nemění.
+      assert.ok(MASTERMIND_EVENT_KINDS.includes("mastermind.presented"));
+    },
+  },
+  {
+    name: "19c. iter-034: formulář má jedno pole „O čem to bude“ s limitem 600, karta nemá osnovu, edit předvyplní spojený popis",
+    run: () => {
+      const form = readSrc("components/mastermind/CaseForm.tsx");
+      assert.ok(form.includes('label="O čem to bude"'));
+      assert.ok(form.includes("maxLength={DESCRIPTION_MAX}"));
+      assert.ok(form.includes("Dvě až tři věty, ať ostatní vědí, jestli se přidat."));
+      assert.equal((form.match(/<Textarea/g) ?? []).length, 1, "jedno textové pole");
+      assert.ok(!/Cesta k řešení|Co si|Doporučení/.test(form));
+      const card = readSrc("components/mastermind/CaseCard.tsx");
+      assert.ok(card.includes("caseDescription(data)"));
+      assert.ok(!/Osnova/.test(card));
+      assert.ok(card.includes("Téma přináší: "));
+      const edit = readSrc("app/(app)/mastermind/[id]/edit/page.tsx");
+      assert.ok(edit.includes("description: caseDescription(found)"));
+      const q = readSrc("lib/db/queries/mastermind.ts");
+      assert.ok(/takeaway = \$\{opts\.takeaway\}/.test(q), "update zapisuje všechny tři sloupce (null)");
     },
   },
   {

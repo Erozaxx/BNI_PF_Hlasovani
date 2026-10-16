@@ -7,17 +7,16 @@ import { InterestButton } from "@/components/mastermind/InterestButton";
 import { RemoveCaseButton } from "@/components/mastermind/RemoveCaseButton";
 import { ScheduleCasePanel } from "@/components/mastermind/ScheduleCasePanel";
 import {
-  OUTLINE_LABELS,
   canConfirm as canConfirmRule,
   canEdit,
   canRemove,
   canSchedule,
   canUndoPresented,
+  caseDescription,
   formatDM,
   formatDMY,
   formatWeekdayDM,
   interestLabels,
-  outlineFilled,
   type CaseStatus,
   type ThursdayOption,
 } from "@/lib/mastermind/rules";
@@ -35,7 +34,7 @@ export interface CaseCardData {
   internalDate: string | null;
   /** Den přihlášení v Praze, „YYYY-MM-DD“ */
   createdDay: string;
-  /** Zájemci / posluchači v pořadí přihlášení */
+  /** Zájemci / účastníci v pořadí přihlášení */
   interested: Array<{ memberId: string; name: string }>;
 }
 
@@ -46,9 +45,9 @@ export interface CaseCardViewer {
 }
 
 /**
- * Karta případu (7.3). Téma, přednášející, počet a tlačítko jsou vidět vždy,
- * popis podle osnovy a jména až po rozkliknutí (nativní `<details>`).
- * Prázdný bod osnovy ukáže pomlčku. Vlastní případ: „Tvůj případ“ jednou,
+ * Karta případu (7.3). Téma, kdo ho přináší, počet a tlačítko jsou vidět vždy,
+ * popis (`caseDescription`, u starších případů spojený ze čtyř bodů) a jména
+ * až po rozkliknutí (nativní `<details>`). Vlastní případ: „Tvůj případ“ jednou,
  * v místě tlačítka (Z6). Jména vidí všichni přihlášení (U6).
  */
 export function CaseCard({
@@ -73,7 +72,6 @@ export function CaseCard({
   const caseLike = { memberId: data.memberId, status: data.status, internalDate: data.internalDate };
 
   const iAmInterested = names.some((n) => n.memberId === viewer.memberId);
-  const filled = outlineFilled(data);
 
   function handleInterestChange(interested: boolean) {
     setNames((prev) => {
@@ -82,27 +80,19 @@ export function CaseCard({
     });
   }
 
-  const points: Array<{ n: number; label: string; value: string | null }> = [
-    { n: 1, label: OUTLINE_LABELS.situation, value: data.situation },
-    { n: 2, label: OUTLINE_LABELS.path, value: data.path },
-    { n: 3, label: OUTLINE_LABELS.takeaway, value: data.takeaway },
-    { n: 4, label: OUTLINE_LABELS.ask, value: data.ask },
-  ];
+  const description = caseDescription(data);
 
   return (
     <article className="rounded-card border border-border bg-surface p-4 shadow-card sm:p-5 min-w-0">
       <h3 className="text-base font-semibold text-text-main break-words">{data.title}</h3>
-      <p className="mt-1 text-sm text-text-muted break-words">Přednášející: {data.presenterName}</p>
+      <p className="mt-1 text-sm text-text-muted break-words">Téma přináší: {data.presenterName}</p>
       {data.status === "scheduled" && data.internalDate && (
         <p className="mt-1 text-sm font-medium text-text-main">
           Interní {formatWeekdayDM(data.internalDate)}
         </p>
       )}
-      {viewer.isManagement && data.status !== "presented" && (
-        <p className="mt-1 text-xs text-text-muted">
-          {filled < 4 && <span>Osnova {filled} ze 4. </span>}
-          {data.status === "proposed" && <span>Čeká od {formatDMY(data.createdDay)}.</span>}
-        </p>
+      {viewer.isManagement && data.status === "proposed" && (
+        <p className="mt-1 text-xs text-text-muted">Čeká od {formatDMY(data.createdDay)}.</p>
       )}
 
       <div className="mt-3">
@@ -142,14 +132,7 @@ export function CaseCard({
               {iAmInterested ? ", jsi přihlášený(á)" : ""}
             </p>
           )}
-          {points.map((p) => (
-            <div key={p.n}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                {p.n} {p.label}
-              </p>
-              <p className="whitespace-pre-line break-words">{p.value && p.value.trim() ? p.value : "–"}</p>
-            </div>
-          ))}
+          <p className="whitespace-pre-line break-words">{description || "–"}</p>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
               {labels.namesLabel}

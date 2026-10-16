@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { getCaseById } from "@/lib/db/queries/mastermind";
-import { canEdit, isUuid } from "@/lib/mastermind/rules";
+import { canEdit, caseDescription, isUuid } from "@/lib/mastermind/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
 import { CaseForm } from "@/components/mastermind/CaseForm";
 
@@ -33,10 +33,10 @@ export default async function EditMastermindCasePage({
     <div className="space-y-6">
       <div>
         <Link href="/mastermind" className="inline-flex min-h-[44px] items-center text-sm text-navy hover:underline">
-          Zpět na 5 minut
+          Zpět na Master mind
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-text-main">Upravit případ</h1>
-        <p className="mt-1 text-sm text-text-muted">Přednášející: {found.presenterName}</p>
+        <p className="mt-1 text-sm text-text-muted">Téma přináší: {found.presenterName}</p>
       </div>
       <CaseForm
         mode="edit"
@@ -44,10 +44,7 @@ export default async function EditMastermindCasePage({
         viewerId={session.memberId}
         initial={{
           title: found.title,
-          situation: found.situation,
-          path: found.path ?? "",
-          takeaway: found.takeaway ?? "",
-          ask: found.ask ?? "",
+          description: caseDescription(found),
         }}
       />
     </div>
