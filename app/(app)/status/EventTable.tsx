@@ -61,6 +61,10 @@ export const KIND_LABELS: Record<string, string> = {
   "mastermind.presented": "Master mind: proběhlo",
   "mastermind.presented-undone": "Master mind: potvrzení vráceno",
   "mastermind.removed": "Master mind: případ odstraněn",
+  // iter-035 (arch 10, Z6): Burza pomoci
+  "burza.offer-by-management": "Burza: řádek zapsalo vedení",
+  "burza.offer-removed": "Burza: řádek smazán vedením",
+  "burza.help-removed": "Burza: záznam pomoci smazán",
 };
 
 export function kindLabel(kind: string): string {

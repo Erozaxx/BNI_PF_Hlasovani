@@ -281,6 +281,64 @@ export function MemberHelp() {
           </li>
         </ul>
       </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Burza pomoci</h2>
+        <p className="text-sm text-text-muted mb-3">
+          Burza pomoci je seznam toho, s čím kdo z chapteru pomůže ostatním.
+          Pomoc z burzy je nezištná: rada nebo krátká konzultace. Když z ní
+          vznikne zakázka, je to běžný obchod a patří do doporučení.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
+          <li>
+            Otevřete v navigaci <strong>Burza pomoci</strong> a klikněte na{" "}
+            <strong>Přidat svůj řádek</strong>.
+          </li>
+          <li>
+            Napište, s čím pomůžete, případně kontakt a poznámku, třeba kdy se
+            hodí volat.
+          </li>
+          <li>
+            Klikněte na <strong>Uložit</strong>.
+          </li>
+        </ol>
+        <ul className="text-sm space-y-1">
+          <li>
+            <strong>Kdo řádek vidí?</strong> Všichni přihlášení členové, včetně
+            kontaktu. Do pole <strong>Jak mě kontaktovat</strong> napište
+            telefon nebo e-mail, aplikace ho nijak nepředvyplňuje.
+          </li>
+          <li>
+            <strong>Jak řádek změním nebo smažu?</strong> V rámečku{" "}
+            <strong>Tvůj řádek</strong> tlačítkem <strong>Upravit</strong>{" "}
+            nebo <strong>Smazat</strong>, kdykoli. Řádek může zapsat nebo upravit
+            i vedení, třeba podle papíru z interní. Vy ho pak kdykoli přepíšete.
+          </li>
+          <li>
+            <strong>Co znamená Platí dál?</strong> Po třech měsících se u vašeho
+            řádku ukáže otázka, jestli ještě platí. Tlačítko{" "}
+            <strong>Platí dál</strong> posune datum potvrzení, stejně ho posune
+            každé uložení řádku. Nic se neposílá e-mailem a starý řádek
+            nezmizí.
+          </li>
+          <li>
+            <strong>Kdy použít Pomohl(a) mi?</strong> Když vám někdo z burzy
+            pomohl, klikněte u jeho řádku na <strong>Pomohl(a) mi</strong>,
+            případně připište větu a klikněte na <strong>Zapsat</strong>. Na
+            stejného člena to jde jednou za kalendářní měsíc.
+          </li>
+          <li>
+            <strong>Kdo záznam o pomoci uvidí?</strong> Vy a vedení. Pomocník
+            vidí jen počet zapsané pomoci za posledních 6 měsíců, ne kdo ji
+            zapsal.
+          </li>
+          <li>
+            <strong>Zapsal(a) jsem to omylem.</strong> Ve stejném měsíci
+            klikněte u řádku na <strong>Zrušit</strong>. Starší záznam smaže
+            vedení.
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }

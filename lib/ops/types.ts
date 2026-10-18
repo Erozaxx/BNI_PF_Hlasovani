@@ -60,7 +60,13 @@ export type OpsEventKind =
   | "mastermind.unscheduled"
   | "mastermind.presented"
   | "mastermind.presented-undone"
-  | "mastermind.removed";
+  | "mastermind.removed"
+  // iter-035 (T-005, arch 10, gate Z6): Burza pomoci. Jednorázové události
+  // s vlastním runId, proto všechny v TERMINAL_KINDS. Loguje se jen zásah
+  // vedení do cizích dat, nikdy text řádku, kontakt, poznámka ani e-mail.
+  | "burza.offer-by-management"
+  | "burza.offer-removed"
+  | "burza.help-removed";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).
@@ -85,6 +91,9 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "mastermind.presented",
   "mastermind.presented-undone",
   "mastermind.removed",
+  "burza.offer-by-management",
+  "burza.offer-removed",
+  "burza.help-removed",
 ];
 
 /**
