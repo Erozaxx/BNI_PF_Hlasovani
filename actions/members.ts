@@ -12,6 +12,7 @@ import {
   updateMemberEmail as dbUpdateMemberEmail,
   updateMemberJoinedAt as dbUpdateMemberJoinedAt,
 } from "@/lib/db/queries/members";
+import { clearHelpNotesForRecipient } from "@/lib/db/queries/burza";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
 import type { ActionResult } from "@/lib/types";
@@ -306,6 +307,16 @@ export async function deleteMemberAction(
     const memberData = await getMemberById(memberId);
     if (!memberData) {
       return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    // iter-035 L-2: poznámky k pomoci z burzy, kde je člen příjemcem, se
+    // vynulují před smazáním (pak by osiřely). Selhání smazání zastaví
+    // (fail closed): radši chyba a opakování než osiřelý text. Bez transakce.
+    try {
+      await clearHelpNotesForRecipient(memberId);
+    } catch (err) {
+      console.error(`deleteMemberAction burza cleanup failed: ${err instanceof Error ? err.name : typeof err}`);
+      return { success: false, error: "Nepodarilo se smazat clena." };
     }
 
     const deleted = await deleteMemberGuarded(memberId, actorId);

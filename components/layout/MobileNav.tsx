@@ -79,6 +79,13 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
         >
           Master mind
         </Link>
+        <Link
+          href="/burza"
+          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+          onClick={() => setOpen(false)}
+        >
+          Burza pomoci
+        </Link>
         {isManagement && (
           <Link
             href="/events"

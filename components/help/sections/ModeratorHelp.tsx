@@ -332,6 +332,60 @@ export function ModeratorHelp() {
           </li>
         </ul>
       </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3">
+          Burza pomoci: zápis za členy
+        </h2>
+        <p className="text-sm text-text-muted mb-3">
+          Řádky v burze si píšou členové sami. Vedení je může zapsat nebo
+          upravit za člena, třeba podle papíru z interní, a zapsat pomoc podle
+          hlášení.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
+          <li>
+            Otevřete <strong>Burza pomoci</strong>. V části{" "}
+            <strong>Pro vedení</strong> rozbalte <strong>Bez řádku</strong> a
+            u člena klikněte na <strong>Zapsat</strong>.
+          </li>
+          <li>
+            Vyplňte <strong>S čím pomůžu</strong>, případně kontakt a
+            poznámku, a klikněte na <strong>Uložit</strong>.
+          </li>
+        </ol>
+        <ul className="text-sm space-y-1">
+          <li>
+            <strong>Řádek už existuje.</strong> U karty člena klikněte na{" "}
+            <strong>Upravit</strong>. Člen svůj řádek kdykoli přepíše nebo
+            smaže. Na kartě se nijak neliší, kdo ho psal.
+          </li>
+          <li>
+            <strong>Revize řádku.</strong> Když člen řekne, že jeho řádek
+            platí, otevřete <strong>Upravit</strong> a uložte. Uložení posune
+            datum potvrzení.
+          </li>
+          <li>
+            <strong>Zápis pomoci podle hlášení.</strong> Otevřete{" "}
+            <strong>Záznamy pomoci</strong>, vyberte, kdo pomohl a komu, a
+            klikněte na <strong>Zapsat</strong>. Pokud pomocník ve výběru
+            chybí, nemá řádek v burze. Napřed mu ho zapište, pak pomoc.
+          </li>
+          <li>
+            <strong>Mazání.</strong> Záznam pomoci smažete tlačítkem{" "}
+            <strong>Smazat</strong> na stránce Záznamy pomoci, řádek člena
+            na jeho formuláři.
+          </li>
+          <li>
+            <strong>Co se loguje?</strong> Zásahy vedení do cizích řádků a
+            záznamů vidíte v sekci Provoz, bez textů a kontaktů.
+          </li>
+          <li>
+            <strong>Akce vedení fungují jen po přihlášení heslem.</strong> Po
+            přihlášení odkazem z e-mailu jste v aplikaci jako člen a tlačítka
+            vedení neuvidíte.
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }

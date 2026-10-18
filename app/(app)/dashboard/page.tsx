@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InterviewDueSection } from "@/components/interviews/InterviewDueSection";
 import { DashboardMastermind } from "@/components/mastermind/DashboardMastermind";
+import { DashboardBurza } from "@/components/burza/DashboardBurza";
 
 export default async function DashboardPage() {
   const session = await requirePageSession();
@@ -55,6 +56,9 @@ export default async function DashboardPage() {
 
       {/* Master mind (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
       <DashboardMastermind memberId={session.memberId} isManagement={isManagement} />
+
+      {/* Burza pomoci (iter-035, Z4): jen výzva vlastníkovi se starým řádkem */}
+      <DashboardBurza memberId={session.memberId} />
 
       {/* Quick actions for management */}
       {isManagement && (

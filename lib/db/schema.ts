@@ -1003,3 +1003,86 @@ export const mastermindInterest = pgTable(
     memberIdx: index("idx_mmi_member").on(table.memberId),
   })
 );
+
+// ============================================================
+// BURZA_OFFER / BURZA_HELP — iter-035 (T-005, arch T-001 sekce 3, gate Z1 až Z5):
+// Burza pomoci. Pravdou je migrační skript scripts/migrate-iter-035-burza.ts
+// (konvence iter-027 až 033), tohle schéma slouží jen typům. `member` se
+// nemění. Zápisy jsou jednopříkazové SQL v lib/db/queries/burza.ts (LL-003).
+//
+// burza_offer: jeden řádek na člena (PK member_id), jméno, firma a obor se
+// berou živě z `member`. Bez sloupce `version` (Z3), `updated_by` zůstává bez UI.
+// burza_help: „pomoc využita“, jen evidence. UNIQUE na dvojici a měsíc hlídá
+// dvojklik a dvě záložky, bh_not_self zákaz „pomohl jsem si sám“.
+// ============================================================
+export const burzaOffer = pgTable(
+  "burza_offer",
+  {
+    memberId: uuid("member_id")
+      .primaryKey()
+      .references(() => member.id, { onDelete: "cascade" }),
+    offer: text("offer").notNull(),
+    contact: text("contact"),
+    note: text("note"),
+    updatedBy: uuid("updated_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    offerLen: check(
+      "bo_offer_len",
+      sql`char_length(btrim(${table.offer})) BETWEEN 1 AND 1000`
+    ),
+    contactLen: check("bo_contact_len", sql`char_length(${table.contact}) <= 500`),
+    noteLen: check("bo_note_len", sql`char_length(${table.note}) <= 1000`),
+  })
+);
+
+export const burzaHelp = pgTable(
+  "burza_help",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    helperId: uuid("helper_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    usedOn: date("used_on").notNull(),
+    usedMonth: date("used_month").notNull(),
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    notSelf: check(
+      "bh_not_self",
+      sql`${table.recipientId} IS NULL OR ${table.recipientId} <> ${table.helperId}`
+    ),
+    monthCheck: check(
+      "bh_month",
+      sql`${table.usedMonth} = date_trunc('month', ${table.usedOn}::timestamp)::date`
+    ),
+    noteLen: check("bh_note_len", sql`char_length(${table.note}) <= 600`),
+    oncePerMonth: unique("bh_once_per_month").on(
+      table.helperId,
+      table.recipientId,
+      table.usedMonth
+    ),
+    helperUsedIdx: index("idx_bh_helper_used").on(table.helperId, table.usedOn),
+    recipientIdx: index("idx_bh_recipient").on(table.recipientId),
+  })
+);
