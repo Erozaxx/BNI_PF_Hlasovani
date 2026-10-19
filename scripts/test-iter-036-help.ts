@@ -120,12 +120,21 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "5. admin: sekce z auditu, bez odrážky o revokaci",
+    name: "5. admin: sekce včetně deaktivace a funkcí, „Zneplatnit odkaz“ místo „Revokovat“",
     run: () => {
-      for (const t of ["Členové", "Role a hesla vedení", "Kategorie", "Mazání hostů, schůzek a akcí"]) {
+      for (const t of [
+        "Členové",
+        "Deaktivace člena",
+        "Funkce a přístup",
+        "Kategorie",
+        "Mazání hostů, schůzek a akcí",
+      ]) {
         assert.ok(ADMIN.includes(`title="${t}"`), `admin: ${t}`);
       }
-      assert.ok(!/Revokovat/.test(ADMIN), "revokace v nápovědě není (mimo scope)");
+      assert.ok(!ADMIN.includes('title="Role a hesla vedení"'), "starý název sekce");
+      assert.ok(!/Revokovat/.test(ADMIN), "„Revokovat“ v nápovědě nemá být");
+      assert.ok(ADMIN.includes("Zneplatnit odkaz"), "Zneplatnit odkaz");
+      assert.ok(ADMIN.includes("Dozví se to člen?"), "FAQ Dozví se to člen?");
     },
   },
   {
@@ -144,6 +153,7 @@ const tests: TestCase[] = [
       const page = read("components/help/HelpPage.tsx");
       assert.ok(!page.includes("Jak se přihlásit"));
       assert.ok(page.includes("<HelpTabs"));
+      assert.ok(page.includes('label: "Pro vedení"') && !page.includes("Pro moderátora"));
       assert.ok(!/ zadej | mrkni /.test(ALL_HELP.replace(/Mrkněte/g, "")), "nápověda vyká");
     },
   },

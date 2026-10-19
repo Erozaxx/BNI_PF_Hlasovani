@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
+import { getMemberById } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import {
   regenerateMeetingToken,
   buildMeetingMagicUrl,
@@ -24,13 +26,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   // 1. Auth check
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
+  const { session } = authz;
 
   const { id: meetingId, memberId } = await params;
 
@@ -38,6 +36,15 @@ export async function POST(
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
     return err(404, "Meeting not found");
+  }
+
+  // iter-037 (T-003b, gate sekce 5): neaktivnímu členovi odkaz přegenerovat nejde.
+  const memberData = await getMemberById(memberId);
+  if (!memberData) {
+    return err(404, "Member not found");
+  }
+  if (!isMemberActive(memberData, pragueToday())) {
+    return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
   }
 
   // 3. Regenerate token (UPDATE existing row — no INSERT, preserves UNIQUE)

@@ -64,7 +64,7 @@ export default async function StatusPage({
 }: {
   searchParams: Promise<StatusPageSearchParams>;
 }) {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "ops.view" });
 
   const params = await searchParams;
   const severity = isSeverity(params.severity) ? params.severity : undefined;

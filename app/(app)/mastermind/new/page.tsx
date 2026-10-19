@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
-import { getMembers } from "@/lib/db/queries/members";
+import { can } from "@/lib/auth/permissions";
+import { getActiveMembers } from "@/lib/db/queries/members";
 import { sortMembersByName } from "@/lib/interviews/list-filters";
 import { CaseForm } from "@/components/mastermind/CaseForm";
 
 export default async function NewMastermindCasePage() {
   const session = await requirePageSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "mastermind.manage");
 
   // Výběr člena, který téma přináší, vidí jen vedení (zápis za člena, který se přihlásil ústně).
   const members = isManagement
-    ? sortMembersByName((await getMembers()).map((m) => ({ id: m.id, name: m.name })))
+    ? sortMembersByName((await getActiveMembers()).map((m) => ({ id: m.id, name: m.name })))
     : undefined;
 
   return (

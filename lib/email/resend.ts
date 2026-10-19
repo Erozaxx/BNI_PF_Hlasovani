@@ -677,17 +677,21 @@ export async function sendSetPasswordLinkEmail(opts: {
   name: string;
   url: string;
   reason: "promoted" | "reset" | "resend";
-  role: "admin" | "moderator";
+  /** iter-037 (T-003b): `function` = držitel funkce bez role (funkce stačí k heslu). */
+  role: "admin" | "moderator" | "function";
   actorName: string;
   appUrl: string;
 }): Promise<AccessEmailResult> {
-  const roleLabel = opts.role === "admin" ? "admin" : "moderátor";
+  const roleLabel =
+    opts.role === "admin" ? "admin" : opts.role === "function" ? "funkce" : "moderátor";
   const reasonLine =
     opts.reason === "promoted"
-      ? `${opts.actorName} ti v aplikaci BNI Plzeň dal(a) roli ${roleLabel}. Pro správu si nastav vlastní heslo.`
+      ? opts.role === "function"
+        ? `${opts.actorName} ti v aplikaci BNI Plzeň přidělil(a) funkci. Pro správu si nastav vlastní heslo.`
+        : `${opts.actorName} ti v aplikaci BNI Plzeň dal(a) roli ${roleLabel}. Pro správu si nastav vlastní heslo.`
       : opts.reason === "reset"
         ? `${opts.actorName} ti zrušil(a) heslo do aplikace BNI Plzeň a posílá odkaz pro nové.`
-        : `${opts.actorName} ti posílá znovu odkaz pro nastavení hesla do aplikace BNI Plzeň (role ${roleLabel}). Předchozí odkaz už neplatí.`;
+        : `${opts.actorName} ti posílá znovu odkaz pro nastavení hesla do aplikace BNI Plzeň${opts.role === "function" ? "" : ` (role ${roleLabel})`}. Předchozí odkaz už neplatí.`;
   const loginUrl = `${opts.appUrl.replace(/\/+$/, "")}/login`;
   const lines = [
     `Ahoj ${opts.name},`,

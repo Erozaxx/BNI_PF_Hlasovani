@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   createQuestion as dbCreateQuestion,
   updateQuestion as dbUpdateQuestion,
@@ -13,9 +13,8 @@ import {
 import type { ActionResult } from "@/lib/types";
 
 // Global editor for the interview question set (arch section 6/9, T-004a delta 1).
-// Every action here is available to admin AND moderator — requireManagementRole,
-// never requireAdmin (that guard stays reserved for member.joined_at edits, out
-// of this task's scope).
+// Every action here requires the permission `interviewQuestions.manage`
+// (iter-037: admin and every leadership function by default).
 
 const QUESTIONS_PATH = "/interviews/questions";
 const MAX_TEXT_LENGTH = 1000;
@@ -56,7 +55,7 @@ export async function createQuestionAction(
   appliesMonth5: boolean = true,
   appliesMonth10: boolean = true
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviewQuestions.manage");
   if (!auth.success) return auth;
 
   const validationError = validateText(text);
@@ -98,7 +97,7 @@ export async function updateQuestionAction(
   appliesMonth5: boolean,
   appliesMonth10: boolean
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviewQuestions.manage");
   if (!auth.success) return auth;
 
   const validationError = validateText(text);
@@ -140,7 +139,7 @@ export async function setQuestionActiveAction(
   id: string,
   active: boolean
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviewQuestions.manage");
   if (!auth.success) return auth;
 
   try {
@@ -176,7 +175,7 @@ export async function setQuestionActiveAction(
 export async function reorderQuestionsAction(
   orderedIds: string[]
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviewQuestions.manage");
   if (!auth.success) return auth;
 
   if (

@@ -13,6 +13,7 @@ import {
   check,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -69,19 +70,32 @@ export const member = pgTable(
     // resetu a nastavení hesla, změně vlastního hesla a změně e-mailu člena
     // vedení. getSession() ji porovná s `sv` v cookie, neshoda = odhlášení.
     sessionVersion: integer("session_version").notNull().default(0),
+    // iter-037 (arch 3.1, gate Z1): deaktivace člena. `deactivated_at` NULL =
+    // aktivní. `inactive_until` = poslední neaktivní den včetně (NULL při
+    // vyplněném `deactivated_at` = do odvolání). Bez poznámky k důvodu (Z1).
+    // Logika deaktivace: lib/members/activity.ts, lib/db/queries/member-status.ts.
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    inactiveUntil: date("inactive_until"),
+    deactivatedBy: uuid("deactivated_by").references(
+      (): AnyPgColumn => member.id,
+      { onDelete: "set null" }
+    ),
   },
   (table) => ({
+    inactiveUntilNeedsDeactivation: check(
+      "member_inactive_until_needs_deactivation",
+      sql`${table.inactiveUntil} IS NULL OR ${table.deactivatedAt} IS NOT NULL`
+    ),
     emailUnique: unique("member_email_unique").on(table.email),
     // iter-032 (K13): e-mail bez ohledu na velikost písmen, přísnější než
     // member_email_unique (přesná shoda), který zůstává.
     emailLowerUnique: uniqueIndex("member_email_lower_unique").on(
       sql`lower(${table.email})`
     ),
-    // iter-032 (K5): heslo jen u vedení, odebrání role heslo maže.
-    passwordOnlyForManagement: check(
-      "member_password_only_for_management",
-      sql`${table.passwordHash} IS NULL OR ${table.managementRole} IS NOT NULL`
-    ),
+    // iter-032 (K5): heslo jen u vedení, odebrání role heslo maže. iter-037
+    // (T-003b): CHECK `member_password_only_for_management` je pryč (migrace),
+    // heslo smí mít držitel role NEBO funkce a CHECK nemůže číst
+    // `member_function`. Pravidlo drží aplikace (`hasPasswordAccess`).
     magicTokenHashUnique: unique().on(table.magicTokenHash),
     managementRequiresCredentials: check(
       "member_management_requires_credentials",
@@ -1151,5 +1165,66 @@ export const burzaContactUse = pgTable(
     once: unique("bcu_once").on(table.contactId, table.recipientId),
     helperUsedIdx: index("idx_bcu_helper_used").on(table.helperId, table.usedOn),
     recipientIdx: index("idx_bcu_recipient").on(table.recipientId),
+  })
+);
+
+
+// ============================================================
+// CHAPTER FUNCTION + MEMBER FUNCTION (iter-037, arch 3.2)
+// ============================================================
+// Funkce chapteru (Prezident, Viceprezident, Člen výboru). `permissions` NULL = výchozí sada
+// (lib/auth/permissions.ts, DEFAULT_FUNCTION_PERMISSIONS). Prezident a
+// Viceprezident mají v datech plnou sadu. Editor práv není součástí iter-037.
+export const chapterFunction = pgTable(
+  "chapter_function",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    area: text("area").notNull(),
+    description: text("description"),
+    displayOrder: integer("display_order").notNull(),
+    permissions: text("permissions").array(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    nameLowerUnique: uniqueIndex("chapter_function_name_lower_unique").on(
+      sql`lower(${table.name})`
+    ),
+    areaCheck: check(
+      "chapter_function_area_check",
+      sql`${table.area} IN ('vedeni', 'leadership', 'vybor', 'ostatni')`
+    ),
+    descriptionLen: check(
+      "chapter_function_description_len",
+      sql`${table.description} IS NULL OR char_length(${table.description}) <= 300`
+    ),
+  })
+);
+
+export const memberFunction = pgTable(
+  "member_function",
+  {
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    functionId: uuid("function_id")
+      .notNull()
+      .references(() => chapterFunction.id, { onDelete: "restrict" }),
+    assignedAt: timestamp("assigned_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    assignedBy: uuid("assigned_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    // Člen má nejvýš jednu funkci (změna zadání 19. 10.): PK jen na member_id.
+    pk: primaryKey({ columns: [table.memberId] }),
+    functionIdx: index("idx_member_function_function").on(table.functionId),
   })
 );

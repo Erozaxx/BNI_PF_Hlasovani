@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import {
   getEventById,
   getEventOptions,
@@ -21,8 +22,8 @@ export default async function EventDetailPage({
 }) {
   const { eventId } = await params;
 
-  const session = await requirePageSession({ role: "management" });
-  const isAdmin = session.managementRole === "admin";
+  const session = await requirePageSession({ permission: "events.manage" });
+  const isAdmin = can(session, "events.delete");
 
   const [ev, options, participants, votes] = await Promise.all([
     getEventById(eventId),

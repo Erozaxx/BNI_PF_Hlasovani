@@ -4,6 +4,7 @@ import { getGuestWithNotes } from "@/lib/db/queries/guests";
 import { getCategories } from "@/lib/db/queries/categories";
 import { getLastMeetingDateForGuest } from "@/lib/db/queries/meetings";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -34,10 +35,9 @@ export default async function GuestDetailPage({
     getCategories(),
     getLastMeetingDateForGuest(id),
   ]);
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  const isAdmin = session.managementRole === "admin";
+  const canManageGuests = can(session, "guests.manage");
+  const canPromoteGuests = can(session, "guests.promote");
+  const canDeleteGuests = can(session, "guests.delete");
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -71,7 +71,7 @@ export default async function GuestDetailPage({
           )}
         </div>
         <div className="flex gap-2">
-          {isManagement && (
+          {canPromoteGuests && (
             <PromoteGuestButton
               guestId={guest.id}
               guestName={guest.name}
@@ -79,7 +79,7 @@ export default async function GuestDetailPage({
               redirectTo="/guests"
             />
           )}
-          {isAdmin && (
+          {canDeleteGuests && (
             <DeleteGuestButton guestId={guest.id} guestName={guest.name} />
           )}
         </div>
@@ -94,7 +94,7 @@ export default async function GuestDetailPage({
       )}
 
       {/* Category changer - management only */}
-      {isManagement && (
+      {canManageGuests && (
         <Card>
           <h2 className="text-sm font-semibold text-text-muted mb-3">
             Změna kategorie

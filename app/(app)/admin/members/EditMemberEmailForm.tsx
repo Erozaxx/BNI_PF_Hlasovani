@@ -43,7 +43,7 @@ export function EditMemberEmailForm({ memberId, initialEmail }: Props) {
       <>
         <button
           onClick={() => { setOpen(true); setNotice(null); }}
-          className="text-xs text-primary hover:underline mt-1"
+          className="inline-flex min-h-[44px] items-center text-sm text-primary hover:underline"
         >
           Upravit
         </button>
@@ -59,21 +59,21 @@ export function EditMemberEmailForm({ memberId, initialEmail }: Props) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="email@example.com"
-        className="text-xs border border-border rounded px-2 py-1 w-48"
+        className="h-11 w-full max-w-xs rounded border border-border px-2 py-1 text-base"
       />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={loading}
-          className="text-xs text-primary hover:underline disabled:opacity-50"
+          className="inline-flex min-h-[44px] items-center text-sm text-primary hover:underline disabled:opacity-50"
         >
           {loading ? "Ukládám…" : "Uložit"}
         </button>
         <button
           type="button"
           onClick={() => { setOpen(false); setEmail(initialEmail ?? ""); setError(null); }}
-          className="text-xs text-text-muted hover:underline"
+          className="inline-flex min-h-[44px] items-center text-sm text-text-muted hover:underline"
         >
           Zrušit
         </button>

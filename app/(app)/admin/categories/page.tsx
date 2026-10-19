@@ -8,7 +8,7 @@ import { DeleteCategoryButton } from "./DeleteCategoryButton";
 import { requirePageSession } from "@/lib/auth/page-guard";
 
 export default async function AdminCategoriesPage() {
-  await requirePageSession({ role: "admin" });
+  await requirePageSession({ permission: "categories.manage" });
   const categories = await getCategories();
 
   return (

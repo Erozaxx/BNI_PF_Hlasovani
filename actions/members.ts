@@ -1,11 +1,14 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
+import { adminTargetError } from "@/lib/auth/admin-protection";
+import { ADMIN_ONLY_MESSAGE } from "@/lib/auth/permissions";
 import {
   createMember as dbCreateMember,
   getMemberById,
-  updateTokenUsed,
+  revokeMagicLinkGuarded,
   deleteMemberGuarded,
   isUniqueViolation,
   updateMemberCompany as dbUpdateMemberCompany,
@@ -13,11 +16,17 @@ import {
   updateMemberJoinedAt as dbUpdateMemberJoinedAt,
 } from "@/lib/db/queries/members";
 import { clearHelpNotesForRecipient } from "@/lib/db/queries/burza";
-import { generateMagicToken } from "@/lib/auth/magic";
+import { getManagerContext } from "@/lib/db/queries/member-status";
+import { getMemberFunctionId } from "@/lib/db/queries/member-functions";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { generateMagicToken, generateMagicTokenAs } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
+import { logOpsEvent } from "@/lib/ops/event-log";
 import type { ActionResult } from "@/lib/types";
 
 const EMAIL_TAKEN_TEXT = "Tenhle e-mail už má jiný člen.";
+/** iter-037 (gate sekce 5, T-003b): neaktivnímu členovi odkaz neposíláme. */
+const INACTIVE_NO_LINK_TEXT = "Neaktivnímu členovi odkaz neposíláme.";
 
 /**
  * Create a new member. Requires admin role.
@@ -34,7 +43,7 @@ export async function createMemberAction(
   company?: string,
   obor?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
@@ -70,7 +79,7 @@ export async function createMemberAction(
 export async function generateMagicLinkAction(
   memberId: string
 ): Promise<ActionResult<{ magicLink: string }>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   try {
@@ -78,8 +87,14 @@ export async function generateMagicLinkAction(
     if (!memberData) {
       return { success: false, error: "Clen nebyl nalezen." };
     }
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+    if (!isMemberActive(memberData, pragueToday())) {
+      return { success: false, error: INACTIVE_NO_LINK_TEXT };
+    }
 
-    const rawToken = await generateMagicToken(memberId);
+    const rawToken = await generateMagicTokenAs(memberId, auth.session.memberId);
+    if (!rawToken) return { success: false, error: ADMIN_ONLY_MESSAGE };
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`;
 
@@ -92,27 +107,50 @@ export async function generateMagicLinkAction(
 }
 
 /**
- * Revoke a member's magic token. Requires admin role.
+ * „Zneplatnit odkaz“ (dřív Revokovat). iter-037 (arch 7.1, K11): jeden příkaz
+ * `revokeMagicLinkGuarded` vynuluje oba tokeny, odhlásí člena ze všech zařízení
+ * a zneplatní nepoužité přihlašovací odkazy z mailu. Žádný záložní nový odkaz.
+ * Přihlásit se člen může dál přes nový odkaz z přihlašovací stránky, zablokovat
+ * ho jde deaktivací. Hlasovací odkazy se nemění.
  */
 export async function revokeTokenAction(
   memberId: string
 ): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
+  const actor = auth.session;
 
   try {
-    const memberData = await getMemberById(memberId);
-    if (!memberData) {
+    const denied = await adminTargetError(actor, memberId);
+    if (denied) return { success: false, error: denied };
+
+    const row = await revokeMagicLinkGuarded(memberId, actor.memberId);
+    if (!row) {
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    await updateTokenUsed(memberId);
+    // LL-011: vstup se sestaví a zapíše uvnitř try, logOpsEvent sám nevyhodí.
+    try {
+      await logOpsEvent({
+        runId: randomUUID(),
+        seq: 1,
+        source: "gui",
+        kind: "access.magic-link-revoked",
+        severity: "info",
+        actor: actor.name,
+        memberId: row.id,
+        memberName: row.name,
+        message: "Osobní odkaz zneplatněn.",
+      });
+    } catch (err) {
+      console.error(`[revokeTokenAction] ops log failed: ${err instanceof Error ? err.name : typeof err}`);
+    }
 
     revalidatePath("/admin/members");
     return { success: true };
   } catch (error) {
     console.error("revokeTokenAction error:", error);
-    return { success: false, error: "Nepodarilo se revokovat odkaz." };
+    return { success: false, error: "Nepodarilo se zneplatnit odkaz." };
   }
 }
 
@@ -123,7 +161,7 @@ export async function revokeTokenAction(
 export async function sendMagicLinkEmailAction(
   memberId: string
 ): Promise<ActionResult<{ magicLink: string }>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   try {
@@ -132,11 +170,18 @@ export async function sendMagicLinkEmailAction(
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+
     if (!memberData.email) {
       return { success: false, error: "Clen nema zadany email." };
     }
+    if (!isMemberActive(memberData, pragueToday())) {
+      return { success: false, error: INACTIVE_NO_LINK_TEXT };
+    }
 
-    const rawToken = await generateMagicToken(memberId);
+    const rawToken = await generateMagicTokenAs(memberId, auth.session.memberId);
+    if (!rawToken) return { success: false, error: ADMIN_ONLY_MESSAGE };
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`;
 
@@ -169,7 +214,7 @@ export async function updateMemberCompanyAction(
   company: string,
   obor: string
 ): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   try {
@@ -178,11 +223,16 @@ export async function updateMemberCompanyAction(
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    await dbUpdateMemberCompany(
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+
+    const changed = await dbUpdateMemberCompany(
       memberId,
       company.trim() || null,
-      obor.trim() || null
+      obor.trim() || null,
+      auth.session.memberId
     );
+    if (!changed) return { success: false, error: ADMIN_ONLY_MESSAGE };
 
     revalidatePath("/admin/members");
     return { success: true };
@@ -208,7 +258,7 @@ export async function updateMemberEmailAction(
   memberId: string,
   email: string
 ): Promise<ActionResult<{ revokedLinks: number; isManagement: boolean }>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   try {
@@ -217,14 +267,21 @@ export async function updateMemberEmailAction(
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    if (memberData.managementRole && !(email ?? "").trim()) {
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+
+    // T-003b: e-mail je přihlašovací jméno i u držitele funkce bez role.
+    const hasFunction = (await getMemberFunctionId(memberId)) !== null;
+    if ((memberData.managementRole || hasFunction) && !(email ?? "").trim()) {
       return {
         success: false,
-        error: "Člen vedení musí mít e-mail. Nejdřív mu odeber roli.",
+        error: memberData.managementRole
+          ? "Člen vedení musí mít e-mail. Nejdřív mu odeber roli."
+          : "Člen s funkcí musí mít e-mail. Nejdřív mu odeber funkci.",
       };
     }
 
-    const updated = await dbUpdateMemberEmail(memberId, email ?? null);
+    const updated = await dbUpdateMemberEmail(memberId, email ?? null, auth.session.memberId);
     if (!updated) {
       return { success: false, error: "Clen nebyl nalezen." };
     }
@@ -232,7 +289,10 @@ export async function updateMemberEmailAction(
     revalidatePath("/admin/members");
     return {
       success: true,
-      data: { revokedLinks: updated.revokedLinks, isManagement: !!memberData.managementRole },
+      data: {
+        revokedLinks: updated.revokedLinks,
+        isManagement: !!memberData.managementRole || hasFunction,
+      },
     };
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -257,7 +317,7 @@ export async function updateMemberJoinedAtAction(
   memberId: string,
   joinedAt: string
 ): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(joinedAt)) {
@@ -275,7 +335,11 @@ export async function updateMemberJoinedAtAction(
       return { success: false, error: "Clen nebyl nalezen." };
     }
 
-    await dbUpdateMemberJoinedAt(memberId, joinedAt);
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+
+    const changed = await dbUpdateMemberJoinedAt(memberId, joinedAt, auth.session.memberId);
+    if (!changed) return { success: false, error: ADMIN_ONLY_MESSAGE };
 
     revalidatePath("/admin/members");
     return { success: true };
@@ -295,7 +359,7 @@ export async function updateMemberJoinedAtAction(
 export async function deleteMemberAction(
   memberId: string
 ): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.delete");
   if (!auth.success) return auth;
 
   const actorId = auth.session.memberId;
@@ -307,6 +371,17 @@ export async function deleteMemberAction(
     const memberData = await getMemberById(memberId);
     if (!memberData) {
       return { success: false, error: "Clen nebyl nalezen." };
+    }
+
+    const denied = await adminTargetError(auth.session, memberId);
+    if (denied) return { success: false, error: denied };
+
+    // iter-037 (T-003b): poslední aktivní účet se správou členů (admin nebo
+    // funkce s `members.manage`) smazat nejde. Hláška hned, ještě před úklidem
+    // poznámek z burzy. Správnost drží `deleteMemberGuarded`.
+    const ctx = await getManagerContext(memberId);
+    if (ctx.target?.isActiveManager && ctx.otherActiveManagers === 0) {
+      return { success: false, error: "Posledního aktivního admina smazat nejde." };
     }
 
     // iter-035 L-2: poznámky k pomoci z burzy, kde je člen příjemcem, se
@@ -323,10 +398,7 @@ export async function deleteMemberAction(
     if (!deleted) {
       return {
         success: false,
-        error:
-          memberData.managementRole === "admin"
-            ? "Posledního admina smazat nejde."
-            : "Clena se nepodarilo smazat, obnov stranku.",
+        error: "Clena se nepodarilo smazat, obnov stranku.",
       };
     }
 

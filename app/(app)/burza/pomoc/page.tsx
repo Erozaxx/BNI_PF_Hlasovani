@@ -13,7 +13,7 @@ import { RecordHelpForm } from "@/components/burza/RecordHelpForm";
 
 /** Záznamy pomoci pro vedení (Z5): formulář zápisu podle hlášení a seznam za 12 měsíců. */
 export default async function BurzaHelpPage() {
-  await requirePageSession({ role: "management", denyTo: "/burza" });
+  await requirePageSession({ permission: "burza.manage", denyTo: "/burza" });
 
   const today = todayInPrague();
   const [help, contacts, helpers, members] = await Promise.all([

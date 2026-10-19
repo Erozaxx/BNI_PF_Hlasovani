@@ -12,6 +12,7 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 import {
   CASE_LIMIT,
   PRESENTED_LIMIT,
@@ -102,6 +103,11 @@ function toCaseListRow(r: CaseListDbRow): CaseListRow {
  * Všechny případy pro přehled `/mastermind` jedním dotazem (se jmény
  * zájemců). Odprezentovaných jen posledních PRESENTED_LIMIT podle data
  * interní. Řazení zásobníku dělá čistá `sortCases`, SQL vrací data.
+ *
+ * iter-037 (T-003b, arch 5.2): témata neaktivního člena jsou neviditelná všem
+ * včetně vedení (`JOIN member p ... memberActiveSql`), jeho zájem o cizí témata
+ * zůstává v DB, ale ve jménech zájemců se nepočítá (`LEFT JOIN member m ...
+ * memberActiveSql`).
  */
 export async function getCasesForOverview(): Promise<CaseListRow[]> {
   const result = await getDb().execute<CaseListDbRow>(sql`
@@ -113,13 +119,13 @@ export async function getCasesForOverview(): Promise<CaseListRow[]> {
            COALESCE(
              json_agg(json_build_object('memberId', i.member_id, 'name', m.name)
                       ORDER BY i.created_at, i.member_id)
-               FILTER (WHERE i.member_id IS NOT NULL),
+               FILTER (WHERE m.id IS NOT NULL),
              '[]'::json
            )::text AS interested
     FROM mastermind_case c
-    JOIN member p ON p.id = c.member_id
+    JOIN member p ON p.id = c.member_id AND ${memberActiveSql("p")}
     LEFT JOIN mastermind_interest i ON i.case_id = c.id
-    LEFT JOIN member m ON m.id = i.member_id
+    LEFT JOIN member m ON m.id = i.member_id AND ${memberActiveSql("m")}
     WHERE c.status <> 'presented'
        OR c.id IN (
          SELECT id FROM mastermind_case
@@ -145,7 +151,11 @@ export interface CaseDetailRow {
   internalDate: string | null;
 }
 
-/** Jeden případ pro stránku úpravy a pro rozhodování, proč příkaz nic nezměnil. */
+/**
+ * Jeden případ pro stránku úpravy a pro rozhodování, proč příkaz nic nezměnil.
+ * iter-037: téma neaktivního člena se nevrací (`null` = „téma teď není k
+ * dispozici“, i pro vedení).
+ */
 export async function getCaseById(caseId: string): Promise<CaseDetailRow | null> {
   const result = await getDb().execute<{
     id: string;
@@ -162,7 +172,7 @@ export async function getCaseById(caseId: string): Promise<CaseDetailRow | null>
     SELECT c.id, c.member_id, p.name AS presenter_name, c.title, c.situation,
            c.path, c.takeaway, c.ask, c.status, c.internal_date::text AS internal_date
     FROM mastermind_case c
-    JOIN member p ON p.id = c.member_id
+    JOIN member p ON p.id = c.member_id AND ${memberActiveSql("p")}
     WHERE c.id = ${caseId}::uuid
   `);
   const r = result.rows[0];
@@ -181,7 +191,11 @@ export async function getCaseById(caseId: string): Promise<CaseDetailRow | null>
   };
 }
 
-/** Data pro nabídku čtvrtků (3.5): data schůzek od dneška a data zařazených případů. */
+/**
+ * Data pro nabídku čtvrtků (3.5): data schůzek od dneška a data zařazených
+ * případů. iter-037: případy neaktivního člena se nepočítají (při deaktivaci se
+ * stejně vracejí do zásobníku).
+ */
 export async function getThursdayData(todayPrague: string): Promise<{
   meetingDates: string[];
   caseDates: string[];
@@ -191,7 +205,9 @@ export async function getThursdayData(todayPrague: string): Promise<{
       SELECT date::text AS d FROM meeting WHERE date >= ${todayPrague}::date
     `),
     getDb().execute<{ d: string }>(sql`
-      SELECT internal_date::text AS d FROM mastermind_case WHERE internal_date IS NOT NULL
+      SELECT c.internal_date::text AS d FROM mastermind_case c
+      JOIN member p ON p.id = c.member_id AND ${memberActiveSql("p")}
+      WHERE c.internal_date IS NOT NULL
     `),
   ]);
   return {
@@ -215,7 +231,8 @@ export interface CreateCaseInput {
 /**
  * Limit 5 otevřených případů hlídá sám INSERT (počet je ve WHERE příkazu,
  * ne v samostatném SELECTu před ním). Vrací `id`, nebo `null` při dosaženém
- * limitu.
+ * limitu. iter-037 (security L-3): případ neaktivního člena nevznikne ani
+ * přímým voláním (akce to hlásí srozumitelně dřív, tohle je poslední pojistka).
  */
 export async function createCaseWithLimit(input: CreateCaseInput): Promise<string | null> {
   const result = await getDb().execute<{ id: string }>(sql`
@@ -226,6 +243,8 @@ export async function createCaseWithLimit(input: CreateCaseInput): Promise<strin
     WHERE (SELECT count(*) FROM mastermind_case c
             WHERE c.member_id = ${input.memberId}::uuid
               AND c.status IN ('proposed','scheduled')) < ${CASE_LIMIT}::int
+      AND EXISTS (SELECT 1 FROM member m
+                   WHERE m.id = ${input.memberId}::uuid AND ${memberActiveSql("m")})
     RETURNING id
   `);
   return result.rows[0]?.id ?? null;
@@ -316,6 +335,7 @@ export async function addInterest(caseId: string, memberId: string): Promise<boo
   const result = await getDb().execute<{ case_id: string }>(sql`
     INSERT INTO mastermind_interest (case_id, member_id)
     SELECT c.id, ${memberId}::uuid FROM mastermind_case c
+    JOIN member p ON p.id = c.member_id AND ${memberActiveSql("p")}
     WHERE c.id = ${caseId}::uuid AND c.member_id <> ${memberId}::uuid
       AND c.status IN ('proposed','scheduled')
     ON CONFLICT (case_id, member_id) DO NOTHING
@@ -336,8 +356,11 @@ export async function removeInterest(caseId: string, memberId: string): Promise<
 }
 
 export async function countInterest(caseId: string): Promise<number> {
+  // iter-037: zájem neaktivního člena se nepočítá (řádek zůstává v DB).
   const result = await getDb().execute<{ n: number }>(sql`
-    SELECT count(*)::int AS n FROM mastermind_interest WHERE case_id = ${caseId}::uuid
+    SELECT count(*)::int AS n FROM mastermind_interest i
+    JOIN member m ON m.id = i.member_id AND ${memberActiveSql("m")}
+    WHERE i.case_id = ${caseId}::uuid
   `);
   return Number(result.rows[0]?.n ?? 0);
 }
@@ -530,11 +553,13 @@ export async function getDashboardMastermindRows(memberId: string): Promise<Dash
     listening: boolean;
   }>(sql`
     SELECT c.id, c.member_id, p.name, c.title, c.internal_date::text AS internal_date,
-           (SELECT count(*) FROM mastermind_interest i WHERE i.case_id = c.id)::int AS cnt,
+           (SELECT count(*) FROM mastermind_interest i
+              JOIN member m ON m.id = i.member_id AND ${memberActiveSql("m")}
+             WHERE i.case_id = c.id)::int AS cnt,
            EXISTS (SELECT 1 FROM mastermind_interest i
                    WHERE i.case_id = c.id AND i.member_id = ${memberId}::uuid) AS listening
     FROM mastermind_case c
-    JOIN member p ON p.id = c.member_id
+    JOIN member p ON p.id = c.member_id AND ${memberActiveSql("p")}
     WHERE c.status = 'scheduled'
     ORDER BY c.internal_date, c.id
   `);

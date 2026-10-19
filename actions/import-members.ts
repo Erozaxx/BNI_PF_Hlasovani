@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
+import { ADMIN_ONLY_MESSAGE, isAdminSession, mayChangeMember } from "@/lib/auth/permissions";
 import { parseXlsxFileWithDuplicates } from "@/lib/import/parse-xlsx";
 import {
   getMembersForImport,
@@ -24,7 +25,7 @@ import type {
 export async function parseXlsxAction(
   formData: FormData
 ): Promise<ActionResult<ImportPreview>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   const file = formData.get("file");
@@ -142,7 +143,7 @@ export async function parseXlsxAction(
 export async function importMembersAction(
   rows: ImportPreviewRow[]
 ): Promise<ActionResult<ImportResult>> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("members.manage");
   if (!auth.success) return auth;
 
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -191,12 +192,24 @@ export async function importMembersAction(
           continue;
         }
 
-        await updateMemberObor(row.existingMemberId, row.xlsxObor ?? null);
+        // iter-037 (M-1): údaje člena s rolí admin mění jen admin (SQL to hlídá
+        // znovu přes `actorId`).
+        if (!mayChangeMember(isAdminSession(auth.session), dbMember.managementRole)) {
+          errors.push(`Clen "${row.xlsxName}": ${ADMIN_ONLY_MESSAGE}`);
+          errorCount++;
+          continue;
+        }
+
+        await updateMemberObor(row.existingMemberId, row.xlsxObor ?? null, auth.session.memberId);
         // joined_at: only touched when the XLSX row actually has a value
         // (MAJOR-3) — an update row never clears an existing entry date just
         // because the column was left blank in the file.
         if (row.xlsxJoinedAt) {
-          await updateMemberJoinedAt(row.existingMemberId, row.xlsxJoinedAt);
+          await updateMemberJoinedAt(
+            row.existingMemberId,
+            row.xlsxJoinedAt,
+            auth.session.memberId
+          );
         }
         updatedCount++;
       }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import {
   getMembersWithoutOffer,
   getMyHelpState,
@@ -18,8 +19,7 @@ import { OfferList } from "@/components/burza/OfferList";
  */
 export default async function BurzaPage() {
   const session = await requirePageSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "burza.manage");
   const today = todayInPrague();
 
   const [offers, helpState, withoutOffer] = await Promise.all([

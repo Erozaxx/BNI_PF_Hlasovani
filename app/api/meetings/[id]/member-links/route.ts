@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, isNotNull, and } from "drizzle-orm";
+import { eq, isNotNull, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { member as memberTable, meetingMemberLink } from "@/lib/db/schema";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 
 function getDb() {
   return drizzle(getSql());
@@ -19,7 +20,7 @@ function err(status: number, message: string) {
  *
  * Returns ALL members with an email address (LEFT JOIN with meeting_member_link).
  * Each entry includes:
- *   - memberId, memberName, memberEmail
+ *   - memberId, memberName, memberEmail, isInactive (iter-037: deaktivovaný člen)
  *   - hasLink: whether a meeting_member_link row exists for this member+meeting
  *   - isRevoked: revokedAt != null
  *   - isExpired: expiresAt != null && expiresAt < now
@@ -33,13 +34,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // 1. Auth check
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
 
   const { id: meetingId } = await params;
 
@@ -55,6 +51,9 @@ export async function GET(
       memberId: memberTable.id,
       memberName: memberTable.name,
       memberEmail: memberTable.email,
+      // iter-037 (T-003b): neaktivní se ukáže se štítkem „Neaktivní“ bez akcí.
+      // Jen příznak, datum deaktivace do odpovědi nejde.
+      isInactive: sql<boolean>`NOT ${memberActiveSql("member")}`,
       linkId: meetingMemberLink.id,
       tokenHash: meetingMemberLink.tokenHash,
       linkCreatedAt: meetingMemberLink.createdAt,
@@ -84,6 +83,7 @@ export async function GET(
       memberId: row.memberId,
       memberName: row.memberName,
       memberEmail: row.memberEmail,
+      isInactive: row.isInactive,
       hasLink,
       isRevoked,
       isExpired,

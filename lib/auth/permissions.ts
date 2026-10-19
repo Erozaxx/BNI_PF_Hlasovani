@@ -1,0 +1,236 @@
+/**
+ * iter-037 (arch 6.1, 6.2, změna zadání 19. 10.): katalog práv a jediné místo
+ * rozhodnutí, co smí session dělat.
+ *
+ * Čistý modul: žádný import drizzle-orm, @/lib/db/*, next/* ani resend.
+ * Bezpečné pro scripts/test-iter-037-members.ts.
+ *
+ * Každý guard v aplikaci se ptá na konkrétní právo, ne na roli. Práva session
+ * se počítají v `getSession()` z `member.management_role` a funkce člena:
+ *
+ * 1. přihlášení odkazem (`authMethod !== "password"`) = práva člena, tedy
+ *    prázdná množina (iter-032 6.4), i pro Prezidenta a Viceprezidenta,
+ * 2. admin = všechna práva,
+ * 3. jinak je to SJEDNOCENÍ práv role a práv funkce. Role `moderator` dává
+ *    `DEFAULT_FUNCTION_PERMISSIONS` (dnešní moderátor). Funkce (nejvýš jedna:
+ *    Prezident, Viceprezident, Člen výboru) dává `chapter_function.permissions`,
+ *    `NULL` = `DEFAULT_FUNCTION_PERMISSIONS`. V datech mají Prezident a
+ *    Viceprezident značku `ADMIN_DELEGABLE_MARKER` (= všechna práva admina
+ *    kromě nedelegovatelných, počítá se z AKTUÁLNÍHO katalogu, ne ze snímku),
+ *    Člen výboru `NULL`. Rozhodnutí Toma 19. 10. (M-1): `NON_DELEGABLE`
+ *    (`access.manage`, `functions.manage`) nedostane žádná funkce, ani kdyby je
+ *    měla v datech. Roli admin a funkce, hesla a odkaz admina mění jen admin,
+ * 4. držitel funkce BEZ role má heslo i práva (T-003b, rozhodnutí 19. 10.):
+ *    CHECK `member_password_only_for_management` je pryč, pravidlo „heslo jen
+ *    s rolí nebo funkcí“ žije tady (`hasPasswordAccess`). Bez role i bez funkce
+ *    je množina prázdná (fail closed).
+ */
+
+import type { AuthMethod } from "@/lib/auth/session-check";
+
+export const PERMISSIONS = [
+  "guests.manage",
+  "guests.promote",
+  "guests.delete",
+  "categories.create",
+  "categories.manage",
+  "meetings.manage",
+  "meetings.delete",
+  "events.manage",
+  "events.delete",
+  "timers.manage",
+  "interviews.manage",
+  "interviewQuestions.manage",
+  "ops.view",
+  "mastermind.manage",
+  "burza.manage",
+  "members.manage",
+  "members.deactivate",
+  "members.delete",
+  "access.manage",
+  "functions.manage",
+] as const;
+
+export type Permission = (typeof PERMISSIONS)[number];
+
+/**
+ * Výchozí sada (role `moderator` a funkce s `permissions = NULL`) = dnešní moderátor
+ * (arch 6.1, sloupec „Výchozí sada“). Test 9a ji hlídá proti tabulce.
+ */
+export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
+  "guests.manage",
+  "guests.promote",
+  "categories.create",
+  "meetings.manage",
+  "events.manage",
+  "timers.manage",
+  "interviews.manage",
+  "interviewQuestions.manage",
+  "ops.view",
+  "mastermind.manage",
+  "burza.manage",
+];
+
+/**
+ * Práva, která funkce nikdy nedostane (rozhodnutí Toma 19. 10., M-1): přidělování
+ * role admin, funkcí a hesel patří jen roli admin. Jediné místo, kde se to
+ * rozhoduje, `permissionsFor` filtruje funkce přes tenhle seznam.
+ */
+export const NON_DELEGABLE: readonly Permission[] = ["access.manage", "functions.manage"];
+
+const NON_DELEGABLE_SET: ReadonlySet<string> = new Set(NON_DELEGABLE);
+
+/** Všechna práva katalogu, která smí dostat funkce (admin bez nedelegovatelných). */
+export const DELEGABLE_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter(
+  (p) => !NON_DELEGABLE_SET.has(p)
+);
+
+/**
+ * Značka v `chapter_function.permissions` (jediný prvek pole): „všechna práva
+ * admina kromě nedelegovatelných“. Odvozuje se z aktuálního katalogu při každém
+ * výpočtu, takže nové právo v `PERMISSIONS` dostanou Prezident a Viceprezident
+ * hned, bez migrace (review MIN-2). Není to `Permission`.
+ */
+export const ADMIN_DELEGABLE_MARKER = "admin-delegable";
+
+const PERMISSION_SET: ReadonlySet<string> = new Set(PERMISSIONS);
+
+export function isPermission(value: string): value is Permission {
+  return PERMISSION_SET.has(value);
+}
+
+/**
+ * Práva funkce z dat: `NULL` = výchozí sada, značka = všechna delegovatelná
+ * práva, jinak jmenovitě (neznámé klíče se ignorují). Nedelegovatelná práva
+ * vypadnou vždy.
+ */
+export function expandFunctionPermissions(raw: readonly string[] | null): Permission[] {
+  const granted = new Set<Permission>();
+  if (raw === null) {
+    for (const p of DEFAULT_FUNCTION_PERMISSIONS) granted.add(p);
+  } else {
+    for (const value of raw) {
+      if (value === ADMIN_DELEGABLE_MARKER) {
+        for (const p of DELEGABLE_PERMISSIONS) granted.add(p);
+      } else if (isPermission(value)) {
+        granted.add(value);
+      }
+    }
+  }
+  return [...granted].filter((p) => !NON_DELEGABLE_SET.has(p));
+}
+
+/**
+ * Funkce z dat dává právo `permission` (stejné pravidlo jako
+ * `expandFunctionPermissions`, SQL protějšek je `functionGrantsSql`).
+ */
+export function functionGrants(raw: readonly string[] | null, permission: Permission): boolean {
+  return expandFunctionPermissions(raw).includes(permission);
+}
+
+/** Session je admin přihlášený heslem (role, ne funkce). Jen takový smí měnit účet admina. */
+export function isAdminSession(
+  session: { authMethod?: AuthMethod; managementRole?: string | null } | null | undefined
+): boolean {
+  return !!session && session.authMethod === "password" && session.managementRole === "admin";
+}
+
+/** Účet s rolí admin smí měnit jen admin (rozhodnutí Toma 19. 10.). Ostatní cíle smí každý s právem. */
+export function mayChangeMember(actorIsAdmin: boolean, targetRole: string | null | undefined): boolean {
+  return targetRole !== "admin" || actorIsAdmin;
+}
+
+export const ADMIN_ONLY_MESSAGE = "Účet admina může měnit jen admin.";
+
+/** Funkce člena tak, jak ji čte `getMemberAuthState`. */
+export interface MemberFunctionInfo {
+  name: string;
+  permissions: string[] | null;
+}
+
+/**
+ * Člen má skutečné heslo: hash existuje a člen nečeká na odkaz „nastav si
+ * heslo“. Zámkový hash (povýšení, první funkce, reset) není heslo, nejde jím
+ * přihlásit (review MIN-1). Čekající odkaz = nepoužitý `set-password` v DB.
+ */
+export function hasRealPassword(input: {
+  hasHash: boolean;
+  pendingSetPasswordLink: boolean;
+}): boolean {
+  return input.hasHash && !input.pendingSetPasswordLink;
+}
+
+/**
+ * Jedno místo pravdy pro „smí mít heslo a přihlásit se jím“ (T-003b): člen má
+ * roli (admin, moderator), NEBO aspoň jednu funkci. Dřív to hlídal CHECK
+ * `member_password_only_for_management` (jen role), ten CHECK nemůže číst
+ * `member_function`, proto je pravidlo v aplikaci.
+ */
+export function hasPasswordAccess(input: {
+  managementRole: string | null | undefined;
+  hasFunction: boolean;
+}): boolean {
+  return !!input.managementRole || input.hasFunction;
+}
+
+/** Session s heslem a přístupem (role nebo funkce). Pro nastavení hesla a menu. */
+export function hasPasswordSession(
+  session:
+    | {
+        authMethod: AuthMethod;
+        managementRole: string | null;
+        functionNames?: readonly string[];
+      }
+    | null
+    | undefined
+): boolean {
+  if (!session || session.authMethod !== "password") return false;
+  return hasPasswordAccess({
+    managementRole: session.managementRole,
+    hasFunction: (session.functionNames?.length ?? 0) > 0,
+  });
+}
+
+export function permissionsFor(input: {
+  authMethod: AuthMethod;
+  managementRole: "admin" | "moderator" | null;
+  functions: readonly MemberFunctionInfo[];
+}): ReadonlySet<Permission> {
+  if (input.authMethod !== "password") return new Set();
+
+  if (input.managementRole === "admin") return new Set(PERMISSIONS);
+
+  // Role moderator dává výchozí sadu, držitel funkce bez role začíná prázdný a
+  // dostane jen práva funkce. Bez role i bez funkce zůstane množina prázdná.
+  const result = new Set<Permission>(
+    input.managementRole === "moderator" ? DEFAULT_FUNCTION_PERMISSIONS : []
+  );
+  for (const fn of input.functions) {
+    // Značka i výchozí sada se rozbalí z aktuálního katalogu, NON_DELEGABLE vypadne.
+    for (const p of expandFunctionPermissions(fn.permissions)) result.add(p);
+  }
+  return result;
+}
+
+/** Nejmenší tvar session, který `can` potřebuje (prázdná session = `false`). */
+export interface PermissionHolder {
+  permissions?: readonly Permission[];
+}
+
+export function can(
+  session: PermissionHolder | null | undefined,
+  permission: Permission
+): boolean {
+  return session?.permissions?.includes(permission) ?? false;
+}
+
+/** Aspoň jedno z práv. */
+export function canAny(
+  session: PermissionHolder | null | undefined,
+  permissions: readonly Permission[]
+): boolean {
+  return permissions.some((p) => can(session, p));
+}
+
+/** Česká hláška pro `requirePermission` a API routes (gate, sekce 5). */
+export const NO_PERMISSION_MESSAGE = "Na tohle nemáš oprávnění.";

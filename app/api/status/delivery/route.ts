@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import {
   getOpsEventsForDelivery,
   updateOpsEventDeliveryStatus,
@@ -42,12 +42,8 @@ interface DeliveryRequestBody {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    return errorResponse(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("ops.view");
+  if ("response" in authz) return authz.response;
 
   let body: DeliveryRequestBody;
   try {

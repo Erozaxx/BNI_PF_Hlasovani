@@ -6,6 +6,7 @@ import {
   type InterviewType,
 } from "@/lib/db/queries/interviews";
 import { getMembers } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import {
   buildInterviewListRows,
   isDueRelevant,
@@ -30,7 +31,7 @@ export default async function InterviewsPage({
 }: {
   searchParams: Promise<{ memberId?: string; type?: string }>;
 }) {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "interviews.manage" });
 
   const [interviews, allMembers, dueList] = await Promise.all([
     getInterviewsList(),
@@ -42,11 +43,17 @@ export default async function InterviewsPage({
   // výběry na stránce (D1, D2, D6, D7, D8). getMembers() dál řadí podle
   // display_order, to potřebuje konzole členů.
   const members = sortMembersByName(allMembers);
+  // iter-037 (K13, K15): zpovídaný člen smí být neaktivní (štítek), vedoucí
+  // pohovoru ne. `memberOptions` nese příznak, výběry vedoucího jdou z
+  // `leaderOptions` (jen aktivní).
+  const todayPrague = pragueToday();
   const memberOptions = members.map((m) => ({
     id: m.id,
     name: m.name,
     email: m.email ?? null,
+    isInactive: !isMemberActive(m, todayPrague),
   }));
+  const leaderOptions = memberOptions.filter((m) => !m.isInactive);
 
   // Gate T-004b U1: datumy i stav odkazu počítá server s jedním `now`
   // a v Europe/Prague, do klienta jdou jen řetězce a výčty (hydratace).
@@ -65,6 +72,7 @@ export default async function InterviewsPage({
     due10SinceDays: e.due10SinceDays,
     upcoming5: e.upcoming5,
     upcoming10: e.upcoming10,
+    isInactive: e.isInactive,
   }));
 
   // memberId -> which types already have a non-cancelled interview — comfort
@@ -113,7 +121,7 @@ export default async function InterviewsPage({
         </Link>
       </div>
 
-      <InterviewDueTable entries={dueEntries} members={memberOptions} />
+      <InterviewDueTable entries={dueEntries} members={leaderOptions} />
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
@@ -128,7 +136,11 @@ export default async function InterviewsPage({
         />
       </Card>
 
-      <InterviewListTable rows={listRows} members={memberOptions} />
+      <InterviewListTable
+        rows={listRows}
+        members={leaderOptions}
+        inactiveMemberIds={memberOptions.filter((m) => m.isInactive).map((m) => m.id)}
+      />
     </div>
   );
 }

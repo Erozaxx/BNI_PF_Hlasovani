@@ -43,7 +43,7 @@ export default async function EventsPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "events.manage" });
 
   const { filter: filterParam } = await searchParams;
   const validStatuses: EventStatus[] = ["draft", "active", "closed", "done"];

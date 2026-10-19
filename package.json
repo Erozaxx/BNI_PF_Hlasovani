@@ -28,6 +28,8 @@
     "test:iter-033-mastermind": "tsx scripts/test-iter-033-mastermind.ts",
     "test:iter-033": "npm run test:iter-033-mastermind && npm run test:iter-028 && npm run test:iter-032-access",
     "test:iter-036": "tsx scripts/test-iter-036-help.ts",
+    "test:iter-037-members": "tsx scripts/test-iter-037-members.ts",
+    "test:iter-037": "npm run test:iter-037-members && npm run test:iter-032-access && npm run test:iter-028 && npm run test:iter-035 && npm run test:iter-036",
     "test:iter-035-burza": "tsx scripts/test-iter-035-burza.ts",
     "test:iter-035b-burza": "tsx scripts/test-iter-035b-burza.ts",
     "test:iter-035": "npm run test:iter-035b-burza && npm run test:iter-035-burza && npm run test:iter-033 && npm run test:iter-032-access",

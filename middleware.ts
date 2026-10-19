@@ -102,14 +102,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Admin-only paths: /admin/*
-  if (pathname.startsWith("/admin")) {
-    if (session.managementRole !== "admin") {
-      // Redirect non-admins to dashboard
-      const dashboardUrl = new URL("/dashboard", request.url);
-      return NextResponse.redirect(dashboardUrl);
-    }
-  }
+  // iter-037 (arch 6.3, R9, změna zadání 19. 10.): kontrola role admin pro
+  // /admin/* je pryč. Práva stránek pod /admin (`members.manage`,
+  // `categories.manage`) má i Prezident a Viceprezident,
+  // proto každá stránka hlídá své právo sama (`requirePageSession({ permission })`,
+  // statický test 12f) a akce `requirePermission`.
 
   return response;
 }

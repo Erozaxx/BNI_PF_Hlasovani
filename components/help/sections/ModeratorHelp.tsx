@@ -13,7 +13,7 @@ export function ModeratorHelp() {
         faq={[
           {
             q: "Heslo ještě nemám.",
-            a: "Když vám admin dá roli, přijde vám mail „BNI Plzeň: nastav si heslo pro vedení“. Odkaz platí 24 hodin a jde použít jednou. Heslo musí mít aspoň 8 znaků.",
+            a: "Když vám admin dá funkci nebo roli, přijde vám mail „BNI Plzeň: nastav si heslo pro vedení“. Odkaz platí 24 hodin a jde použít jednou. Heslo musí mít aspoň 8 znaků.",
           },
           {
             q: "Jak změním heslo?",
@@ -288,7 +288,7 @@ export function ModeratorHelp() {
 
       <HelpSection
         title="Co dělá jen admin"
-        intro="Moderátor nespravuje členy a jejich role, nemění cizí hesla, nemaže hosty, schůzky ani akce a nepřejmenovává ani nemaže kategorie. O to požádejte admina. Sekci Admin s položkami Členové a Kategorie vidí v menu jen admin."
+        intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemění cizí hesla, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. To dělá admin, Prezident a Viceprezident. Sekci Admin s položkami Členové a Kategorie vidí v menu jen oni. Přidělování admina, funkcí a hesel a změny v účtu admina dělá jen admin."
       />
     </div>
   );

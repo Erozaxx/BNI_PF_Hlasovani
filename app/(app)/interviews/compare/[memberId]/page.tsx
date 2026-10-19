@@ -8,6 +8,7 @@ import {
   type PairedQuestionRow,
 } from "@/lib/db/queries/interviews";
 import { getMemberById, getMembers } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { sortMembersByName } from "@/lib/interviews/list-filters";
 import { buildInterviewCompareReportHtml } from "@/lib/email/interview-report";
 import { Card } from "@/components/ui/Card";
@@ -166,7 +167,7 @@ export default async function InterviewComparePage({
 }) {
   const { memberId } = await params;
 
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "interviews.manage" });
 
   const member = await getMemberById(memberId);
   if (!member) {
@@ -200,7 +201,7 @@ export default async function InterviewComparePage({
 
   // iter-032 T-001b 5.2: příjemci porovnání (D5) abecedně.
   const recipients = sortMembersByName(members)
-    .filter((m) => Boolean(m.email))
+    .filter((m) => Boolean(m.email) && isMemberActive(m, pragueToday()))
     .map((m) => ({ id: m.id, name: m.name }));
 
   return (

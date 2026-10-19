@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
 import path from "path";
 import fs from "fs";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
-import { getMembers } from "@/lib/db/queries/members";
+import { getActiveMembers } from "@/lib/db/queries/members";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meetingGuest, guest, category } from "@/lib/db/schema";
@@ -68,13 +68,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
 
   const { id } = await params;
 
@@ -83,7 +78,8 @@ export async function GET(
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
 
-  const members = await getMembers();
+  // iter-037 (T-003b, arch 5.3): výstup schůzky jen s aktivními členy.
+  const members = await getActiveMembers();
 
   const meetingGuests = await getDb()
     .select({

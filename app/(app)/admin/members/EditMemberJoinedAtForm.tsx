@@ -33,12 +33,12 @@ export function EditMemberJoinedAtForm({ memberId, initialJoinedAt }: Props) {
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", "Datum vstupu aktualizovano.");
+        showToast("success", "Datum vstupu aktualizováno.");
         setOpen(false);
         router.refresh();
       }
     } catch {
-      showToast("error", "Nepodarilo se aktualizovat datum vstupu.");
+      showToast("error", "Nepodařilo se aktualizovat datum vstupu.");
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export function EditMemberJoinedAtForm({ memberId, initialJoinedAt }: Props) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-primary underline hover:no-underline"
+        className="inline-flex min-h-[44px] items-center text-sm text-primary underline hover:no-underline"
       >
         Upravit
       </button>
@@ -66,19 +66,20 @@ export function EditMemberJoinedAtForm({ memberId, initialJoinedAt }: Props) {
         required
       />
       <div className="flex gap-2">
-        <Button type="submit" variant="primary" size="sm" loading={loading}>
-          Ulozit
+        <Button type="submit" variant="primary" size="sm" className="min-h-[44px]" loading={loading}>
+          Uložit
         </Button>
         <Button
           type="button"
           variant="secondary"
           size="sm"
+          className="min-h-[44px]"
           onClick={() => {
             setJoinedAt(initialJoinedAt);
             setOpen(false);
           }}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </form>

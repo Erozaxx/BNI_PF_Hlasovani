@@ -10,6 +10,8 @@ interface MemberLink {
   memberId: string;
   memberName: string;
   memberEmail: string;
+  /** iter-037: deaktivovaný člen, bez akcí Kopírovat, Poslat email a Regenerovat. */
+  isInactive: boolean;
   hasLink: boolean;
   isRevoked: boolean;
   isExpired: boolean;
@@ -241,6 +243,7 @@ export function MemberLinksManager({
                         {link.memberName}
                       </p>
                       {getLinkStatusBadge(link)}
+                      {link.isInactive && <Badge variant="neutral">Neaktivní</Badge>}
                     </div>
                     <p className="text-xs text-text-muted mt-0.5">
                       {link.memberEmail}
@@ -274,39 +277,43 @@ export function MemberLinksManager({
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 shrink-0">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleCopy(link.memberId, link.memberName)}
-                      loading={busy}
-                      title="Regenerovat token a zkopirovat magic link URL"
-                    >
-                      Kopirovat
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleSendEmail(link.memberId, link.memberName)}
-                      loading={busy}
-                      disabled={!link.hasLink || link.isRevoked}
-                      title={
-                        !link.hasLink
-                          ? "Clen nema link"
-                          : link.isRevoked
-                          ? "Link je revokovan"
-                          : "Odeslat magic link email"
-                      }
-                    >
-                      Poslat email
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleRegenerate(link.memberId)}
-                      loading={busy}
-                    >
-                      Regenerovat
-                    </Button>
+                    {!link.isInactive && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleCopy(link.memberId, link.memberName)}
+                          loading={busy}
+                          title="Regenerovat token a zkopirovat magic link URL"
+                        >
+                          Kopirovat
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleSendEmail(link.memberId, link.memberName)}
+                          loading={busy}
+                          disabled={!link.hasLink || link.isRevoked}
+                          title={
+                            !link.hasLink
+                              ? "Clen nema link"
+                              : link.isRevoked
+                              ? "Link je revokovan"
+                              : "Odeslat magic link email"
+                          }
+                        >
+                          Poslat email
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleRegenerate(link.memberId)}
+                          loading={busy}
+                        >
+                          Regenerovat
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="danger"
                       size="sm"

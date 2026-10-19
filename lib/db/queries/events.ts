@@ -8,6 +8,7 @@ import {
   eventVote,
   member,
 } from "@/lib/db/schema";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 
 function getDb() {
   return drizzleHttp(getSql());
@@ -139,6 +140,9 @@ export async function getEventParticipants(eventId: string) {
       createdAt: eventParticipant.createdAt,
       memberName: member.name,
       memberEmail: member.email,
+      // iter-037 (T-003b, K14): řádek účastníka vzniká dál všem, neaktivnímu se
+      // jen neposílá a nezobrazuje odkaz. Externí účastník je vždy aktivní.
+      memberActive: sql<boolean>`(${eventParticipant.memberId} IS NULL OR ${memberActiveSql("member")})`,
       voteCount: sql<number>`COALESCE(${voteCounts.voteCount}, 0)`,
     })
     .from(eventParticipant)
@@ -220,6 +224,9 @@ export async function getEventByParticipantToken(tokenHash: string) {
         magicTokenHash: eventParticipant.magicTokenHash,
         tokenCreatedAt: eventParticipant.tokenCreatedAt,
         createdAt: eventParticipant.createdAt,
+        // iter-037 (T-003b, arch 5.2): externí účastník je vždy aktivní, člen
+        // podle deaktivace. Rozhoduje volající (stránka vrací 404).
+        memberActive: sql<boolean>`(${eventParticipant.memberId} IS NULL OR ${memberActiveSql("member")})`,
       },
     })
     .from(eventParticipant)
@@ -280,4 +287,23 @@ export async function markEventDone(eventId: string): Promise<void> {
       tokensRevokedAt: now,
     })
     .where(eq(event.id, eventId));
+}
+
+/**
+ * iter-037 (T-003b, arch 5.2): smí účastník akce teď hlasovat a přidávat
+ * možnosti? Externí účastník ano, člen jen když je aktivní. Neexistující
+ * účastník vrací `false`. Volá ho `castVoteAction` a
+ * `addOptionByParticipantAction`, aby už otevřená stránka `/e/...`
+ * deaktivovaného člena nic nezapsala (stránka samotná vrací 404).
+ */
+export async function isEventParticipantAllowed(participantId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({
+      allowed: sql<boolean>`(${eventParticipant.memberId} IS NULL OR ${memberActiveSql("member")})`,
+    })
+    .from(eventParticipant)
+    .leftJoin(member, eq(eventParticipant.memberId, member.id))
+    .where(eq(eventParticipant.id, participantId))
+    .limit(1);
+  return rows[0]?.allowed === true;
 }

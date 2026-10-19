@@ -29,12 +29,12 @@ export function EditMemberCompanyForm({ memberId, initialCompany, initialObor }:
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", "Firma/obor aktualizovany.");
+        showToast("success", "Firma a obor aktualizovány.");
         setOpen(false);
         router.refresh();
       }
     } catch {
-      showToast("error", "Nepodarilo se aktualizovat firmu/obor.");
+      showToast("error", "Nepodařilo se aktualizovat firmu a obor.");
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export function EditMemberCompanyForm({ memberId, initialCompany, initialObor }:
     return (
       <button
         onClick={() => setOpen(true)}
-        className="text-xs text-primary underline hover:no-underline"
+        className="inline-flex min-h-[44px] items-center text-sm text-primary underline hover:no-underline"
       >
         Upravit
       </button>
@@ -58,30 +58,31 @@ export function EditMemberCompanyForm({ memberId, initialCompany, initialObor }:
         name="company"
         value={company}
         onChange={(e) => setCompany(e.target.value)}
-        placeholder="Nazev firmy"
+        placeholder="Název firmy"
       />
       <Input
         label="Obor"
         name="obor"
         value={obor}
         onChange={(e) => setObor(e.target.value)}
-        placeholder="Obor cinnosti"
+        placeholder="Obor činnosti"
       />
       <div className="flex gap-2">
-        <Button type="submit" variant="primary" size="sm" loading={loading}>
-          Ulozit
+        <Button type="submit" variant="primary" size="sm" className="min-h-[44px]" loading={loading}>
+          Uložit
         </Button>
         <Button
           type="button"
           variant="secondary"
           size="sm"
+          className="min-h-[44px]"
           onClick={() => {
             setCompany(initialCompany ?? "");
             setObor(initialObor ?? "");
             setOpen(false);
           }}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </form>

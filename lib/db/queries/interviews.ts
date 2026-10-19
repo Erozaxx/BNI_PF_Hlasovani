@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/neon-http";
 import { addMonths, differenceInCalendarDays, isAfter, parseISO } from "date-fns";
 import { getSql } from "@/lib/db/client";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 import {
   interview,
   interviewQuestion,
@@ -632,6 +633,8 @@ export type InterviewDueEntry = {
   due10SinceDays: number | null;
   upcoming5: boolean;
   upcoming10: boolean;
+  /** iter-037 (K15): neaktivní člen zůstává v přehledu se štítkem „Neaktivní“. */
+  isInactive: boolean;
 };
 
 /**
@@ -657,6 +660,8 @@ export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
       memberEmail: member.email,
       joinedAt: member.joinedAt,
       joinedAtUnverified: sql<boolean>`(${member.joinedAt} = ${member.createdAt}::date)`,
+      // iter-037 (K15): bez data, jen příznak (členové PK, group by id stačí).
+      isInactive: sql<boolean>`NOT ${memberActiveSql("member")}`,
       // COALESCE(..., false) is required: bool_or() over a LEFT JOIN with zero
       // matching interview rows aggregates a single NULL and returns NULL, not
       // false — without this a member with no interviews at all would get
@@ -704,6 +709,7 @@ export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
       due10SinceDays: due10 ? differenceInCalendarDays(today, due10Date) : null,
       upcoming5,
       upcoming10,
+      isInactive: row.isInactive,
     };
   });
 }

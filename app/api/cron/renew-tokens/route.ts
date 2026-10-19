@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMembers } from "@/lib/db/queries/members";
+import { getActiveMembers } from "@/lib/db/queries/members";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
 
@@ -30,7 +30,8 @@ async function handler(request: NextRequest) {
   }
 
   try {
-    const members = await getMembers();
+    // iter-037 (T-003b, arch 5.3): jen aktivní členové.
+    const members = await getActiveMembers();
     const now = new Date();
     const oneDayFromNow = new Date(now.getTime() + 24 * 3600 * 1000);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

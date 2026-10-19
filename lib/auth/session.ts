@@ -3,6 +3,7 @@ import { getIronSession, type SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
 import { getMemberAuthState } from "@/lib/db/queries/members";
 import { checkSession, type AuthMethod } from "@/lib/auth/session-check";
+import { permissionsFor, type Permission } from "@/lib/auth/permissions";
 import { EMAIL_LINK_SESSION_HOURS } from "@/lib/auth/login-link-core";
 
 /**
@@ -18,10 +19,20 @@ export interface SessionData {
   authMethod: AuthMethod;
   name: string;
   sv?: number;
+  /**
+   * iter-037 (arch 6.3): vypočtená pole, `getSession()` je doplní z DB při
+   * každém požadavku. `createSession` je do cookie NEUKLÁDÁ (test 9e), práva
+   * se tak po změně funkcí projeví hned, bez nového přihlášení.
+   */
+  permissions: Permission[];
+  functionNames: string[];
 }
 
-/** Vstup `createSession`: verze jde zvlášť jako povinný parametr (F13). */
-export type NewSession = Omit<SessionData, "sv">;
+/**
+ * Vstup `createSession`: verze jde zvlášť jako povinný parametr (F13).
+ * Vypočtená pole (`permissions`, `functionNames`) do cookie nepatří.
+ */
+export type NewSession = Omit<SessionData, "sv" | "permissions" | "functionNames">;
 
 /** Cookie name for the session. */
 const COOKIE_NAME = "bni_session";
@@ -62,7 +73,14 @@ export async function getRawSession() {
 }
 
 function emptySession(): SessionData {
-  return { memberId: "", managementRole: null, authMethod: "magic_link", name: "" };
+  return {
+    memberId: "",
+    managementRole: null,
+    authMethod: "magic_link",
+    name: "",
+    permissions: [],
+    functionNames: [],
+  };
 }
 
 /**
@@ -85,12 +103,22 @@ export const getSession = cache(async (): Promise<SessionData> => {
     authMethod: raw.authMethod,
     name: raw.name,
     sv: raw.sv,
+    permissions: [],
+    functionNames: [],
   };
 
   try {
     const row = await getMemberAuthState(snapshot.memberId);
     const result = checkSession(snapshot, row);
-    if (!result.valid) return emptySession();
+    if (!result.valid || !row) return emptySession();
+    snapshot.permissions = [
+      ...permissionsFor({
+        authMethod: snapshot.authMethod,
+        managementRole: snapshot.managementRole,
+        functions: row.functions,
+      }),
+    ];
+    snapshot.functionNames = row.functions.map((f) => f.name);
   } catch (err) {
     const cls = err instanceof Error ? err.name : typeof err;
     console.error(`[session] auth state check failed memberId=${snapshot.memberId}: ${cls}`);

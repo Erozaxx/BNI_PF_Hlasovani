@@ -17,9 +17,10 @@ import {
 function member(
   id: string,
   name: string,
-  email: string | null = `${id}@x.cz`
+  email: string | null = `${id}@x.cz`,
+  active = true
 ): PlanMember {
-  return { memberId: id, memberName: name, memberEmail: email };
+  return { memberId: id, memberName: name, memberEmail: email, active };
 }
 
 function link(
@@ -167,6 +168,7 @@ const cases: TestCase[] = [
         willSend: 0,
         skippedNoEmail: 0,
         skippedRevoked: 0,
+        skippedInactive: 0,
         skippedAlreadySent: 0,
       });
     },

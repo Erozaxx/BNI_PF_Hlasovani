@@ -6,7 +6,7 @@ import { CreateTimerForm } from "./CreateTimerForm";
 import { TimerCard } from "./TimerCard";
 
 export default async function AdminTimersPage() {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "timers.manage" });
   const timers = await listTimers();
 
   return (

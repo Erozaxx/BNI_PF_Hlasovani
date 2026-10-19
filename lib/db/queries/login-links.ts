@@ -136,6 +136,26 @@ export async function rotateSetPasswordLink(input: {
   return rows.length > 0;
 }
 
+/**
+ * Člen čeká na odkaz „nastav si heslo“: existuje nepoužitý `set-password`
+ * (i prošlý). Jeho hash v `member.password_hash` je zámkový, ne heslo
+ * (review MIN-1, `hasRealPassword`).
+ */
+export async function hasPendingSetPasswordLink(memberId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: memberLoginLink.id })
+    .from(memberLoginLink)
+    .where(
+      and(
+        eq(memberLoginLink.memberId, memberId),
+        eq(memberLoginLink.purpose, "set-password"),
+        isNull(memberLoginLink.usedAt)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
 /** Úklid ve fázi 6 cronu (6.6): odkazy prošlé víc než 1 den. */
 export async function cleanupStaleLoginLinks(): Promise<void> {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

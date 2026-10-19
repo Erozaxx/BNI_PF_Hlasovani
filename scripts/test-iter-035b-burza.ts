@@ -244,12 +244,12 @@ const cases: TestCase[] = [
       assert.ok(!uses.includes("created_by"));
       assert.ok(!/\bgetMemberContactCounts\b/.test(src), "Z8: seznam Kontakty za člena se nedělá");
 
-      // removeContactUseGuarded volá jen akce s requireManagementRole
+      // removeContactUseGuarded volá jen akce s requirePermission
       const actions = readSrc("actions/burza.ts");
       const calls = actions.match(/removeContactUseGuarded\(/g) ?? [];
       assert.equal(calls.length, 1);
       const fn = actions.slice(actions.indexOf("export async function removeContactUseAction"));
-      assert.ok(fn.indexOf("requireManagementRole") > 0 && fn.indexOf("requireManagementRole") < fn.indexOf("removeContactUseGuarded("));
+      assert.ok(fn.indexOf("requirePermission") > 0 && fn.indexOf("requirePermission") < fn.indexOf("removeContactUseGuarded("));
     },
   },
   {

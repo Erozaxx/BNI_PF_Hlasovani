@@ -53,6 +53,12 @@ export type OpsEventKind =
   | "access.password-link-copied"
   // T-006r (review F-02): „Poslat znovu" jen vymění token nepoužitého odkazu.
   | "access.password-link-resent"
+  // iter-037 (T-003b, arch 10, gate Z1): deaktivace a návrat člena, zneplatnění
+  // osobního odkazu, změna funkce člena. Bez data deaktivace a bez důvodu.
+  | "access.member-deactivated"
+  | "access.member-reactivated"
+  | "access.magic-link-revoked"
+  | "access.functions-changed"
   // iter-033 (T-005, arch 10.1): zásobník „5 minut pro ostatní“. Jednorázové
   // události s vlastním runId, proto všechny v TERMINAL_KINDS. Nikdy nenesou
   // téma, text případu ani e-mailovou adresu.
@@ -88,6 +94,10 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "access.password-set",
   "access.password-link-copied",
   "access.password-link-resent",
+  "access.member-deactivated",
+  "access.member-reactivated",
+  "access.magic-link-revoked",
+  "access.functions-changed",
   "mastermind.scheduled",
   "mastermind.unscheduled",
   "mastermind.presented",

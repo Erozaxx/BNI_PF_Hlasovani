@@ -5,6 +5,7 @@ import { getSql } from "@/lib/db/client";
 import { eq, and } from "drizzle-orm";
 import { event, eventOption, eventParticipant } from "@/lib/db/schema";
 import { revalidatePath } from "next/cache";
+import { isEventParticipantAllowed } from "@/lib/db/queries/events";
 import type { ActionResult } from "@/lib/types";
 
 function getDb() {
@@ -52,6 +53,11 @@ export async function addOptionByParticipantAction(
     const participant = participants[0];
     if (!participant) {
       return { success: false, error: "Ucastnik nebyl nalezen." };
+    }
+
+    // iter-037 (T-003b): deaktivovaný člen možnosti nepřidává.
+    if (!(await isEventParticipantAllowed(participantId))) {
+      return { success: false, error: "Člen je neaktivní." };
     }
 
     // Verify event state and permissions

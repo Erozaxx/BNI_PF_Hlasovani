@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { compare, hash } from "bcryptjs";
 import { getMemberByEmail, getMemberById, setOwnPassword } from "@/lib/db/queries/members";
-import { createSession, destroySession, getSession } from "@/lib/auth/session";
+import { createSession, destroySession } from "@/lib/auth/session";
+import { requirePasswordSession } from "@/lib/auth/guards";
+import { hasPasswordAccess } from "@/lib/auth/permissions";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { getClientIp, throttleClear, throttleHit } from "@/lib/auth/throttle";
 import {
   THROTTLE_BLOCKED_TEXT,
@@ -26,6 +29,9 @@ const DUMMY_PASSWORD_HASH =
 
 const INVALID_CREDENTIALS = "Neplatné přihlašovací údaje.";
 
+/** Gate K18: o deaktivaci se člen dozví až po správném hesle. */
+const ACCESS_PAUSED_TEXT = "Přístup máš teď pozastavený. Když je to omyl, ozvi se adminovi.";
+
 /**
  * Login action for admin/moderator via email + password.
  *
@@ -35,7 +41,10 @@ const INVALID_CREDENTIALS = "Neplatné přihlašovací údaje.";
  *   e-mail 50, IP 20 za 10 minut; počítá se i neexistující e-mail,
  * - dummy bcrypt u neexistujícího e-mailu a člena bez role,
  * - session nese `session_version` z řádku člena,
- * - po úspěchu se smaže jen klíč dvojice.
+ * - po úspěchu se smaže jen klíč dvojice,
+ * - iter-037 (T-003b): heslo má držitel role NEBO funkce (funkce bez role stačí),
+ *   neaktivní člen se nepřihlásí ani se správným heslem (K18: hláška až po
+ *   ověření hesla, bez hesla se o deaktivaci nic nedozví, session nevznikne).
  */
 export async function loginAction(
   email: string,
@@ -69,14 +78,18 @@ export async function loginAction(
     return { success: false, error: "Přihlášení se nepovedlo, zkus to znovu." };
   }
 
+  const hasAccess =
+    !!member &&
+    hasPasswordAccess({
+      managementRole: member.managementRole,
+      hasFunction: member.hasFunction,
+    });
   const usableHash =
-    member && member.managementRole && member.passwordHash
-      ? member.passwordHash
-      : DUMMY_PASSWORD_HASH;
+    member && hasAccess && member.passwordHash ? member.passwordHash : DUMMY_PASSWORD_HASH;
   const passwordValid = await compare(password, usableHash);
 
   // Generic error — no user enumeration
-  if (!member || !member.managementRole || !member.passwordHash || !passwordValid) {
+  if (!member || !hasAccess || !member.passwordHash || !passwordValid) {
     return { success: false, error: INVALID_CREDENTIALS };
   }
 
@@ -90,10 +103,15 @@ export async function loginAction(
     }
   }
 
+  // Správné heslo, ale člen je deaktivovaný: session nevznikne.
+  if (!isMemberActive(member, pragueToday())) {
+    return { success: false, error: ACCESS_PAUSED_TEXT };
+  }
+
   await createSession(
     {
       memberId: member.id,
-      managementRole: member.managementRole as "admin" | "moderator",
+      managementRole: (member.managementRole as "admin" | "moderator" | null) ?? null,
       authMethod: "password",
       name: member.name,
     },
@@ -130,10 +148,11 @@ export async function changePasswordAction(
     return { success: false, error: "Nova hesla se neshoduji." };
   }
 
-  const session = await getSession();
-  if (!session.memberId || !session.managementRole) {
-    return { success: false, error: "Nemate opravneni pro tuto akci." };
+  const auth = await requirePasswordSession();
+  if (!auth.success) {
+    return { success: false, error: auth.error };
   }
+  const { session } = auth;
 
   try {
     const member = await getMemberById(session.memberId);
@@ -165,7 +184,7 @@ export async function changePasswordAction(
     await createSession(
       {
         memberId: session.memberId,
-        managementRole: updated.managementRole as "admin" | "moderator",
+        managementRole: (updated.managementRole as "admin" | "moderator" | null) ?? null,
         authMethod: "password",
         name: updated.name,
       },

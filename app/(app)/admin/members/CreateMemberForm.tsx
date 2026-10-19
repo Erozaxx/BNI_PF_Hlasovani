@@ -20,7 +20,7 @@ export function CreateMemberForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      setError("Jmeno je povinne.");
+      setError("Jméno je povinné.");
       return;
     }
 
@@ -42,12 +42,12 @@ export function CreateMemberForm() {
         setEmail("");
         setCompany("");
         setObor("");
-        showToast("success", "Clen byl pridan.");
+        showToast("success", "Člen byl přidán.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se vytvorit clena.");
-      showToast("error", "Nepodarilo se vytvorit clena.");
+      setError("Nepodařilo se vytvořit člena.");
+      showToast("error", "Nepodařilo se vytvořit člena.");
     } finally {
       setLoading(false);
     }
@@ -61,14 +61,14 @@ export function CreateMemberForm() {
         </div>
       )}
       <Input
-        label="Jmeno *"
+        label="Jméno *"
         name="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Jmeno clena"
+        placeholder="Jméno člena"
       />
       <Input
-        label="Email (pro report)"
+        label="E-mail (pro report)"
         name="email"
         type="email"
         value={email}
@@ -80,19 +80,19 @@ export function CreateMemberForm() {
         name="company"
         value={company}
         onChange={(e) => setCompany(e.target.value)}
-        placeholder="Nazev firmy"
+        placeholder="Název firmy"
       />
       <Input
         label="Obor"
         name="obor"
         value={obor}
         onChange={(e) => setObor(e.target.value)}
-        placeholder="Obor cinnosti"
+        placeholder="Obor činnosti"
       />
       <p className="text-xs text-text-muted">
-        Nový člen vzniká bez role. Roli moderátora nebo admina mu dáš v seznamu členů níž.
+        Nový člen vzniká bez funkce. Funkci nebo admina mu dáš na jeho stránce.
       </p>
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
+      <Button type="submit" variant="primary" size="sm" className="min-h-[44px]" loading={loading}>
         Přidat člena
       </Button>
     </form>

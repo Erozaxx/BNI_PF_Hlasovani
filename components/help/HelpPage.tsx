@@ -4,31 +4,36 @@ import { ModeratorHelp } from "@/components/help/sections/ModeratorHelp";
 import { AdminHelp } from "@/components/help/sections/AdminHelp";
 
 interface HelpPageProps {
-  managementRole: "admin" | "moderator" | null;
+  /** Záložka pro vedení (člen s rolí a heslem). iter-037: počítá stránka. */
+  showLeadershipHelp: boolean;
+  /** Záložka pro správu členů (právo `members.manage`: admin, Prezident, Viceprezident). */
+  showAdminHelp: boolean;
+  /** Čtenář smí přidělovat admina, funkce a hesla (`access.manage`, jen admin). */
+  canManageAccess?: boolean;
 }
 
-export function HelpPage({ managementRole }: HelpPageProps) {
+export function HelpPage({ showLeadershipHelp, showAdminHelp, canManageAccess = false }: HelpPageProps) {
   const tabs = [
     {
       id: "member",
       label: "Pro člena",
       content: <MemberHelp />,
     },
-    ...(managementRole === "moderator" || managementRole === "admin"
+    ...(showLeadershipHelp
       ? [
           {
             id: "moderator",
-            label: "Pro moderátora",
+            label: "Pro vedení",
             content: <ModeratorHelp />,
           },
         ]
       : []),
-    ...(managementRole === "admin"
+    ...(showAdminHelp
       ? [
           {
             id: "admin",
             label: "Pro admina",
-            content: <AdminHelp />,
+            content: <AdminHelp canManageAccess={canManageAccess} />,
           },
         ]
       : []),

@@ -31,6 +31,8 @@ export interface DueTableEntry {
   due10SinceDays: number | null;
   upcoming5: boolean;
   upcoming10: boolean;
+  /** iter-037 (K15): štítek „Neaktivní“, pohovor jde dál založit. */
+  isInactive: boolean;
 }
 
 type ChipType = "5" | "10";
@@ -163,6 +165,11 @@ export function InterviewDueTable({
                     <tr className="border-b border-border">
                       <td className="px-3 sm:px-4 py-3">
                         <span className="font-medium text-text-main">{entry.memberName}</span>
+                        {entry.isInactive && (
+                          <Badge variant="neutral" className="ml-2">
+                            Neaktivní
+                          </Badge>
+                        )}
                         {entry.joinedAtUnverified && (
                           <Badge variant="warning" className="ml-2">
                             Neověřené datum vstupu

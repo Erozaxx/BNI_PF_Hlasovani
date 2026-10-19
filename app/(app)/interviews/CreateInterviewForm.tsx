@@ -17,6 +17,8 @@ interface MemberOption {
   id: string;
   name: string;
   email: string | null;
+  /** iter-037 (K13, K15): neaktivní člen smí být zpovídaný, ale ne vedoucí. */
+  isInactive?: boolean;
 }
 
 interface CreateInterviewFormProps {
@@ -56,8 +58,11 @@ export function CreateInterviewForm({
     if (initialType) setType(initialType);
   }, [initialMemberId, initialType]);
 
-  const memberOptions = members.map((m) => ({ value: m.id, label: m.name }));
-  const leaderOptions = members.map((m) => ({
+  const memberOptions = members.map((m) => ({
+    value: m.id,
+    label: m.isInactive ? `${m.name} (neaktivní)` : m.name,
+  }));
+  const leaderOptions = members.filter((m) => !m.isInactive).map((m) => ({
     value: m.id,
     label: m.email ? m.name : `${m.name} (bez emailu)`,
   }));
@@ -87,7 +92,7 @@ export function CreateInterviewForm({
     };
   });
 
-  const selectedLeader = members.find((m) => m.id === leaderId);
+  const selectedLeader = members.find((m) => m.id === leaderId && !m.isInactive);
 
   function handleMemberChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newMemberId = e.target.value;

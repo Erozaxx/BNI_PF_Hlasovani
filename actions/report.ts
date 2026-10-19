@@ -1,6 +1,6 @@
 "use server";
 
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import { sendReport } from "@/lib/email/resend";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
@@ -12,7 +12,7 @@ import type { ActionResult } from "@/lib/types";
 export async function triggerReportAction(
   meetingId: string
 ): Promise<ActionResult<{ sent: number; emails: string[] }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("meetings.manage");
   if (!auth.success) return auth;
 
   if (!meetingId) {

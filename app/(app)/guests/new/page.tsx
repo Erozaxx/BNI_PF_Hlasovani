@@ -4,7 +4,7 @@ import { getActiveMeeting } from "@/lib/db/queries/meetings";
 import { GuestForm } from "@/components/guests/GuestForm";
 
 export default async function NewGuestPage() {
-  const session = await requirePageSession({ role: "management", denyTo: "/guests" });
+  const session = await requirePageSession({ permission: "guests.manage", denyTo: "/guests" });
 
   const [categories, activeMeeting] = await Promise.all([
     getCategories(),

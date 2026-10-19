@@ -7,7 +7,9 @@ import {
   updateMeetingStatus,
 } from "@/lib/db/queries/meetings";
 import { sendReport, sendMagicLinkEmail, sendVotingWarningEmail } from "@/lib/email/resend";
-import { getMembers } from "@/lib/db/queries/members";
+import { getActiveMembers, getMembers } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { cleanupExpiredDeactivations } from "@/lib/db/queries/member-status";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { generateMagicToken } from "@/lib/auth/magic";
 import { todayInPrague, weekdayInPrague } from "@/lib/meetings/voting-window";
@@ -99,11 +101,15 @@ async function runMorningDispatch(
           getMembers(),
           getMeetingLinkRows(target.meetingId),
         ]);
+        // iter-037 (T-003b, arch 5.3): stejný příznak `active` jako v dispatchi,
+        // neaktivní má `skip "inactive"` a do `willSend` se nepočítá.
+        const todayForPlan = pragueToday(now);
         willSendPlan = planVotingDispatch({
           members: members.map((m) => ({
             memberId: m.id,
             memberName: m.name,
             memberEmail: m.email ?? null,
+            active: isMemberActive(m, todayForPlan),
           })),
           links: links.map((l) => ({
             memberId: l.memberId,
@@ -604,6 +610,9 @@ async function handler(request: NextRequest) {
     try {
       await cleanupStaleThrottleRows();
       await cleanupStaleLoginLinks();
+      // iter-037 (arch 4.3): prošlé deaktivace se vyčistí (minimalizace dat).
+      // Správnost na tom nestojí, aktivita se vyhodnocuje při čtení.
+      await cleanupExpiredDeactivations();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error("close-voting cron: throttle/login-link cleanup failed:", msg);
@@ -761,7 +770,9 @@ async function renewExpiringTokens(): Promise<{
   errors?: string[];
 }> {
   try {
-    const members = await getMembers();
+    // iter-037 (T-003b, arch 5.3): týdenní obnova 7denního odkazu jen aktivním
+    // členům. Obnova jako taková se nemění.
+    const members = await getActiveMembers();
     const now = new Date();
     const oneDayFromNow = new Date(now.getTime() + 24 * 3600 * 1000);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

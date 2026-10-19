@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { getMeetingWithGuests } from "@/lib/db/queries/meetings";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getVotingResults } from "@/lib/db/queries/votes";
-import { getMembers } from "@/lib/db/queries/members";
+import { getActiveMembers } from "@/lib/db/queries/members";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -34,10 +35,8 @@ export default async function MeetingDetailPage({
   }
 
   const session = await requirePageSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  const isAdmin = session.managementRole === "admin";
+  const isManagement = can(session, "meetings.manage");
+  const canDeleteMeeting = can(session, "meetings.delete");
 
   // Get all guests for the "add guest" dropdown
   const allGuests = isManagement && meeting.status === "draft"
@@ -82,7 +81,8 @@ export default async function MeetingDetailPage({
   let initialLinkEmailSentCount = 0;
   if (isManagement) {
     const [allMembers, linkRows] = await Promise.all([
-      getMembers(),
+      // iter-037 (T-003b, arch 5.3): "X z Y" počítá jen aktivní členy.
+      getActiveMembers(),
       getMeetingLinkRows(id),
     ]);
     membersWithEmailCount = allMembers.filter((m) => !!m.email).length;
@@ -151,7 +151,7 @@ export default async function MeetingDetailPage({
           {isManagement && (
             <ExportListButton meetingId={id} />
           )}
-          {isAdmin && (
+          {canDeleteMeeting && (
             <DeleteMeetingButton meetingId={id} meetingDate={meeting.date} />
           )}
         </div>

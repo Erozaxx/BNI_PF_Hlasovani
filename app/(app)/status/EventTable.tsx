@@ -55,6 +55,11 @@ export const KIND_LABELS: Record<string, string> = {
   "access.password-set": "Heslo nastaveno",
   "access.password-link-copied": "Odkaz ke zkopirovani",
   "access.password-link-resent": "Odkaz poslan znovu",
+  // iter-037 (gate sekce 5)
+  "access.member-deactivated": "Deaktivace člena",
+  "access.member-reactivated": "Návrat člena",
+  "access.magic-link-revoked": "Zneplatnění odkazu",
+  "access.functions-changed": "Změna funkcí",
   // iter-033 (arch 10.1): zásobník Master mind
   "mastermind.scheduled": "Master mind: zařazeno",
   "mastermind.unscheduled": "Master mind: vráceno do zásobníku",

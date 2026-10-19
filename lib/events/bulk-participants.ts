@@ -22,7 +22,10 @@ export async function bulkCreateParticipantsFromMembers(
 ): Promise<void> {
   const db = getDb();
 
-  // Fetch all members (no is_active column in schema — include all)
+  // Fetch all members, včetně deaktivovaných (iter-037, K14): řádek účastníka
+  // vzniká všem, aby návrat člena uprostřed akce fungoval bez dalšího kódu.
+  // Neaktivnímu se pozvánka neposílá (activateEventAction, resend) a odkaz
+  // `/e/...` neplatí (getEventByParticipantToken, castVoteAction).
   const members = await db.select().from(member);
 
   if (members.length === 0) return;

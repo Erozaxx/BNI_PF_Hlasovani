@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMeetings } from "@/lib/db/queries/meetings";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,9 +12,7 @@ import { statusLabel } from "@/lib/meetings/statusLabel";
 export default async function MeetingsPage() {
   const session = await requirePageSession();
   const meetings = await getMeetings();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
+  const isManagement = can(session, "meetings.manage");
 
   const statusBadge = (status: string) => {
     const label = statusLabel[status] ?? status;

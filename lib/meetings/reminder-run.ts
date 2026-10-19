@@ -17,7 +17,7 @@ import {
   claimReminder,
   markReminderSent,
 } from "@/lib/db/queries/meeting-member-reminders";
-import { getMembers } from "@/lib/db/queries/members";
+import { getActiveMembers } from "@/lib/db/queries/members";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { hashMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
 import {
@@ -86,7 +86,8 @@ export async function runReminders(
   // zachytí vlastním try/catch fáze 8.
   const [votableGuestCount, members, links, votedMemberIds, claimed] = await Promise.all([
     getVotableGuestCount(meeting.id),
-    getMembers(),
+    // iter-037 (T-003b, arch 5.3): připomínky jen aktivním členům.
+    getActiveMembers(),
     getMeetingLinkRows(meeting.id),
     getVotedMemberIds(meeting.id),
     getClaimedRounds(meeting.id),

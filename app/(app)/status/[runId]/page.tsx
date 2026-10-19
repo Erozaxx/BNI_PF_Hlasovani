@@ -56,7 +56,7 @@ export default async function RunDetailPage({
 }: {
   params: Promise<{ runId: string }>;
 }) {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "ops.view" });
 
   const { runId } = await params;
 

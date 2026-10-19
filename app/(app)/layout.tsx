@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can, hasPasswordSession } from "@/lib/auth/permissions";
+import { sessionHeaderLabel } from "@/lib/members/labels";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -15,10 +17,21 @@ export default async function AppLayout({
   // iter-032 (7.3): plné načtení bez ověřené session -> /login. Rozhodující
   // je volání ve stránce, layout se při měkké navigaci nevykresluje.
   const session = await requirePageSession();
-  const isAdmin = session.managementRole === "admin";
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
+  // iter-037 (arch 6.3): menu podle práv. Dnešní moderátor vidí totéž co
+  // před iter-037 (Akce, Časovače, Pohovory, Provoz, Nastavení), Členové a
+  // Kategorie jen admin (`members.manage`, `categories.manage`).
+  const show = {
+    events: can(session, "events.manage"),
+    timers: can(session, "timers.manage"),
+    interviews: can(session, "interviews.manage"),
+    status: can(session, "ops.view"),
+    members: can(session, "members.manage"),
+    categories: can(session, "categories.manage"),
+    settings: hasPasswordSession(session),
+  };
+
+  // iter-037 (T-003c): v záhlaví funkce a role, ne jen technická role.
+  const headerLabel = sessionHeaderLabel(session);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -36,26 +49,26 @@ export default async function AppLayout({
           <NavLink href="/meetings">Schůzky</NavLink>
           <NavLink href="/mastermind">Master mind</NavLink>
           <NavLink href="/burza">Burza pomoci</NavLink>
-          {isManagement && <NavLink href="/events">Akce</NavLink>}
-          {isManagement && <NavLink href="/timers">Časovače</NavLink>}
-          {isManagement && <NavLink href="/interviews">Pohovory</NavLink>}
-          {isManagement && <NavLink href="/status">Provoz</NavLink>}
+          {show.events && <NavLink href="/events">Akce</NavLink>}
+          {show.timers && <NavLink href="/timers">Časovače</NavLink>}
+          {show.interviews && <NavLink href="/interviews">Pohovory</NavLink>}
+          {show.status && <NavLink href="/status">Provoz</NavLink>}
           <NavLink href="/archive">Archiv</NavLink>
           <NavLink href="/help">Nápověda</NavLink>
 
-          {isAdmin && (
+          {(show.members || show.categories) && (
             <>
               <div className="pt-4 pb-2">
                 <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                   Admin
                 </span>
               </div>
-              <NavLink href="/admin/members">Členové</NavLink>
-              <NavLink href="/admin/categories">Kategorie</NavLink>
+              {show.members && <NavLink href="/admin/members">Členové</NavLink>}
+              {show.categories && <NavLink href="/admin/categories">Kategorie</NavLink>}
             </>
           )}
 
-          {isManagement && (
+          {show.settings && (
             <>
               <div className="pt-4 pb-2">
                 <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -70,9 +83,9 @@ export default async function AppLayout({
         <div className="p-4 border-t border-border">
           <div className="text-sm text-text-muted mb-2">
             {session.name || "Uživatel"}
-            {session.managementRole && (
+            {headerLabel && (
               <span className="ml-1 text-xs text-primary">
-                ({session.managementRole})
+                ({headerLabel})
               </span>
             )}
           </div>
@@ -91,8 +104,7 @@ export default async function AppLayout({
             BNI Hlasování
           </Link>
           <MobileNav
-            isAdmin={isAdmin}
-            isManagement={isManagement}
+            show={show}
             name={session.name || "Uživatel"}
           />
         </header>

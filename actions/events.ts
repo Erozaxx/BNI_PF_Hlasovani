@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole, requireAdmin } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { eq, and } from "drizzle-orm";
@@ -11,7 +11,12 @@ import {
   eventParticipant,
   member,
 } from "@/lib/db/schema";
-import { getEventById, markEventDone, getEventParticipants } from "@/lib/db/queries/events";
+import {
+  getEventById,
+  markEventDone,
+  getEventParticipants,
+  isEventParticipantAllowed,
+} from "@/lib/db/queries/events";
 import { getParticipantById } from "@/lib/db/queries/participants";
 import { bulkCreateParticipantsFromMembers } from "@/lib/events/bulk-participants";
 import {
@@ -47,7 +52,7 @@ export async function createEventAction(
   },
   description?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   if (!title || !title.trim()) {
@@ -104,7 +109,7 @@ export async function updateEventAction(
   title: string,
   description?: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   if (!title || !title.trim()) {
@@ -145,7 +150,7 @@ export async function updateEventAction(
  * Allowed only in draft, closed, or done status (not active).
  */
 export async function deleteEventAction(id: string): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("events.delete");
   if (!auth.success) return auth;
 
   try {
@@ -177,9 +182,15 @@ export async function deleteEventAction(id: string): Promise<ActionResult> {
  * Activate an event (draft → active). Requires admin or moderator.
  * After flipping status, sends magic link emails to all participants with an email address.
  * Uses decrypt(encryptedToken) to preserve the original link; falls back to new token on failure.
+ *
+ * iter-037 (T-003b, K14): neaktivnímu členovi se pozvánka neposílá (řádek
+ * účastníka zůstává, po návratu jde odkaz poslat). Počet přeskočených jde
+ * volajícímu do toastu („Přeskočeno, neaktivní: n“).
  */
-export async function activateEventAction(id: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+export async function activateEventAction(
+  id: string
+): Promise<ActionResult<{ skippedInactive: number }>> {
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -206,12 +217,14 @@ export async function activateEventAction(id: string): Promise<ActionResult> {
 
     let sent = 0;
     let skipped = 0;
+    let skippedInactive = 0;
     const errors: string[] = [];
 
     for (const p of participants) {
       const email = p.memberEmail ?? p.externalEmail ?? null;
       const name  = p.memberName  ?? p.externalName  ?? "Ucastnik";
 
+      if (!p.memberActive) { skippedInactive++; continue; }
       if (!email) { skipped++; continue; }
 
       if (!p.encryptedToken) {
@@ -256,7 +269,7 @@ export async function activateEventAction(id: string): Promise<ActionResult> {
 
     revalidatePath("/events");
     revalidatePath(`/events/${id}`);
-    return { success: true };
+    return { success: true, data: { skippedInactive } };
   } catch (error) {
     console.error("activateEventAction error:", error);
     return { success: false, error: "Nepodarilo se aktivovat akci." };
@@ -267,7 +280,7 @@ export async function activateEventAction(id: string): Promise<ActionResult> {
  * Close an event (active → closed). Requires admin or moderator.
  */
 export async function closeEventAction(id: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -303,7 +316,7 @@ export async function setSelectedOptionAction(
   id: string,
   optionId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -373,7 +386,7 @@ function parseCzechDateLabel(label: string, optionType: string): Date | null {
  * Requires admin or moderator role.
  */
 export async function markEventDoneAction(eventId: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -403,7 +416,7 @@ export async function addOptionAction(
   eventId: string,
   label: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   if (!label || !label.trim()) {
@@ -450,7 +463,7 @@ export async function removeOptionAction(
   eventId: string,
   optionId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -491,7 +504,7 @@ export async function addParticipantAction(
   name: string,
   email?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
@@ -565,7 +578,7 @@ export async function removeParticipantAction(
   eventId: string,
   participantId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -604,13 +617,17 @@ export async function removeParticipantAction(
 export async function resendMagicLinkAction(
   participantId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
     const participant = await getParticipantById(participantId);
     if (!participant) {
       return { success: false, error: "Ucastnik nebyl nalezen." };
+    }
+    // iter-037 (T-003b): neaktivnímu členovi pozvánku neposíláme.
+    if (!(await isEventParticipantAllowed(participantId))) {
+      return { success: false, error: "Člen je neaktivní." };
     }
 
     const eventData = await getEventById(participant.eventId);
@@ -701,8 +718,8 @@ export async function resendMagicLinkAction(
  */
 export async function resendAllMagicLinksAction(
   eventId: string
-): Promise<ActionResult<{ sent: number; skipped: number }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+): Promise<ActionResult<{ sent: number; skipped: number; skippedInactive: number }>> {
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
@@ -717,11 +734,14 @@ export async function resendAllMagicLinksAction(
 
     let sent = 0;
     let skipped = 0;
+    let skippedInactive = 0;
 
     for (const p of participants) {
       const email = p.memberEmail ?? p.externalEmail ?? null;
       const name = p.memberName ?? p.externalName ?? "Ucastnik";
 
+      // iter-037 (T-003b, K14): neaktivní člen pozvánku nedostane.
+      if (!p.memberActive) { skippedInactive++; continue; }
       if (!email) { skipped++; continue; }
 
       const rawToken = generateEventToken();
@@ -743,7 +763,7 @@ export async function resendAllMagicLinksAction(
     }
 
     revalidatePath(`/events/${eventId}`);
-    return { success: true, data: { sent, skipped } };
+    return { success: true, data: { sent, skipped, skippedInactive } };
   } catch (error) {
     console.error("resendAllMagicLinksAction error:", error);
     return { success: false, error: "Nepodarilo se odeslat hromadne pozvanky." };
@@ -761,7 +781,7 @@ export async function resendAllMagicLinksAction(
 export async function getParticipantLinkAction(
   participantId: string
 ): Promise<ActionResult<{ link: string; regenerated?: boolean }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   const encKey = process.env.EVENT_TOKEN_ENCRYPTION_KEY!;
@@ -770,6 +790,10 @@ export async function getParticipantLinkAction(
     const participant = await getParticipantById(participantId);
     if (!participant) {
       return { success: false, error: "Ucastnik nebyl nalezen." };
+    }
+    // iter-037 (T-003b, gate sekce 5): odkaz neaktivního člena se nezobrazuje.
+    if (!(await isEventParticipantAllowed(participantId))) {
+      return { success: false, error: "Člen je neaktivní." };
     }
 
     if (participant.encryptedToken) {
@@ -816,13 +840,17 @@ export async function getParticipantLinkAction(
 export async function resetParticipantTokenAction(
   participantId: string
 ): Promise<ActionResult<{ link: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
   try {
     const participant = await getParticipantById(participantId);
     if (!participant) {
       return { success: false, error: "Ucastnik nebyl nalezen." };
+    }
+    // iter-037 (T-003b): neaktivnímu členovi nový odkaz nevzniká.
+    if (!(await isEventParticipantAllowed(participantId))) {
+      return { success: false, error: "Člen je neaktivní." };
     }
 
     const rawToken = generateEventToken();
@@ -869,6 +897,11 @@ export async function castVoteAction(
   }
 
   try {
+    // iter-037 (T-003b): deaktivovaný člen už otevřenou stránkou nehlasuje.
+    if (!(await isEventParticipantAllowed(participantId))) {
+      return { success: false, error: "Člen je neaktivní." };
+    }
+
     // Verify the event is still active
     const eventData = await getEventById(eventId);
     if (!eventData) {

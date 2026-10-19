@@ -16,7 +16,7 @@ import { SortableQuestionList } from "./SortableQuestionList";
  * client-side nav hiding alone).
  */
 export default async function InterviewQuestionsPage() {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "interviewQuestions.manage" });
 
   const questions = await getAllQuestions();
 

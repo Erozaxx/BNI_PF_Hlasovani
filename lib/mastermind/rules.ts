@@ -410,6 +410,10 @@ export const MESSAGES = {
     "Máš už 5 otevřených případů. Počkej, až některý proběhne, nebo jeden stáhni.",
   limitOther: (name: string) => `${name} má už 5 otevřených případů.`,
   notFound: "Případ už neexistuje.",
+  // iter-037 (T-003b, gate sekce 5): téma neaktivního člena je skryté i pro vedení.
+  unavailable: "Téma teď není k dispozici.",
+  // iter-037 (security L-3): vedení nezapisuje případ za neaktivního člena.
+  memberInactive: "Člen je neaktivní, případ za něj zapsat nejde.",
   cannotEdit: "Případ už nejde upravit.",
   cannotRemove: "Případ už nejde stáhnout.",
   ownInterest: "Vlastní případ nejde označit zájmem.",

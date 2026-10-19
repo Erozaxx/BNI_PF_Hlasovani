@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { revokeMeetingToken } from "@/lib/auth/meeting-magic";
 
@@ -20,13 +20,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   // 1. Auth check
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
+  const { session } = authz;
 
   const { id: meetingId, memberId } = await params;
 

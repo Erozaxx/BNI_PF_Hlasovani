@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getContactItemsForEdit } from "@/lib/db/queries/burza";
 import { CONTACT_ITEMS_LIMIT, TEXTS, canEditContacts, isUuid } from "@/lib/burza/rules";
 import { ContactItemForm } from "@/components/burza/ContactItemForm";
@@ -18,8 +19,7 @@ export default async function ManageContactsPage({
 
   if (!isUuid(memberId)) notFound();
 
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "burza.manage");
   if (!canEditContacts({ memberId: session.memberId, isManagement }, memberId)) {
     redirect("/burza/kontakty");
   }
