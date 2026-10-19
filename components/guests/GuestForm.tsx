@@ -114,7 +114,7 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
       )}
 
       <Input
-        label="Jmeno hosta *"
+        label="Jméno hosta *"
         name="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -175,13 +175,13 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
             onChange={(e) => setAddToMeeting(e.target.checked)}
             className="w-4 h-4 accent-primary"
           />
-          Pridat do schuzky {activeMeeting.date}
+          Přidat do schůzky {activeMeeting.date}
         </label>
       )}
 
       <div className="flex gap-3">
         <Button type="submit" variant="primary" loading={loading}>
-          {isEdit ? "Ulozit zmeny" : "Pridat hosta"}
+          {isEdit ? "Uložit změny" : "Přidat hosta"}
         </Button>
         <Button
           type="button"

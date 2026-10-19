@@ -45,7 +45,7 @@ export function AddParticipantForm({ eventId }: AddParticipantFormProps) {
   return (
     <Card>
       <h2 className="text-sm font-semibold text-text-muted mb-3">
-        Pridat externiho ucastnika
+        Přidat externího účastníka
       </h2>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -91,7 +91,7 @@ export function AddParticipantForm({ eventId }: AddParticipantFormProps) {
           loading={isPending}
           disabled={!name.trim()}
         >
-          Pridat ucastnika
+          Přidat účastníka
         </Button>
       </form>
     </Card>

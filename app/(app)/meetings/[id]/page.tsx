@@ -119,12 +119,12 @@ export default async function MeetingDetailPage({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-main">
-            Schuzka {meeting.date}
+            Schůzka {meeting.date}
           </h1>
           <div className="mt-2">{statusBadge(meeting.status)}</div>
           {meeting.location && (
             <p className="text-sm text-text-muted mt-1">
-              Misto: {meeting.location}
+              Místo: {meeting.location}
             </p>
           )}
           {meeting.votingClosesAt && meeting.status === "voting" && (
@@ -163,7 +163,7 @@ export default async function MeetingDetailPage({
           {availableGuests.length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-text-muted mb-3">
-                Pridat hosta
+                Přidat hosta
               </h2>
               <AddGuestToMeetingForm
                 meetingId={id}
@@ -195,7 +195,7 @@ export default async function MeetingDetailPage({
       {/* Guests list */}
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Hoste ({meeting.guests.length})
+          Hosté ({meeting.guests.length})
         </h2>
         {meeting.guests.length > 0 ? (
           <SortableMeetingGuestList

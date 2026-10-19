@@ -166,7 +166,7 @@ export function StartVotingPanel({
     const closesLabel = formatClosesAtPreview(meetingDate);
     if (
       !confirm(
-        `Spustit hlasovani? Maily clenum odejdou ${kdy}, ne ted. Hlasovani pobezi do ${closesLabel}.`
+        `Spustit hlasování? Maily členům odejdou ${kdy}, ne teď. Hlasování poběží do ${closesLabel}.`
       )
     ) {
       return;
@@ -222,7 +222,7 @@ export function StartVotingPanel({
                   : "Schuzka nema zadneho hosta, neni o cem hlasovat. Nejdrive pridejte hosty."
               }
             >
-              Spustit hlasovani
+              Spustit hlasování
             </Button>
             <p className="text-sm text-text-muted">
               {hasGuests

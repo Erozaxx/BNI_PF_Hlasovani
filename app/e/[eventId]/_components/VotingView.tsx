@@ -375,7 +375,7 @@ export function VotingView({
                 disabled={isPending}
                 className="w-full mt-2"
               >
-                Ulozit hlasy
+                Uložit hlasy
               </Button>
             </>
           )}

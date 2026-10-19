@@ -82,7 +82,7 @@ export function NoteForm({ guestId }: NoteFormProps) {
           loading={loading}
           disabled={!text.trim()}
         >
-          Pridat poznamku
+          Přidat poznámku
         </Button>
       </div>
     </form>

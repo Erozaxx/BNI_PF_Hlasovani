@@ -40,14 +40,14 @@ export interface DeliveryStatus {
 }
 
 const STATE_META: Record<DeliveryState, { label: string; severity: DeliveryStatus["severity"] }> = {
-  delivered: { label: "Doruceno", severity: "info" },
-  bounced: { label: "Odmitnuto (bounced)", severity: "error" },
-  complained: { label: "Oznaceno jako spam", severity: "error" },
+  delivered: { label: "Doručeno", severity: "info" },
+  bounced: { label: "Odmítnuto (bounced)", severity: "error" },
+  complained: { label: "Označeno jako spam", severity: "error" },
   failed: { label: "Chyba u poskytovatele", severity: "error" },
-  queued: { label: "Ve fronte u poskytovatele", severity: "warn" },
-  sent: { label: "Predano poskytovateli", severity: "warn" },
-  scheduled: { label: "Naplanovano", severity: "warn" },
-  unknown: { label: "Nezjisteno", severity: "warn" },
+  queued: { label: "Ve frontě u poskytovatele", severity: "warn" },
+  sent: { label: "Předáno poskytovateli", severity: "warn" },
+  scheduled: { label: "Naplánováno", severity: "warn" },
+  unknown: { label: "Nezjištěno", severity: "warn" },
 };
 
 function unknownStatus(): DeliveryStatus {

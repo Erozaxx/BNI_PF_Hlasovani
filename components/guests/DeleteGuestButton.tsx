@@ -19,7 +19,7 @@ export function DeleteGuestButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      `Opravdu smazat hosta "${guestName}"? Budou smazany i vsechny poznamky a hlasy tohoto hosta.`
+      `Opravdu smazat hosta "${guestName}"? Budou smazány i všechny poznámky a hlasy tohoto hosta.`
     );
     if (!confirmed) return;
 

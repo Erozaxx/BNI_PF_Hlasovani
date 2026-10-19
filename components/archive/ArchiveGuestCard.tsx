@@ -28,7 +28,7 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
         {/* Meetings */}
         <div>
           <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
-            Schuzky
+            Schůzky
           </h4>
           <div className="flex flex-wrap gap-1">
             {guest.meetings.map((m) => (
@@ -43,7 +43,7 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
         {voteSummary.total > 0 && (
           <div>
             <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
-              Hlasovani
+              Hlasování
             </h4>
             <div className="flex gap-3 text-sm">
               <span className="text-success font-medium">
@@ -63,7 +63,7 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
         {guest.notes.length > 0 && (
           <div>
             <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
-              Poznamky ({guest.notes.length})
+              Poznámky ({guest.notes.length})
             </h4>
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {guest.notes.map((n) => (

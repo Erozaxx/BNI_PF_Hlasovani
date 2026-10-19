@@ -126,7 +126,7 @@ export function DeliveryStatusCell({
   if (failed || !status) {
     return (
       <span className="inline-flex items-center gap-2 text-xs">
-        <span className="text-text-muted">Nezjisteno</span>
+        <span className="text-text-muted">Nezjištěno</span>
         <button
           type="button"
           onClick={handleRecheck}

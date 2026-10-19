@@ -33,11 +33,11 @@ export default async function GuestsPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-text-main">Hoste</h1>
+        <h1 className="text-2xl font-bold text-text-main">Hosté</h1>
         {isManagement && (
           <Link href="/guests/new">
             <Button variant="primary" size="sm">
-              + Pridat hosta
+              + Přidat hosta
             </Button>
           </Link>
         )}

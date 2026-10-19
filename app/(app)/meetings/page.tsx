@@ -32,13 +32,13 @@ export default async function MeetingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-text-main">Schuzky</h1>
+        <h1 className="text-2xl font-bold text-text-main">Schůzky</h1>
       </div>
 
       {isManagement && (
         <Card>
           <h2 className="text-sm font-semibold text-text-muted mb-3">
-            Nova schuzka
+            Nová schůzka
           </h2>
           <CreateMeetingForm />
         </Card>
@@ -52,7 +52,7 @@ export default async function MeetingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <p className="font-medium text-text-main">
-                      Schuzka {m.date}
+                      Schůzka {m.date}
                     </p>
                     <div className="mt-1">{statusBadge(m.status)}</div>
                   </div>

@@ -191,7 +191,7 @@ export function ImportMembersForm() {
           />
         </div>
         <Button type="submit" variant="primary" size="sm">
-          Nahrat a zobrazit preview
+          Nahrát a zobrazit preview
         </Button>
       </form>
     );
@@ -306,7 +306,7 @@ export function ImportMembersForm() {
             onClick={handleImport}
             disabled={selectedActionableCount === 0}
           >
-            Importovat vybrane ({selectedActionableCount})
+            Importovat vybrané ({selectedActionableCount})
           </Button>
           <Button
             type="button"

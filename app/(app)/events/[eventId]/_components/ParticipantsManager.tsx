@@ -147,7 +147,7 @@ export function ParticipantsManager({
     <Card>
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="text-lg font-semibold text-text-main">
-          Ucastnici ({participants.length})
+          Účastníci ({participants.length})
         </h2>
         {event.status === "active" && (
           <Button

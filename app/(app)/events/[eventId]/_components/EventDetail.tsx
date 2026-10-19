@@ -90,7 +90,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
   }
 
   function handleActivate() {
-    if (!confirm("Spustit akci? Ucastnici ziskaji pristup k hlasovani.")) return;
+    if (!confirm("Spustit akci? Účastníci získají přístup k hlasování.")) return;
     clearMessages();
     startTransition(async () => {
       const result = await activateEventAction(event.id);
@@ -104,7 +104,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
   }
 
   function handleClose() {
-    if (!confirm("Uzavrit akci? Tato akce je nevratna.")) return;
+    if (!confirm("Uzavřít akci? Tato akce je nevratná.")) return;
     clearMessages();
     startTransition(async () => {
       const result = await closeEventAction(event.id);
@@ -238,7 +238,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
                   onClick={handleClose}
                   loading={isPending}
                 >
-                  Uzavrit akci
+                  Uzavřít akci
                 </Button>
                 <Button
                   variant="secondary"

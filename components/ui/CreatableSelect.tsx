@@ -39,7 +39,7 @@ export function CreatableSelect({
   // Build visible list: existing matches + optional "Vytvorit" entry
   const createEntry =
     inputValue.trim() && !hasExactMatch
-      ? { value: "__create__", label: `Vytvorit: ${inputValue.trim()}` }
+      ? { value: "__create__", label: `Vytvořit: ${inputValue.trim()}` }
       : null;
 
   const visibleOptions = createEntry ? [...filtered, createEntry] : filtered;

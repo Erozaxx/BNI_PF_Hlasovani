@@ -19,8 +19,8 @@ import { SendInterviewLinkForm } from "./SendInterviewLinkForm";
 import { SendInterviewReportForm } from "./SendInterviewReportForm";
 
 const TYPE_LABELS: Record<string, string> = {
-  month_5: "5 mesicu",
-  month_10: "10 mesicu",
+  month_5: "5 měsíců",
+  month_10: "10 měsíců",
 };
 
 const STATUS_BADGE: Record<string, { label: string; variant: BadgeVariant }> = {

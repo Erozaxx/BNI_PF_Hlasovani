@@ -30,7 +30,7 @@ const voteOptions = [
   {
     value: "neutral" as VoteValue,
     emoji: "🤷",
-    label: "Nevim",
+    label: "Nevím",
     selectedClass: "border-info bg-info-light",
   },
   {
@@ -43,7 +43,7 @@ const voteOptions = [
 
 const voteLabel: Record<string, string> = {
   up: "Pro",
-  neutral: "Nevim",
+  neutral: "Nevím",
   down: "Proti",
 };
 
@@ -162,7 +162,7 @@ export function MeetingVoteButtons({
           variant="secondary"
           onClick={handleChange}
         >
-          Zmenit
+          Změnit
         </Button>
       </div>
     );

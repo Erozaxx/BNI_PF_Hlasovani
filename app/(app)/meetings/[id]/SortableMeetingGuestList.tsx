@@ -77,7 +77,7 @@ function GuestCard({
       {results && results.length > 0 && (
         <Card className="mt-2 ml-4">
           <h3 className="text-sm font-semibold text-text-muted mb-2">
-            Vysledky hlasovani
+            Výsledky hlasování
           </h3>
           <VoteResults results={results} meetingStatus={meetingStatus} />
         </Card>

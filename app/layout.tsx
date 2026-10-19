@@ -12,7 +12,7 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: "BNI · PF Hlasovani",
-  description: "Hlasovaci aplikace pro BNI Plzen chapter",
+  description: "Hlasovací aplikace pro BNI Plzeň chapter",
 };
 
 export default function RootLayout({

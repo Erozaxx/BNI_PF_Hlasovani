@@ -80,7 +80,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
       {/* Date range filter */}
       <div>
         <h3 className="text-sm font-medium text-text-main mb-2">
-          Casove obdobi
+          Časové období
         </h3>
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="flex flex-col gap-1">
@@ -113,7 +113,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
       {/* Meeting multiselect */}
       <div>
         <h3 className="text-sm font-medium text-text-main mb-2">
-          Schuzky
+          Schůzky
         </h3>
         {meetings.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -158,7 +158,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
           onChange={(e) => handleCategoryChange(e.target.value)}
           className="h-11 px-3.5 py-2.5 rounded-lg border border-border text-base appearance-none bg-white text-text-main bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[right_12px_center] pr-10 focus:outline-none focus:border-primary focus:shadow-focus"
         >
-          <option value="">Vsechny kategorie</option>
+          <option value="">Všechny kategorie</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -171,7 +171,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
       {hasFilters && (
         <div>
           <Button variant="ghost" size="sm" onClick={handleClearAll}>
-            Zrusit filtry
+            Zrušit filtry
           </Button>
         </div>
       )}

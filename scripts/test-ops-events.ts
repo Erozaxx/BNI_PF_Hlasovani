@@ -424,7 +424,7 @@ const cases: TestCase[] = [
     run: () => {
       const delivered = mapResendStatus({ last_event: "delivered" });
       assert.equal(delivered.terminal, true);
-      assert.equal(delivered.label, "Doruceno");
+      assert.equal(delivered.label, "Doručeno");
 
       const bounced = mapResendStatus({ last_event: "bounced" });
       assert.equal(bounced.terminal, true);

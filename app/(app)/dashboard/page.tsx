@@ -39,7 +39,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="text-text-main font-medium">
-                Schuzka: {upcomingMeeting.date}
+                Schůzka: {upcomingMeeting.date}
               </p>
               <Badge variant="category" className="mt-1">
                 {statusLabel[upcomingMeeting.status]}
@@ -65,12 +65,12 @@ export default async function DashboardPage() {
         <div className="flex flex-wrap gap-3">
           <Link href="/guests/new">
             <Button variant="secondary" size="sm">
-              + Novy host
+              + Nový host
             </Button>
           </Link>
           <Link href="/meetings">
             <Button variant="secondary" size="sm">
-              Schuzky
+              Schůzky
             </Button>
           </Link>
         </div>
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-text-main">
-            Posledni hoste
+            Poslední hosté
           </h2>
           <Link href="/guests">
             <Button variant="link" size="sm">
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
           <Card>
             <EmptyState
               title="Zatim zadni hoste"
-              description="Hoste se zobrazi po jejich pridani do systemu."
+              description="Hosté se zobrazí po jejich přidání do systému."
             />
           </Card>
         )}

@@ -57,7 +57,7 @@ export function RenameCategoryForm({
   if (!editing) {
     return (
       <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-        Prejmenovat
+        Přejmenovat
       </Button>
     );
   }

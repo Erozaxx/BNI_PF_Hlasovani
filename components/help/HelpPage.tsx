@@ -37,21 +37,6 @@ export function HelpPage({ managementRole }: HelpPageProps) {
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-bold mb-6">Nápověda</h1>
-      {/* iter-032 (arch 7.6): jak se přihlásit */}
-      <div className="mb-6 rounded-lg border border-border p-4 text-sm space-y-2">
-        <h2 className="font-semibold">Jak se přihlásit</h2>
-        <p>
-          Na přihlašovací stránce zadej svůj e-mail a dej <strong>Pokračovat</strong>.
-          Člen dostane do e-mailu odkaz. Platí 15 minut a jde použít jednou,
-          přihlášení pak vydrží 12 hodin. Když mail nedorazí, mrkni do spamu.
-          Osobní odkaz od admina funguje dál.
-        </p>
-        <p>
-          Vedení (moderátor, admin) s nastaveným heslem se po zadání e-mailu
-          zeptáme na heslo. Heslo si nastavíš odkazem, který ti přijde mailem,
-          když ti admin dá roli. Místo hesla si můžeš nechat poslat i odkaz.
-        </p>
-      </div>
       <HelpTabs tabs={tabs} />
     </div>
   );

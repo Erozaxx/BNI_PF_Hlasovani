@@ -758,7 +758,7 @@ const cases: TestCase[] = [
       assert.ok(!/zásobník/i.test(src.replace(/"[^"]*zásobník[^"]*"/gi, "")), "počet zásobníku se nezobrazuje");
       const dash = readSrc("app/(app)/dashboard/page.tsx");
       assert.ok(dash.includes("<DashboardMastermind"));
-      assert.ok(dash.includes("Schuzka: {upcomingMeeting.date}"), "karta schůzky beze změny");
+      assert.ok(dash.includes("Schůzka: {upcomingMeeting.date}"), "karta schůzky beze změny");
     },
   },
   {
@@ -785,9 +785,9 @@ const cases: TestCase[] = [
       const member = readSrc("components/help/sections/MemberHelp.tsx");
       assert.ok(mod.includes("Téma ohlašujeme 14 dní předem."));
       assert.ok(mod.includes("Aplikace kratší lhůtu nezakáže, jen ji při zařazení ukáže."));
-      assert.ok(!/mail/i.test(mod.slice(mod.indexOf("Master mind: zařazování"), mod.indexOf("Omezení role Moderátora"))), "mail v nápovědě zařazování");
+      assert.ok(!/mail/i.test(mod.slice(mod.indexOf("Master mind: zařazování"), mod.indexOf("Burza pomoci: zápis za členy"))), "mail v nápovědě zařazování");
       for (const src of [mod, member]) {
-        const from = src.indexOf("Master mind");
+        const from = src.search(/<h2[^>]*>\s*Master mind/);
         const section = src.slice(from, src.indexOf("</section>", from));
         assert.ok(!/doporučen/i.test(section), "štítek doporučená");
         assert.ok(!/zaškrt/i.test(section), "zaškrtávátko");

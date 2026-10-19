@@ -26,18 +26,18 @@ export default async function AppLayout({
       <aside className="hidden md:flex md:flex-col md:w-60 bg-surface border-r border-border">
         <div className="p-6">
           <Link href="/dashboard" className="text-xl font-bold text-primary">
-            BNI Plzen
+            BNI Plzeň
           </Link>
         </div>
 
         <nav className="flex-1 px-4 space-y-1">
           <NavLink href="/dashboard">Dashboard</NavLink>
-          <NavLink href="/guests">Hoste</NavLink>
-          <NavLink href="/meetings">Schuzky</NavLink>
+          <NavLink href="/guests">Hosté</NavLink>
+          <NavLink href="/meetings">Schůzky</NavLink>
           <NavLink href="/mastermind">Master mind</NavLink>
           <NavLink href="/burza">Burza pomoci</NavLink>
           {isManagement && <NavLink href="/events">Akce</NavLink>}
-          {isManagement && <NavLink href="/timers">Casovace</NavLink>}
+          {isManagement && <NavLink href="/timers">Časovače</NavLink>}
           {isManagement && <NavLink href="/interviews">Pohovory</NavLink>}
           {isManagement && <NavLink href="/status">Provoz</NavLink>}
           <NavLink href="/archive">Archiv</NavLink>
@@ -50,7 +50,7 @@ export default async function AppLayout({
                   Admin
                 </span>
               </div>
-              <NavLink href="/admin/members">Clenove</NavLink>
+              <NavLink href="/admin/members">Členové</NavLink>
               <NavLink href="/admin/categories">Kategorie</NavLink>
             </>
           )}
@@ -59,17 +59,17 @@ export default async function AppLayout({
             <>
               <div className="pt-4 pb-2">
                 <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                  Ucet
+                  Účet
                 </span>
               </div>
-              <NavLink href="/settings">Nastaveni</NavLink>
+              <NavLink href="/settings">Nastavení</NavLink>
             </>
           )}
         </nav>
 
         <div className="p-4 border-t border-border">
           <div className="text-sm text-text-muted mb-2">
-            {session.name || "Uzivatel"}
+            {session.name || "Uživatel"}
             {session.managementRole && (
               <span className="ml-1 text-xs text-primary">
                 ({session.managementRole})
@@ -78,7 +78,7 @@ export default async function AppLayout({
           </div>
           <form action={logoutAction}>
             <Button variant="ghost" size="sm" type="submit">
-              Odhlasit se
+              Odhlásit se
             </Button>
           </form>
         </div>
@@ -88,12 +88,12 @@ export default async function AppLayout({
       <div className="flex flex-col flex-1 min-w-0">
         <header className="md:hidden flex items-center justify-between p-4 bg-surface border-b border-border">
           <Link href="/dashboard" className="text-lg font-bold text-primary">
-            BNI Hlasovani
+            BNI Hlasování
           </Link>
           <MobileNav
             isAdmin={isAdmin}
             isManagement={isManagement}
-            name={session.name || "Uzivatel"}
+            name={session.name || "Uživatel"}
           />
         </header>
 

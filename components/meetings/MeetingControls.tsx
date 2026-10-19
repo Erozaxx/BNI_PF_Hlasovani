@@ -18,7 +18,7 @@ export function MeetingControls({ meetingId, status }: MeetingControlsProps) {
   const [error, setError] = useState("");
 
   async function handleCloseVoting() {
-    if (!confirm("Opravdu chcete uzavrit hlasovani? Tuto akci nelze vratit.")) {
+    if (!confirm("Opravdu chcete uzavřít hlasování? Tuto akci nelze vrátit.")) {
       return;
     }
     setLoading(true);
@@ -52,7 +52,7 @@ export function MeetingControls({ meetingId, status }: MeetingControlsProps) {
         onClick={handleCloseVoting}
         loading={loading}
       >
-        Uzavrit hlasovani
+        Uzavřít hlasování
       </Button>
 
       {error && <p className="text-sm text-danger">{error}</p>}

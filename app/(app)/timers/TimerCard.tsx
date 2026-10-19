@@ -26,9 +26,9 @@ export function TimerCard({ timer: t }: TimerCardProps) {
   async function copyToClipboard(url: string, label: string) {
     try {
       await navigator.clipboard.writeText(url);
-      showToast("success", `${label} zkopirovan.`);
+      showToast("success", `${label} zkopírován.`);
     } catch {
-      showToast("error", "Kopirovani selhalo — zkopirujte rucne.");
+      showToast("error", "Kopírování selhalo, zkopírujte ručně.");
     }
   }
 
@@ -39,7 +39,7 @@ export function TimerCard({ timer: t }: TimerCardProps) {
           <span className="font-medium text-text-main">{t.name}</span>
           <div className="flex items-center gap-2">
             <Badge variant={t.status === "running" ? "success" : "neutral"}>
-              {t.status === "running" ? "Bezi" : "Pozastaveno"}
+              {t.status === "running" ? "Běží" : "Pozastaveno"}
             </Badge>
             <span className="text-sm text-text-muted">
               {formatMMSS(t.displaySeconds)}
@@ -52,17 +52,17 @@ export function TimerCard({ timer: t }: TimerCardProps) {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => copyToClipboard(viewUrl, "Zobrazovaci link")}
+            onClick={() => copyToClipboard(viewUrl, "Zobrazovací link")}
           >
-            Kopirovat zobrazovaci link
+            Kopírovat zobrazovací link
           </Button>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => copyToClipboard(controlUrl, "Ovladaci link")}
+            onClick={() => copyToClipboard(controlUrl, "Ovládací link")}
           >
-            Kopirovat ovladaci link
+            Kopírovat ovládací link
           </Button>
           <DeleteTimerButton
             controlToken={t.controlToken}

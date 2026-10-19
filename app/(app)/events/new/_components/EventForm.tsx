@@ -78,27 +78,27 @@ export function EventForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <Input
-        label="Nazev akce *"
+        label="Název akce *"
         name="title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Napr. Vyber terminu schuzky"
+        placeholder="Např. Výběr termínu schůzky"
         required
         disabled={isPending}
       />
 
       <Textarea
-        label="Popis (volitelny)"
+        label="Popis (volitelný)"
         name="description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Kratky popis ucelu akce..."
+        placeholder="Krátký popis účelu akce..."
         disabled={isPending}
       />
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium text-text-main">
-          Typ hlasovani *
+          Typ hlasování *
         </label>
         <select
           value={votingType}
@@ -106,15 +106,15 @@ export function EventForm() {
           disabled={isPending}
           className="h-11 px-3.5 py-2.5 rounded-lg border border-border text-base bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
         >
-          <option value="pick_one">Vyber jednu moznost (pick_one)</option>
-          <option value="multiple">Vyber vice moznosti (multiple)</option>
-          <option value="max_x">Max. N moznosti (max_x)</option>
+          <option value="pick_one">Vyber jednu možnost (pick_one)</option>
+          <option value="multiple">Vyber více možností (multiple)</option>
+          <option value="max_x">Max. N možností (max_x)</option>
         </select>
       </div>
 
       {votingType === "max_x" && (
         <Input
-          label="Max. pocet hlasu na ucastnika *"
+          label="Max. počet hlasů na účastníka *"
           name="votingMaxX"
           type="number"
           min={1}
@@ -281,7 +281,7 @@ export function EventForm() {
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" variant="primary" loading={isPending}>
-          Vytvorit akci
+          Vytvořit akci
         </Button>
         <Button
           type="button"

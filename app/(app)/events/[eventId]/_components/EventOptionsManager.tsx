@@ -192,7 +192,7 @@ export function EventOptionsManager({
                       loading={isPending && settingSelectedId === opt.id}
                       disabled={isPending}
                     >
-                      Oznacit viteze
+                      Označit vítěze
                     </Button>
                   )}
 
