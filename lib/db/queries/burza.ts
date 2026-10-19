@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import {
+  CONTACT_ITEMS_LIMIT,
   HELP_RECORDS_LIMIT,
   HELP_RECORDS_MONTHS,
   HELP_WINDOW_MONTHS,
@@ -183,6 +184,8 @@ export interface HelpRecordRow {
   recipientName: string | null;
   createdBy: string | null;
   createdByName: string | null;
+  /** `timestamptz::text`, jen pro řazení v `mergeUseRecords`. */
+  createdAt: string;
 }
 
 /** Záznamy pomoci za 12 měsíců pro vedení, nejnovější nahoře, nejvýš 200. */
@@ -197,11 +200,13 @@ export async function getHelpRecordsForManagement(today: string): Promise<HelpRe
     recipient_name: string | null;
     created_by: string | null;
     created_by_name: string | null;
+    created_at: string;
   }>(sql`
     SELECT h.id, h.used_on::text AS used_on, h.note,
            h.helper_id, hm.name AS helper_name,
            h.recipient_id, rm.name AS recipient_name,
-           h.created_by, cm.name AS created_by_name
+           h.created_by, cm.name AS created_by_name,
+           h.created_at::text AS created_at
     FROM burza_help h
     JOIN member hm ON hm.id = h.helper_id
     LEFT JOIN member rm ON rm.id = h.recipient_id
@@ -220,6 +225,7 @@ export async function getHelpRecordsForManagement(today: string): Promise<HelpRe
     recipientName: r.recipient_name,
     createdBy: r.created_by,
     createdByName: r.created_by_name,
+    createdAt: r.created_at,
   }));
 }
 
@@ -434,5 +440,339 @@ export async function removeHelpGuarded(args: {
     helperName: r.helper_name,
     recipientId: r.recipient_id,
     createdBy: r.created_by,
+  };
+}
+
+/**
+ * Přepínač pomoci, odškrtnutí: jeden příkaz, maže přesně záznam, který člověk
+ * viděl zaškrtnutý (podle `id`, ne podle měsíce, kvůli přelomu měsíce). Cizí
+ * nebo neexistující `helpId` nic nesmaže. 0 i 1 řádek je úspěch.
+ */
+export async function unsetHelpUsedGuarded(args: {
+  helpId: string;
+  recipientId: string;
+  helperId: string;
+}): Promise<boolean> {
+  const result = await getDb().execute<{ id: string }>(sql`
+    DELETE FROM burza_help
+     WHERE id = ${args.helpId}::uuid
+       AND recipient_id = ${args.recipientId}::uuid
+       AND helper_id = ${args.helperId}::uuid
+    RETURNING id
+  `);
+  return result.rows.length > 0;
+}
+
+// ── Kontakty (iter-035 doplnění, T-013) ──
+
+export interface ContactItemRow {
+  id: string;
+  memberId: string;
+  name: string;
+  company: string | null;
+  obor: string | null;
+  label: string;
+  /** `timestamptz::text`, řadí se jako řetězec. */
+  createdAt: string;
+}
+
+/** Všechny položky kontaktů se jmenným údaji nabízejícího. Bez e-mailu. */
+export async function getContactItemsForOverview(): Promise<ContactItemRow[]> {
+  const result = await getDb().execute<{
+    id: string;
+    member_id: string;
+    name: string;
+    company: string | null;
+    obor: string | null;
+    label: string;
+    created_at: string;
+  }>(sql`
+    SELECT c.id, c.member_id, m.name, m.company, m.obor, c.label, c.created_at::text AS created_at
+    FROM burza_contact c
+    JOIN member m ON m.id = c.member_id
+    ORDER BY m.name, c.member_id, c.created_at, c.id
+  `);
+  return result.rows.map((r) => ({
+    id: r.id,
+    memberId: r.member_id,
+    name: r.name,
+    company: r.company,
+    obor: r.obor,
+    label: r.label,
+    createdAt: r.created_at,
+  }));
+}
+
+export interface MyContactState {
+  /** `contact_id` všech položek, které jsem zaškrtl (natrvalo, bez časového okna). */
+  usedContactIds: string[];
+  /** Kolik záznamů využití je za posledních 6 měsíců, kde jsem nabízející. */
+  usedCount: number;
+}
+
+export async function getMyContactState(me: string, today: string): Promise<MyContactState> {
+  const [used, count] = await Promise.all([
+    getDb().execute<{ contact_id: string }>(sql`
+      SELECT contact_id FROM burza_contact_use
+      WHERE recipient_id = ${me}::uuid AND contact_id IS NOT NULL
+    `),
+    getDb().execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n FROM burza_contact_use
+      WHERE helper_id = ${me}::uuid
+        AND used_on >= (${today}::date - make_interval(months => ${HELP_WINDOW_MONTHS}::int))::date
+        AND used_on <= ${today}::date
+    `),
+  ]);
+  return {
+    usedContactIds: used.rows.map((r) => r.contact_id),
+    usedCount: Number(count.rows[0]?.n ?? 0),
+  };
+}
+
+export interface ContactItemsForEdit {
+  memberId: string;
+  name: string;
+  items: Array<{ id: string; label: string }>;
+}
+
+/** Člen a jeho položky v pořadí přidání. `null` = člen neexistuje. Volá se až po `canEditContacts`. */
+export async function getContactItemsForEdit(memberId: string): Promise<ContactItemsForEdit | null> {
+  const [member, items] = await Promise.all([
+    getDb().execute<{ id: string; name: string }>(sql`
+      SELECT id, name FROM member WHERE id = ${memberId}::uuid
+    `),
+    getDb().execute<{ id: string; label: string }>(sql`
+      SELECT id, label FROM burza_contact
+      WHERE member_id = ${memberId}::uuid
+      ORDER BY created_at, id
+    `),
+  ]);
+  const m = member.rows[0];
+  if (!m) return null;
+  return {
+    memberId: m.id,
+    name: m.name,
+    items: items.rows.map((r) => ({ id: r.id, label: r.label })),
+  };
+}
+
+export interface ContactUseRow {
+  id: string;
+  usedOn: string;
+  /** `null` = položka už v burze není. */
+  contactLabel: string | null;
+  helperId: string;
+  helperName: string;
+  recipientId: string | null;
+  recipientName: string | null;
+  createdAt: string;
+}
+
+/** Záznamy využití kontaktů za 12 měsíců pro vedení, nejnovější nahoře, nejvýš 200. */
+export async function getContactUsesForManagement(today: string): Promise<ContactUseRow[]> {
+  const result = await getDb().execute<{
+    id: string;
+    used_on: string;
+    label: string | null;
+    helper_id: string;
+    helper_name: string;
+    recipient_id: string | null;
+    recipient_name: string | null;
+    created_at: string;
+  }>(sql`
+    SELECT u.id, u.used_on::text AS used_on, c.label,
+           u.helper_id, hm.name AS helper_name,
+           u.recipient_id, rm.name AS recipient_name,
+           u.created_at::text AS created_at
+    FROM burza_contact_use u
+    JOIN member hm ON hm.id = u.helper_id
+    LEFT JOIN member rm ON rm.id = u.recipient_id
+    LEFT JOIN burza_contact c ON c.id = u.contact_id
+    WHERE u.used_on >= (${today}::date - make_interval(months => ${HELP_RECORDS_MONTHS}::int))::date
+    ORDER BY u.used_on DESC, u.created_at DESC, u.id
+    LIMIT ${HELP_RECORDS_LIMIT}::int
+  `);
+  return result.rows.map((r) => ({
+    id: r.id,
+    usedOn: r.used_on,
+    contactLabel: r.label,
+    helperId: r.helper_id,
+    helperName: r.helper_name,
+    recipientId: r.recipient_id,
+    recipientName: r.recipient_name,
+    createdAt: r.created_at,
+  }));
+}
+
+// ── Zápis položek kontaktů ──
+
+export interface ContactOwner {
+  memberId: string;
+  memberName: string;
+}
+
+/**
+ * Založení položky s limitem: jeden příkaz. Autorita (vlastník, nebo vedení)
+ * a počet položek (méně než `CONTACT_ITEMS_LIMIT`) jsou ve WHERE. `null` =
+ * limit je plný (neexistující člen skončí na FK 23503).
+ */
+export async function createContactItemWithLimit(args: {
+  targetId: string;
+  actorId: string;
+  isManagement: boolean;
+  label: string;
+}): Promise<ContactOwner | null> {
+  const result = await getDb().execute<{ member_id: string; name: string }>(sql`
+    WITH s AS (
+      INSERT INTO burza_contact (member_id, label, updated_by)
+      SELECT ${args.targetId}::uuid, ${args.label}::text, ${args.actorId}::uuid
+       WHERE (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+         AND (SELECT count(*) FROM burza_contact WHERE member_id = ${args.targetId}::uuid) < ${CONTACT_ITEMS_LIMIT}::int
+      RETURNING member_id
+    )
+    SELECT s.member_id, m.name FROM s JOIN member m ON m.id = s.member_id
+  `);
+  const r = result.rows[0];
+  return r ? { memberId: r.member_id, memberName: r.name } : null;
+}
+
+/** Úprava položky: poslední vyhraje. `null` = položka mezitím zmizela, nebo autorita nesedí. */
+export async function updateContactItemGuarded(args: {
+  contactId: string;
+  targetId: string;
+  actorId: string;
+  isManagement: boolean;
+  label: string;
+}): Promise<ContactOwner | null> {
+  const result = await getDb().execute<{ member_id: string; name: string }>(sql`
+    WITH s AS (
+      UPDATE burza_contact
+         SET label = ${args.label}::text, updated_by = ${args.actorId}::uuid, updated_at = now()
+       WHERE id = ${args.contactId}::uuid AND member_id = ${args.targetId}::uuid
+         AND (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+      RETURNING member_id
+    )
+    SELECT s.member_id, m.name FROM s JOIN member m ON m.id = s.member_id
+  `);
+  const r = result.rows[0];
+  return r ? { memberId: r.member_id, memberName: r.name } : null;
+}
+
+/** Smazání položky: vlastník, nebo vedení. Záznamy využití zůstanou s `contact_id = NULL`. */
+export async function removeContactItemGuarded(args: {
+  contactId: string;
+  actorId: string;
+  isManagement: boolean;
+}): Promise<ContactOwner | null> {
+  const result = await getDb().execute<{ member_id: string; name: string }>(sql`
+    WITH d AS (
+      DELETE FROM burza_contact
+       WHERE id = ${args.contactId}::uuid
+         AND (member_id = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+      RETURNING member_id
+    )
+    SELECT d.member_id, m.name FROM d JOIN member m ON m.id = d.member_id
+  `);
+  const r = result.rows[0];
+  return r ? { memberId: r.member_id, memberName: r.name } : null;
+}
+
+// ── Využití kontaktu (natrvalo) ──
+
+/**
+ * Zaškrtnutí kontaktu: jeden příkaz. `helper_id` se bere z položky, ne od
+ * klienta, vlastní položka se nezapíše. Vrací `id` nového záznamu, nebo `null`
+ * (nic nevzniklo, důvod rozliší `getContactUseMissReason`).
+ */
+export async function setContactUsedGuarded(args: {
+  contactId: string;
+  recipientId: string;
+  today: string;
+}): Promise<string | null> {
+  const result = await getDb().execute<{ id: string }>(sql`
+    INSERT INTO burza_contact_use (contact_id, helper_id, recipient_id, used_on)
+    SELECT c.id, c.member_id, ${args.recipientId}::uuid, ${args.today}::date
+      FROM burza_contact c
+     WHERE c.id = ${args.contactId}::uuid AND c.member_id <> ${args.recipientId}::uuid
+    ON CONFLICT (contact_id, recipient_id) DO NOTHING
+    RETURNING id
+  `);
+  return result.rows[0]?.id ?? null;
+}
+
+/** Odškrtnutí kontaktu: přirozený klíč (položka, já). 0 i 1 řádek je úspěch. */
+export async function unsetContactUsedGuarded(args: {
+  contactId: string;
+  recipientId: string;
+}): Promise<boolean> {
+  const result = await getDb().execute<{ id: string }>(sql`
+    DELETE FROM burza_contact_use
+     WHERE contact_id = ${args.contactId}::uuid AND recipient_id = ${args.recipientId}::uuid
+    RETURNING id
+  `);
+  return result.rows.length > 0;
+}
+
+export interface ContactUseMissReason {
+  /** Položka existuje. */
+  exists: boolean;
+  /** Položka patří přihlášenému. */
+  own: boolean;
+  /** Záznam na (položka, já) už je. */
+  recordedId: string | null;
+}
+
+/** Proč zaškrtnutí kontaktu nic nevytvořilo (druhé čtení, jen při prázdném výsledku). */
+export async function getContactUseMissReason(args: {
+  contactId: string;
+  recipientId: string;
+}): Promise<ContactUseMissReason> {
+  const result = await getDb().execute<{
+    owner_id: string | null;
+    recorded_id: string | null;
+  }>(sql`
+    SELECT (SELECT c.member_id FROM burza_contact c WHERE c.id = ${args.contactId}::uuid) AS owner_id,
+           (SELECT u.id FROM burza_contact_use u
+             WHERE u.contact_id = ${args.contactId}::uuid
+               AND u.recipient_id = ${args.recipientId}::uuid
+             LIMIT 1) AS recorded_id
+  `);
+  const r = result.rows[0];
+  return {
+    exists: Boolean(r?.owner_id),
+    own: r?.owner_id === args.recipientId,
+    recordedId: r?.recorded_id ?? null,
+  };
+}
+
+export interface RemovedContactUseRow {
+  useId: string;
+  helperId: string;
+  helperName: string;
+  recipientId: string | null;
+}
+
+/** Smazání záznamu o využití kontaktu vedením (volá jen akce s `requireManagementRole`). */
+export async function removeContactUseGuarded(useId: string): Promise<RemovedContactUseRow | null> {
+  const result = await getDb().execute<{
+    id: string;
+    helper_id: string;
+    helper_name: string;
+    recipient_id: string | null;
+  }>(sql`
+    WITH d AS (
+      DELETE FROM burza_contact_use WHERE id = ${useId}::uuid
+      RETURNING id, helper_id, recipient_id
+    )
+    SELECT d.id, d.helper_id, m.name AS helper_name, d.recipient_id
+      FROM d JOIN member m ON m.id = d.helper_id
+  `);
+  const r = result.rows[0];
+  if (!r) return null;
+  return {
+    useId: r.id,
+    helperId: r.helper_id,
+    helperName: r.helper_name,
+    recipientId: r.recipient_id,
   };
 }

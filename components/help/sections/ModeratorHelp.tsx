@@ -371,9 +371,15 @@ export function ModeratorHelp() {
             chybí, nemá řádek v burze. Napřed mu ho zapište, pak pomoc.
           </li>
           <li>
-            <strong>Mazání.</strong> Záznam pomoci smažete tlačítkem{" "}
-            <strong>Smazat</strong> na stránce Záznamy pomoci, řádek člena
-            na jeho formuláři.
+            <strong>Kontakty člena.</strong> Nevhodnou položku upravíte nebo
+            smažete přes <strong>Upravit</strong> na kartě kontaktu. Využití
+            kontaktu se podle hlášení nezapisuje, člen si ho zaškrtne sám.
+          </li>
+          <li>
+            <strong>Mazání.</strong> Záznam pomoci i využití kontaktu smažete
+            tlačítkem <strong>Smazat</strong> na stránce Záznamy pomoci, řádek
+            člena na jeho formuláři. Když se smaže položka kontaktu, záznamy o
+            jejím využití zůstanou.
           </li>
           <li>
             <strong>Co se loguje?</strong> Zásahy vedení do cizích řádků a

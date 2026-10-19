@@ -322,20 +322,29 @@ export function MemberHelp() {
             nezmizí.
           </li>
           <li>
-            <strong>Kdy použít Pomohl(a) mi?</strong> Když vám někdo z burzy
-            pomohl, klikněte u jeho řádku na <strong>Pomohl(a) mi</strong>,
-            případně připište větu a klikněte na <strong>Zapsat</strong>. Na
-            stejného člena to jde jednou za kalendářní měsíc.
+            <strong>Pomoc a Kontakty.</strong> Na záložce{" "}
+            <strong>Pomoc</strong> je, s čím kdo pomůže, na záložce{" "}
+            <strong>Kontakty</strong>, na koho má kdo kontakt.
           </li>
           <li>
-            <strong>Kdo záznam o pomoci uvidí?</strong> Vy a vedení. Pomocník
-            vidí jen počet zapsané pomoci za posledních 6 měsíců, ne kdo ji
-            zapsal.
+            <strong>Jak přidám kontakt?</strong> Na záložce{" "}
+            <strong>Kontakty</strong> klikněte na{" "}
+            <strong>Přidat kontakt</strong> a napište, na koho kontakt máte,
+            třeba ředitel logistiky ve firmě X. Jméno ani telefon toho člověka
+            nepište, kdo kontakt chce, řekne si vám. Kontaktů můžete mít až 10.
+            Pro úplně jiný kontakt přidejte nový, starý nepřepisujte.
           </li>
           <li>
-            <strong>Zapsal(a) jsem to omylem.</strong> Ve stejném měsíci
-            klikněte u řádku na <strong>Zrušit</strong>. Starší záznam smaže
-            vedení.
+            <strong>Kdy použít Využil(a) jsem?</strong> Když vám někdo z burzy
+            pomohl nebo jste využili jeho kontakt, klikněte na jeho kartě na{" "}
+            <strong>Využil(a) jsem</strong>. Dalším kliknutím zápis smažete,
+            nic se nepotvrzuje. U pomoci platí zápis pro kalendářní měsíc a
+            další měsíc ho můžete zapsat znovu, u kontaktu platí trvale.
+          </li>
+          <li>
+            <strong>Kdo záznam uvidí?</strong> Vy a vedení. Ten, kdo pomohl
+            nebo kontakt nabídl, vidí jen počet za posledních 6 měsíců, ne kdo
+            ho zapsal.
           </li>
         </ul>
       </section>

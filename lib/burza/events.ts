@@ -15,12 +15,16 @@ import type { OpsEventInput } from "@/lib/ops/types";
 export type BurzaEventKind =
   | "burza.offer-by-management"
   | "burza.offer-removed"
-  | "burza.help-removed";
+  | "burza.help-removed"
+  | "burza.contact-by-management"
+  | "burza.contact-use-removed";
 
 export const BURZA_EVENT_KINDS: readonly BurzaEventKind[] = [
   "burza.offer-by-management",
   "burza.offer-removed",
   "burza.help-removed",
+  "burza.contact-by-management",
+  "burza.contact-use-removed",
 ];
 
 export interface BurzaEventCtx {
@@ -85,5 +89,63 @@ export function helpRemovedEvent(ctx: BurzaEventCtx, removed: RemovedHelp): OpsE
     memberName: removed.helperName,
     message: "Záznam pomoci smazalo vedení",
     detail: { helpId: removed.helpId },
+  };
+}
+
+export type ContactItemEventAction = "create" | "update" | "remove";
+
+/**
+ * Událost jen když vedení přidá, upraví nebo smaže položku kontaktu JINÉHO
+ * člena. Vlastní položka (i když je autor ve vedení) a člen bez role vrací
+ * `null`. Bez textu položky.
+ */
+export function contactItemEvent(
+  ctx: BurzaEventCtx,
+  owner: { memberId: string; memberName: string },
+  action: ContactItemEventAction
+): OpsEventInput | null {
+  if (!ctx.isManagement || owner.memberId === ctx.actorId) return null;
+  return {
+    runId: ctx.runId,
+    seq: 1,
+    source: "gui",
+    kind: "burza.contact-by-management",
+    severity: "info",
+    actor: ctx.actor,
+    memberId: owner.memberId,
+    memberName: owner.memberName,
+    message: "Kontakt v burze zapsalo vedení",
+    detail: { action },
+  };
+}
+
+export interface RemovedContactUse {
+  useId: string;
+  helperId: string;
+  helperName: string;
+  recipientId: string | null;
+}
+
+/**
+ * Smazání záznamu o využití kontaktu vedením: `warn`, `null` když vedoucí
+ * maže záznam, kde je sám příjemce. `memberId`/`memberName` = nabízející.
+ */
+export function contactUseRemovedEvent(
+  ctx: BurzaEventCtx,
+  removed: RemovedContactUse
+): OpsEventInput | null {
+  if (!ctx.isManagement) return null;
+  if (removed.recipientId !== null && removed.recipientId === ctx.actorId) return null;
+  return {
+    runId: ctx.runId,
+    seq: 1,
+    source: "gui",
+    kind: "burza.contact-use-removed",
+    severity: "warn",
+    actor: ctx.actor,
+    memberId: removed.helperId,
+    memberName: removed.helperName,
+    message: "Záznam o využití kontaktu smazalo vedení",
+    detail: { useId: removed.useId },
   };
 }

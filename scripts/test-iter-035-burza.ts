@@ -28,7 +28,6 @@ import {
   canRecordHelp,
   canRemoveHelp,
   formatMonthYear,
-  helpButtonState,
   helpPartyLabel,
   isStale,
   mapDbError,
@@ -36,8 +35,8 @@ import {
   monthStart,
   sortOffers,
   summarizeDashboardBurza,
+  validateBoolean,
   validateHelpNote,
-  validateIsNew,
   validateOfferInput,
   type Actor,
 } from "../lib/burza/rules";
@@ -82,9 +81,13 @@ const GUARD_TABLE: Record<string, string> = {
   saveOfferAction: AUTH,
   confirmOfferAction: AUTH,
   removeOfferAction: AUTH,
-  recordHelpAction: AUTH,
   recordHelpForAction: MGMT,
   removeHelpAction: AUTH,
+  setHelpUsedAction: AUTH,
+  saveContactItemAction: AUTH,
+  removeContactItemAction: AUTH,
+  setContactUsedAction: AUTH,
+  removeContactUseAction: MGMT,
 };
 
 /** Každá exportovaná akce a první guard v jejím těle. Chybějící guard = prázdný řetězec. */
@@ -170,11 +173,12 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "1b. validateIsNew: jen boolean (Z3), cokoli jiného neprojde",
+    name: "1b. validateBoolean: jen boolean (Z3, Z12), cokoli jiného neprojde, alias validateIsNew neexistuje",
     run: () => {
-      assert.equal(validateIsNew(true), true);
-      assert.equal(validateIsNew(false), true);
-      for (const v of ["x", "true", 1, 0, null, undefined, {}, []]) assert.equal(validateIsNew(v), false, String(v));
+      assert.equal(validateBoolean(true), true);
+      assert.equal(validateBoolean(false), true);
+      for (const v of ["x", "true", 1, 0, null, undefined, {}, []]) assert.equal(validateBoolean(v), false, String(v));
+      assert.ok(!readSrc("lib/burza/rules.ts").includes("validateIsNew"));
     },
   },
   {
@@ -247,14 +251,11 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "6. canRecordHelp a helpButtonState: cizí karta tlačítko, vlastní nic, zapsáno = stav „recorded“",
+    name: "6. canRecordHelp: cizí karta přepínač, vlastní nic (helpButtonState odpadl)",
     run: () => {
       assert.equal(canRecordHelp(A.memberId, B.memberId), true);
       assert.equal(canRecordHelp(A.memberId, A.memberId), false);
-      assert.equal(helpButtonState(A.memberId, B.memberId, null), "button");
-      assert.equal(helpButtonState(A.memberId, B.memberId, "h-1"), "recorded");
-      assert.equal(helpButtonState(A.memberId, A.memberId, null), "none");
-      assert.equal(helpButtonState(A.memberId, A.memberId, "h-1"), "none");
+      assert.ok(!readSrc("lib/burza/rules.ts").includes("helpButtonState"));
     },
   },
   {
@@ -314,12 +315,14 @@ const cases: TestCase[] = [
 
   // ── 9. Ops log (Z6) ──
   {
-    name: "9a. events: 3 druhy burza.* v TERMINAL_KINDS a v KIND_LABELS, popisky s diakritikou, burza.help-recorded neexistuje",
+    name: "9a. events: 5 druhů burza.* v TERMINAL_KINDS a v KIND_LABELS, popisky s diakritikou, burza.help-recorded neexistuje",
     run: () => {
       assert.deepEqual([...BURZA_EVENT_KINDS], [
         "burza.offer-by-management",
         "burza.offer-removed",
         "burza.help-removed",
+        "burza.contact-by-management",
+        "burza.contact-use-removed",
       ]);
       const table = readSrc("app/(app)/status/EventTable.tsx");
       for (const kind of BURZA_EVENT_KINDS) {
@@ -388,7 +391,8 @@ const cases: TestCase[] = [
     run: () => {
       const src = readSrc("actions/burza.ts");
       assert.deepEqual(guardMismatches(src), []);
-      assert.equal(Object.keys(actionGuards(src)).length, 6);
+      assert.equal(Object.keys(actionGuards(src)).length, 10);
+      assert.ok(!("recordHelpAction" in actionGuards(src)), "recordHelpAction odpadl");
     },
   },
   {
@@ -416,7 +420,7 @@ const cases: TestCase[] = [
       assert.ok(!/(session|actor)MemberId\s*:/.test(src));
       assert.ok(/export async function confirmOfferAction\(\)/.test(src));
       assert.ok(/confirmOfferGuarded\(actor\.memberId\)/.test(src));
-      assert.ok(src.includes("validateIsNew(input.isNew)"));
+      assert.ok(src.includes("validateBoolean(input.isNew)"));
       assert.ok(src.includes("input.isNew"));
     },
   },
@@ -426,7 +430,7 @@ const cases: TestCase[] = [
     name: "11a. každá page.tsx pod app/(app)/burza volá await requirePageSession(, /burza/pomoc s role management, middleware bez burza",
     run: () => {
       const pages = walk(join(ROOT, "app", "(app)", "burza")).filter((f) => f.endsWith("page.tsx"));
-      assert.equal(pages.length, 3, pages.map((p) => relative(ROOT, p)).join(", "));
+      assert.equal(pages.length, 5, pages.map((p) => relative(ROOT, p)).join(", "));
       for (const f of pages) {
         assert.ok(/await requirePageSession\(/.test(stripComments(readFileSync(f, "utf8"))), relative(ROOT, f));
       }
@@ -736,9 +740,18 @@ const cases: TestCase[] = [
       for (const bad of ["Zapsalo vedení", "K potvrzení", "Zapisuješ za člena"]) {
         assert.ok(!all.includes(bad), `Z2/Z4: ${bad}`);
       }
-      for (const bad of ["Zapsat pomoc", "Pomohl(a) mi", "Platí dál", "Přidat svůj řádek"]) {
+      for (const bad of ["Zapsat pomoc", "Platí dál", "Přidat svůj řádek"]) {
         assert.ok(all.includes(bad), `chybí text: ${bad}`);
       }
+      // iter-035 doplnění: „Využil(a) jsem“ nahradil „Pomohl(a) mi“ (gate T-012 K15, Z13)
+      assert.equal(TEXTS.usedToggle, "Využil(a) jsem");
+      assert.ok(!all.includes("Pomohl(a) mi"), "Pomohl(a) mi už v UI není");
+      assert.ok(!all.includes("Využil/a jsem"), "lomítko nikde");
+      assert.ok(!("helpHint" in TEXTS), "TEXTS.helpHint neexistuje");
+      assert.ok(!all.includes("window.confirm(\"Opravdu zrušit zápis"), "zrušení bez potvrzení");
+      const toggle = stripComments(readRaw("components/burza/HelpUsedToggle.tsx"));
+      assert.ok(!toggle.includes("window.confirm") && !toggle.includes("Pomohl(a) mi"));
+      assert.ok(readSrc("components/burza/UsedToggleButton.tsx").includes("TEXTS.usedToggle"));
       for (const bad of ["Hoste", "Schuzky", "Pridat", "Smazat radek", "Upravit radek"]) {
         assert.ok(!all.includes(bad), `bez diakritiky: ${bad}`);
       }
@@ -794,6 +807,11 @@ const cases: TestCase[] = [
       assert.ok(mod.includes("Uložení posune"));
       assert.ok(member.includes("Pomoc z burzy je nezištná: rada nebo krátká konzultace."));
       const burzaMember = member.slice(member.indexOf("Burza pomoci"));
+      // iter-035 doplnění (gate T-012, sekce 5)
+      assert.ok(burzaMember.includes("Využil(a) jsem"));
+      assert.ok(burzaMember.includes("Kontakty"));
+      assert.ok(!burzaMember.includes("Pomohl(a) mi"));
+      assert.ok(!burzaMember.includes("Zapsal(a) jsem to omylem"));
       for (const bad of ["Zapsalo vedení", "K potvrzení", "povinné", "doporučené"]) {
         assert.ok(!burzaMember.includes(bad), bad);
       }
