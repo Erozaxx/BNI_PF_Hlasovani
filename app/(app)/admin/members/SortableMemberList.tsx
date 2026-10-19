@@ -62,7 +62,7 @@ function DueChip({
   memberId: string;
 }) {
   const label = type === "month_5" ? "5 měsíců" : "10 měsíců";
-  const variant: BadgeVariant = type === "month_5" ? "info" : "warning";
+  const variant: BadgeVariant = type === "month_5" ? "success" : "warning";
   return (
     <Link
       href={`/interviews?memberId=${memberId}&type=${type}`}
@@ -125,7 +125,7 @@ function SortableMemberCard({ m }: { m: MemberRow }) {
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {m.functionName && <Badge variant="category">{m.functionName}</Badge>}
           {role && <Badge variant={m.managementRole === "admin" ? "danger" : "info"}>{role}</Badge>}
-          {m.inactiveLabel && <Badge variant="warning">{m.inactiveLabel}</Badge>}
+          {m.inactiveLabel && <Badge variant="neutral">{m.inactiveLabel}</Badge>}
           {m.due5 && <DueChip type="month_5" memberId={m.id} />}
           {m.due10 && <DueChip type="month_10" memberId={m.id} />}
         </div>
