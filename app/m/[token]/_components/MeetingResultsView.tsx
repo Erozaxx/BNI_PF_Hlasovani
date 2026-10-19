@@ -45,7 +45,7 @@ export function MeetingResultsView({
   return (
     <Card className="mt-2 ml-4 bg-background">
       <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
-        Vysledky hlasovani — {guestName}
+        Výsledky hlasování: {guestName}
       </h4>
       {total === 0 ? (
         <p className="text-sm text-text-muted">Zadne hlasy nebyly odevzdany.</p>

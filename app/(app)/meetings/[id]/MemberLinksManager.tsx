@@ -213,7 +213,7 @@ export function MemberLinksManager({
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-text-main">
-          Magic linky clenu
+          Magic linky členů
         </h2>
         <p className="text-sm text-text-muted mt-1">
           Schuzka: {meetingDate} &mdash; {links.length} clenu

@@ -51,7 +51,7 @@ export function CreateMeetingForm() {
           <Input
             type="date"
             name="date"
-            label="Datum schuzky"
+            label="Datum schůzky"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             error={error}
@@ -61,14 +61,14 @@ export function CreateMeetingForm() {
           <Input
             type="text"
             name="location"
-            label="Misto konani"
+            label="Místo konání"
             placeholder="Nepovinne"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />
         </div>
         <Button type="submit" variant="primary" size="sm" loading={loading}>
-          Vytvorit
+          Vytvořit
         </Button>
       </div>
     </form>

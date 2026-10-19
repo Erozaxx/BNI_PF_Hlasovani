@@ -9,7 +9,7 @@ type VoteValue = "up" | "neutral" | "down";
 
 const voteOptions: { value: VoteValue; emoji: string; label: string }[] = [
   { value: "up", emoji: "👍", label: "Pro" },
-  { value: "neutral", emoji: "😐", label: "Nevim" },
+  { value: "neutral", emoji: "😐", label: "Nevím" },
   { value: "down", emoji: "👎", label: "Proti" },
 ];
 

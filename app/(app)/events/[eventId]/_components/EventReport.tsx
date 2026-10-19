@@ -45,7 +45,7 @@ export function EventReport({ event, options, participants, votersByOption }: Ev
     <Card>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-text-main">
-          Report vysledku
+          Report výsledků
         </h2>
         <Button variant="secondary" size="sm" onClick={handleExportCsv}>
           Exportovat CSV

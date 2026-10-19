@@ -70,7 +70,7 @@ export function GuestCategoryChanger({
         loading={loading}
         disabled={categoryId === currentCategoryId}
       >
-        Zmenit
+        Změnit
       </Button>
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>

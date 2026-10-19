@@ -47,7 +47,7 @@ export function DeleteMeetingButton({
       loading={loading}
       onClick={handleDelete}
     >
-      Smazat schuzku
+      Smazat schůzku
     </Button>
   );
 }

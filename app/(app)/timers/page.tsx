@@ -11,18 +11,18 @@ export default async function AdminTimersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-main">Casovace</h1>
+      <h1 className="text-2xl font-bold text-text-main">Časovače</h1>
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Novy casovac
+          Nový časovač
         </h2>
         <CreateTimerForm />
       </Card>
 
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Casovace ({timers.length})
+          Časovače ({timers.length})
         </h2>
         {timers.length > 0 ? (
           <div className="space-y-3">

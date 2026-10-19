@@ -28,21 +28,21 @@ export default async function AdminMembersPage() {
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Novy clen
+          Nový člen
         </h2>
         <CreateMemberForm />
       </Card>
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Import clenu z XLSX
+          Import členů z XLSX
         </h2>
         <ImportMembersForm />
       </Card>
 
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Clenove ({members.length})
+          Členové ({members.length})
         </h2>
         {members.length > 0 ? (
           <SortableMemberList

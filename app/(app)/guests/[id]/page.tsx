@@ -97,7 +97,7 @@ export default async function GuestDetailPage({
       {isManagement && (
         <Card>
           <h2 className="text-sm font-semibold text-text-muted mb-3">
-            Zmena kategorie
+            Změna kategorie
           </h2>
           <GuestCategoryChanger
             guestId={guest.id}

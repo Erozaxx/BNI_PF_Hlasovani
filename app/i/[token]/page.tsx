@@ -13,8 +13,8 @@ import {
 } from "./_components/InterviewFillForm";
 
 const TYPE_LABELS: Record<string, string> = {
-  month_5: "5 mesicu",
-  month_10: "10 mesicu",
+  month_5: "5 měsíců",
+  month_10: "10 měsíců",
 };
 
 interface FormData {

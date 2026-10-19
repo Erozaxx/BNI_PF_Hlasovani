@@ -93,7 +93,7 @@ export function CreateMemberForm() {
         Nový člen vzniká bez role. Roli moderátora nebo admina mu dáš v seznamu členů níž.
       </p>
       <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Pridat clena
+        Přidat člena
       </Button>
     </form>
   );

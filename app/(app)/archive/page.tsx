@@ -64,7 +64,7 @@ export default async function ArchivePage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-main">Archiv hostu</h1>
+      <h1 className="text-2xl font-bold text-text-main">Archiv hostů</h1>
 
       {/* Filters */}
       <Card>

@@ -73,12 +73,12 @@ export function CreateTimerForm() {
     return (
       <div className="space-y-4 max-w-xl">
         <p className="text-sm font-semibold text-text-main">
-          Casovac byl vytvoren. Zkopirujte oba odkazy — po zavřeni je nelze znovu zobrazit.
+          Časovač byl vytvořen. Zkopírujte oba odkazy. Ze seznamu časovačů je zkopírujete znovu.
         </p>
 
         <div className="space-y-3">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-text-muted">Zobrazovaci link (pro publikum)</span>
+            <span className="text-xs font-medium text-text-muted">Zobrazovací link (pro publikum)</span>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs bg-background border border-border rounded px-2 py-1.5 break-all">
                 {createdLinks.viewUrl}
@@ -87,15 +87,15 @@ export function CreateTimerForm() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => copyToClipboard(createdLinks.viewUrl, "Zobrazovaci link")}
+                onClick={() => copyToClipboard(createdLinks.viewUrl, "Zobrazovací link")}
               >
-                Kopirovat
+                Kopírovat
               </Button>
             </div>
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-text-muted">Ovladaci link (pro moderatora)</span>
+            <span className="text-xs font-medium text-text-muted">Ovládací link (pro moderátora)</span>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs bg-background border border-border rounded px-2 py-1.5 break-all">
                 {createdLinks.controlUrl}
@@ -104,9 +104,9 @@ export function CreateTimerForm() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => copyToClipboard(createdLinks.controlUrl, "Ovladaci link")}
+                onClick={() => copyToClipboard(createdLinks.controlUrl, "Ovládací link")}
               >
-                Kopirovat
+                Kopírovat
               </Button>
             </div>
           </div>
@@ -123,7 +123,7 @@ export function CreateTimerForm() {
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
       <Input
         name="name"
-        label="Nazev casovace"
+        label="Název časovače"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Napr. Prezentace clena"
@@ -131,7 +131,7 @@ export function CreateTimerForm() {
       />
       <Input
         name="displaySeconds"
-        label="Delka v sekundach"
+        label="Délka v sekundách"
         type="number"
         min={1}
         max={86400}
@@ -141,7 +141,7 @@ export function CreateTimerForm() {
         error={error}
       />
       <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Vytvorit casovac
+        Vytvořit časovač
       </Button>
     </form>
   );

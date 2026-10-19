@@ -68,7 +68,7 @@ function DueRow({
         <span className="font-medium text-text-main">{entry.memberName}</span>
         {entry.joinedAtUnverified && (
           <Badge variant="warning" className="ml-2">
-            Neoverene datum vstupu
+            Neověřené datum vstupu
           </Badge>
         )}
       </div>

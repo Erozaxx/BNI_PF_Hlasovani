@@ -39,39 +39,39 @@ export function PromoteGuestButton({
 
   function buildConfirmText(): string {
     const lines = [
-      `Povysit hosta "${guestName}" na clena?`,
+      `Povýšit hosta "${guestName}" na člena?`,
       "",
-      "Vznikne novy clen (jmeno, firma, email, obor podle kategorie hosta). Host bude NENAVRATNE smazan a s nim:",
+      "Vznikne nový člen (jméno, firma, e-mail, obor podle kategorie hosta). Host bude NENÁVRATNĚ smazán a s ním:",
       "",
-      "- vsechny poznamky o hostovi",
-      "- vsechny hlasy o prijeti hosta, vcetne historie v archivu",
-      "- ucast hosta na vsech schuzkach, vcetne nadchazejicich, kde se jeste nehlasovalo",
-      "- telefon a popis hosta (clen tato pole nema)",
+      "- všechny poznámky o hostovi",
+      "- všechny hlasy o přijetí hosta, včetně historie v archivu",
+      "- účast hosta na všech schůzkách, včetně nadcházejících, kde se ještě nehlasovalo",
+      "- telefon a popis hosta (člen tato pole nemá)",
       "",
     ];
 
     if (!hasEmail) {
       lines.push(
-        "Host nema vyplneny email - clen vznikne bez emailu a nepujde mu poslat hlasovaci odkaz, dokud email nedoplnite v administraci.",
+        "Host nemá vyplněný e-mail. Člen vznikne bez e-mailu a nepůjde mu poslat hlasovací odkaz, dokud e-mail nedoplníte v sekci Členové.",
         ""
       );
     }
 
-    lines.push("Tuto akci nelze vzit zpet.");
+    lines.push("Tuto akci nelze vzít zpět.");
     return lines.join("\n");
   }
 
   function buildRepairConfirmText(existingMemberEmail: string): string {
     return [
-      `Clen se stejnym jmenem i emailem (${existingMemberEmail}) uz existuje.`,
+      `Člen se stejným jménem i e-mailem (${existingMemberEmail}) už existuje.`,
       "",
-      `Novy clen NEVZNIKNE. Host "${guestName}" bude pouze NENAVRATNE smazan, vcetne poznamek, hlasu a ucasti na schuzkach.`,
+      `Nový člen NEVZNIKNE. Host "${guestName}" bude pouze NENÁVRATNĚ smazán, včetně poznámek, hlasů a účasti na schůzkách.`,
       "",
-      "Pokud jste tohoto clena uz zalozili drive rucne, je to v poradku - potvrzenim se odstrani jen zbytecny zaznam hosta.",
+      "Pokud jste tohoto člena už založili dříve ručně, je to v pořádku. Potvrzením se odstraní jen zbytečný záznam hosta.",
       "",
-      "Pokud jde o dva ruzne lidi (napr. sdileny firemni email), akci zruste a nejdriv upravte email hosta.",
+      "Pokud jde o dva různé lidi (např. sdílený firemní e-mail), akci zrušte a nejdřív upravte e-mail hosta.",
       "",
-      "Smazat hosta bez vytvoreni noveho clena?",
+      "Smazat hosta bez vytvoření nového člena?",
     ].join("\n");
   }
 
@@ -80,12 +80,12 @@ export function PromoteGuestButton({
       if (result.repaired) {
         showToast(
           "success",
-          `Host "${guestName}" byl odstranen. Novy clen nevznikl - clen se stejnym jmenem a emailem uz existoval.`
+          `Host "${guestName}" byl odstraněn. Nový člen nevznikl, člen se stejným jménem a e-mailem už existoval.`
         );
       } else {
         showToast(
           "success",
-          `Host "${guestName}" byl povysen na clena. Clen zatim nema prihlasovaci odkaz - vygeneruje ho admin v sekci Clenove.`
+          `Host "${guestName}" byl povýšen na člena. Člen se přihlásí sám na přihlašovací stránce svým e-mailem. Admin v sekci Členové ověří, že e-mail sedí.`
         );
       }
       if (redirectTo) {
@@ -119,7 +119,7 @@ export function PromoteGuestButton({
       const result = await promoteGuestToMemberAction(guestId);
       await handleResult(result);
     } catch {
-      showToast("error", "Nepodarilo se povysit hosta.");
+      showToast("error", "Nepodařilo se povýšit hosta.");
     } finally {
       setIsSubmitting(false);
     }
@@ -133,7 +133,7 @@ export function PromoteGuestButton({
       loading={isSubmitting}
       onClick={handlePromote}
     >
-      Povysit na clena
+      Povýšit na člena
     </Button>
   );
 }

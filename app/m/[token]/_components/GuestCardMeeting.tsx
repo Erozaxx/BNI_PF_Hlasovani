@@ -87,7 +87,7 @@ export function GuestCardMeeting({
                 ({ up: "success", neutral: "neutral", down: "danger" } as Record<string, "success" | "neutral" | "danger">)[initialVote.value] ?? "neutral"
               }
             >
-              {({ up: "Pro", neutral: "Nevim", down: "Proti" } as Record<string, string>)[initialVote.value] ?? initialVote.value}
+              {({ up: "Pro", neutral: "Nevím", down: "Proti" } as Record<string, string>)[initialVote.value] ?? initialVote.value}
             </Badge>
             {initialVote.reason && (
               <p className="text-xs text-text-muted max-w-xs text-right">

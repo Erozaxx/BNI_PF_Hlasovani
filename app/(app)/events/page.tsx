@@ -62,7 +62,7 @@ export default async function EventsPage({
         <h1 className="text-2xl font-bold text-text-main">Akce</h1>
         <Link href="/events/new">
           <Button variant="primary" size="sm">
-            + Nova akce
+            + Nová akce
           </Button>
         </Link>
       </div>

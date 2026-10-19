@@ -62,13 +62,13 @@ function DueChip({
   type: "month_5" | "month_10";
   memberId: string;
 }) {
-  const label = type === "month_5" ? "5 mesicu" : "10 mesicu";
+  const label = type === "month_5" ? "5 měsíců" : "10 měsíců";
   const variant: BadgeVariant = type === "month_5" ? "info" : "warning";
   return (
     <Link
       href={`/interviews?memberId=${memberId}&type=${type}`}
-      title={`Zalozit pohovor ${label}`}
-      aria-label={`Zalozit pohovor ${label}`}
+      title={`Založit pohovor ${label}`}
+      aria-label={`Založit pohovor ${label}`}
       className="hover:opacity-80"
     >
       <Badge variant={variant}>{label}</Badge>

@@ -10,7 +10,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-lg">
-      <h1 className="text-2xl font-bold text-text-main">Nastaveni</h1>
+      <h1 className="text-2xl font-bold text-text-main">Nastavení</h1>
 
       <Card>
         <h2 className="text-lg font-semibold text-text-main mb-4">

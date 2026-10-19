@@ -92,7 +92,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       )}
 
       <Button type="submit" variant="primary" size="md" loading={loading}>
-        Zmenit heslo
+        Změnit heslo
       </Button>
     </form>
   );

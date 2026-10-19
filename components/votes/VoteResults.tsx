@@ -17,7 +17,7 @@ interface VoteResultsProps {
 
 const valueBadge: Record<string, { variant: "success" | "neutral" | "danger"; label: string }> = {
   up: { variant: "success", label: "Pro" },
-  neutral: { variant: "neutral", label: "Neutralni" },
+  neutral: { variant: "neutral", label: "Neutrální" },
   down: { variant: "danger", label: "Proti" },
 };
 

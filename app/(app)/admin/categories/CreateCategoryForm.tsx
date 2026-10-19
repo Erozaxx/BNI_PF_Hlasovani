@@ -50,7 +50,7 @@ export function CreateCategoryForm() {
       <div className="flex-1 min-w-0">
         <Input
           name="name"
-          label="Nazev kategorie"
+          label="Název kategorie"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Napr. IT / Technologie"
@@ -58,7 +58,7 @@ export function CreateCategoryForm() {
         />
       </div>
       <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Pridat
+        Přidat
       </Button>
     </form>
   );

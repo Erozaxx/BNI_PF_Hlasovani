@@ -92,7 +92,7 @@ export function MeetingNoteForm({
         onClick={handleOpen}
         className="text-sm text-navy hover:underline"
       >
-        + Pridat poznamku
+        + Přidat poznámku
       </button>
     );
   }

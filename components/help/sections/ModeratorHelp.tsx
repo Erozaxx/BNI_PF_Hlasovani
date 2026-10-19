@@ -1,247 +1,178 @@
+import { HelpSection } from "@/components/help/HelpParts";
+
 export function ModeratorHelp() {
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Přihlášení</h2>
-        <p className="text-sm text-text-muted mb-3">
-          Moderátor se přihlašuje do aplikace pomocí hesla na přihlašovací
-          stránce. Na rozdíl od členů, kteří používají magic link, moderátor
-          zadává přímo své uživatelské jméno a heslo.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            Přejděte na stránku <strong>/login</strong>.
-          </li>
-          <li>Zadejte své přihlašovací jméno a heslo.</li>
-          <li>
-            Klikněte na tlačítko <strong>Přihlásit se</strong>.
-          </li>
-          <li>
-            Po úspěšném přihlášení budete přesměrováni na Dashboard.
-          </li>
-        </ol>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Jak změním heslo?</strong> — Heslo lze změnit v sekci{" "}
-            <strong>Nastavení</strong> — tato funkce je dostupná pouze adminovi;
-            požádejte admina o změnu.
-          </li>
-          <li>
-            <strong>Proč nemohu použít magic link jako člen?</strong> —
-            Moderátoři a admini se přihlašují heslem; magic link je určen pouze
-            pro členy s omezenou rolí.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Přihlášení vedení"
+        steps={[
+          "Na přihlašovací stránce zadejte e-mail a klikněte na „Pokračovat“.",
+          "Zadejte heslo a klikněte na „Přihlásit se“.",
+        ]}
+        note="Funkce vedení máte jen po přihlášení heslem. Přes „Poslat odkaz místo hesla“ se přihlásíte jako člen, na 12 hodin a bez tlačítek vedení. Přihlášení heslem vydrží 8 hodin."
+        faq={[
+          {
+            q: "Heslo ještě nemám.",
+            a: "Když vám admin dá roli, přijde vám mail „BNI Plzeň: nastav si heslo pro vedení“. Odkaz platí 24 hodin a jde použít jednou. Heslo musí mít aspoň 8 znaků.",
+          },
+          {
+            q: "Jak změním heslo?",
+            a: "V Nastavení, „Změnit heslo“. Na ostatních zařízeních se odhlásíte.",
+          },
+          {
+            q: "Zapomněl(a) jsem heslo.",
+            a: "Napište adminovi, pošle vám nový odkaz pro nastavení hesla.",
+          },
+        ]}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          Vytvoření schůzky a místo konání
-        </h2>
-        <p className="text-sm text-text-muted mb-3">
-          Moderátor vytváří nové schůzky, ke kterým se přiřazují hosté a spouští
-          hlasování. Každá schůzka má datum a volitelné pole Místo konání, které
-          slouží pro evidenci, kde se schůzka koná.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            V navigaci klikněte na <strong>Schůzky</strong>.
-          </li>
-          <li>
-            Klikněte na tlačítko <strong>Vytvořit schůzku</strong>.
-          </li>
-          <li>Zadejte datum schůzky (povinné pole).</li>
-          <li>
-            Volitelně vyplňte pole <strong>Místo konání</strong> (např. &ldquo;Café
-            Imperial, Praha&rdquo;).
-          </li>
-          <li>
-            Klikněte na <strong>Uložit</strong>.
-          </li>
-          <li>Nově vytvořená schůzka se zobrazí v seznamu schůzek.</li>
-        </ol>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Je Místo konání povinné?</strong> — Ne, pole Místo konání je
-            volitelné; vyplňte ho pouze tehdy, pokud chcete mít místo evidováno
-            v reportu.
-          </li>
-          <li>
-            <strong>Kde uvidím vytvořenou schůzku?</strong> — Schůzka se zobrazí
-            ihned v seznamu na stránce Schůzky a bude dostupná k editaci.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Schůzka a hosté"
+        steps={[
+          "Na stránce Schůzky vyplňte v kartě „Nová schůzka“ datum, případně místo konání, a klikněte na „Vytvořit“.",
+          "Hosty přidáte třemi cestami. Na stránce Hosté přes „+ Přidat hosta“ (nechte zaškrtnuté „Přidat do schůzky {datum}“). V detailu schůzky přes „Přidat hosta“ u hosta, který už v aplikaci je. Nebo hromadně přes „Importovat hosty (.xlsx)“.",
+          "Pořadí hostů změníte přetažením za „≡“.",
+          "Prezenční listinu stáhnete přes „Exportovat seznam (.xlsx)“.",
+        ]}
+        note="Hosty jde přidávat a importovat jen ve stavu Návrh. Po spuštění hlasování už ne."
+        faq={[
+          {
+            q: "Kategorie hosta je povinná.",
+            a: "Vyberte ze seznamu, nebo napište novou a zvolte „Vytvořit: {název}“. Držte se raději seznamu, kategorie vycházejí z číselníku CZ-NACE.",
+          },
+          {
+            q: "Co musí mít importní soubor?",
+            a: "Sloupce Full Name, Email, Phone Number, Company Name, Company profile (z něj je kategorie) a Poznamka, nejvýš 500 řádků. Host se stejným e-mailem nebo jménem se nezaloží znovu, sloučí se.",
+          },
+        ]}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          Výběr hostů před hlasováním
-        </h2>
-        <p className="text-sm text-text-muted mb-3">
-          Před spuštěním hlasování se zobrazí checklist hostů, kde moderátor
-          určí, kteří hosté půjdou do hlasování. Výchozí stav je, že jsou
-          zaškrtnuti všichni hosté přiřazení ke schůzce; moderátor může
-          jednotlivé hosty odznačit.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            Otevřete detail schůzky, pro kterou chcete spustit hlasování.
-          </li>
-          <li>
-            Klikněte na tlačítko <strong>Spustit hlasování</strong> — zobrazí se
-            checklist hostů.
-          </li>
-          <li>Zkontrolujte seznam hostů; všichni jsou výchozně zaškrtnuti.</li>
-          <li>
-            Odznačte zaškrtávací políčko u hostů, kteří se hlasování neúčastní.
-          </li>
-          <li>
-            Klikněte na <strong>Potvrdit a spustit</strong> — hlasování se
-            spustí jen pro vybrané hosty.
-          </li>
-        </ol>
-        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm mb-3">
-          Po kliknutí na &ldquo;Potvrdit a spustit&rdquo; již nelze seznam hlasovaných hostů
-          změnit bez uzavření a opětovného spuštění hlasování.
-        </div>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Co se stane s hostem, kterého odznačím?</strong> — Host
-            zůstane přiřazen ke schůzce, ale nebude zařazen do aktuálního
-            hlasování.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Spuštění hlasování"
+        steps={[
+          "Otevřete detail schůzky a klikněte na „Spustit hlasování“. Hlasuje se o všech hostech schůzky.",
+          "Potvrďte. Odkazy členům odejdou ráno v den schůzky, ne hned.",
+        ]}
+        note="Když hlasování ve čtvrtek ráno neběží, aplikace ho pro dnešní schůzku spustí sama. Den předem a v den schůzky vás na to upozorní pruh nahoře na každé stránce, s odkazem „Spustit hlasování“. Hlasování běží do středy 23:59 po schůzce."
+        faq={[
+          {
+            q: "Spouštím hlasování až v den schůzky.",
+            a: "Maily pak odejdou hned. Kdo odkaz nedostal, tomu ho pošlete přes „Rozeslat hned“.",
+          },
+          {
+            q: "Člen ztratil odkaz.",
+            a: "V detailu schůzky v části „Magic linky členů“ ho zkopírujte, nebo pošlete znovu.",
+          },
+          {
+            q: "Proč mi přišel varovný mail?",
+            a: "Ve čtvrtek ráno nebylo co spustit, nebo něco neodešlo. Podrobnosti jsou v Provozu.",
+          },
+          {
+            q: "",
+            a: "Připomínky členům, kteří ještě nehlasovali, chodí samy, nejvýš třikrát.",
+          },
+        ]}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          Spuštění a správa hlasování
-        </h2>
-        <p className="text-sm text-text-muted mb-3">
-          Moderátor spouští hlasování po potvrzení výběru hostů a sleduje jeho
-          průběh. Hlasování uzavře, jakmile jsou sbírány všechny hlasy nebo
-          uplyne čas schůzky. Po uzavření schůzka přechází do archivu.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            Otevřete detail schůzky a projděte checklist hostů (viz předchozí
-            kapitola).
-          </li>
-          <li>
-            Kliknutím na <strong>Potvrdit a spustit</strong> otevřete hlasování
-            — stav schůzky se změní na <strong>Aktuální</strong>.
-          </li>
-          <li>
-            Sledujte průběh hlasování na detailu schůzky (přehled odevzdaných
-            hlasů).
-          </li>
-          <li>
-            Po dokončení hlasování klikněte na tlačítko{" "}
-            <strong>Uzavřít hlasování</strong>.
-          </li>
-          <li>
-            Schůzka přejde do stavu <strong>Uzavřeno</strong> a bude přesunuta
-            do archivu.
-          </li>
-        </ol>
-        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm mb-3">
-          Po uzavření hlasování nelze přijímat další hlasy. Schůzka bude
-          dostupná pouze v archivu.
-        </div>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Kde najdu schůzku po uzavření?</strong> — Uzavřené schůzky
-            jsou v sekci <strong>Archiv</strong> v navigaci.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Uzavření a report"
+        intro="Hlasování skončí ve středu 23:59 po schůzce a ve čtvrtek ráno ho aplikace sama uzavře. Report pak odejde mailem všem z vedení: počty hlasů, kdo jak hlasoval, důvody u „Proti“ a poznámky."
+        note="„Uzavřít hlasování“ v detailu schůzky ukončí hlasování hned a vrátit to nejde. Report se při tom neposílá. Pošlete ho tlačítkem „Generovat report“."
+        faq={[
+          {
+            q: "Kde je uzavřená schůzka?",
+            a: "Pořád na stránce Schůzky se stavem Uzavřeno. Hosty z ní najdete i v Archivu.",
+          },
+          {
+            q: "",
+            a: "Výsledky během hlasování vidí v detailu schůzky jen vedení. Členové je v aplikaci vidí až po uzavření.",
+          },
+        ]}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Správa hostů</h2>
-        <p className="text-sm text-text-muted mb-3">
-          Moderátor může přidávat nové hosty do systému a editovat existující
-          záznamy. Každý host má profil s kontaktními údaji a kategorií dle
-          číselníku CZ-NACE.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            V navigaci klikněte na <strong>Hosté</strong>.
-          </li>
-          <li>
-            Pro přidání nového hosta klikněte na <strong>Přidat hosta</strong>.
-          </li>
-          <li>
-            Vyplňte formulář: <strong>Jméno</strong>, <strong>Firma</strong>,{" "}
-            <strong>E-mail</strong>, <strong>Kategorie</strong>,{" "}
-            <strong>Popis</strong>.
-          </li>
-          <li>
-            V poli <strong>Kategorie</strong> vyberte ze seznamu (CZ-NACE
-            číselník) nebo klikněte na <strong>Vytvořit novou kategorii</strong>{" "}
-            a zadejte vlastní název.
-          </li>
-          <li>
-            Klikněte na <strong>Uložit</strong> — host je přidán do systému.
-          </li>
-          <li>
-            Pro editaci existujícího hosta klikněte na jeho jméno v seznamu a
-            pak na <strong>Upravit</strong>.
-          </li>
-        </ol>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>
-              Mohu hosta přiřadit ke schůzce hned při vytváření?
-            </strong>{" "}
-            — Ano, v procesu přidávání hosta lze schůzku přiřadit přímo z
-            formuláře.
-          </li>
-          <li>
-            <strong>
-              Doporučuje se vlastní kategorie nebo ze seznamu?
-            </strong>{" "}
-            — Doporučujeme použít standardní kategorii ze seznamu CZ-NACE;
-            vlastní kategorii použijte jen pokud vhodná kategorie v číselníku
-            neexistuje.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Úprava hosta"
+        intro="V detailu hosta změníte kategorii v kartě „Změna kategorie“ tlačítkem „Změnit“. Jiné údaje hosta v aplikaci upravit nejdou."
+        faq={[
+          {
+            q: "Host se stal členem.",
+            a: "Klikněte na „Povýšit na člena“. Vznikne člen a host se smaže i s poznámkami a hlasy, vrátit to nejde. Novému členovi pak admin v Členech zkontroluje e-mail, ať se může přihlásit.",
+          },
+          {
+            q: "",
+            a: "Hosta smazat nemůžete, to dělá admin.",
+          },
+        ]}
+      />
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Generování reportu</h2>
-        <p className="text-sm text-text-muted mb-3">
-          Report schůzky je souhrn výsledků hlasování — zobrazuje, kteří hosté
-          byli hodnoceni a jak dopadlo jejich hlasování. Report je dostupný po
-          uzavření schůzky.
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>
-            Otevřete sekci <strong>Archiv</strong> v navigaci.
-          </li>
-          <li>
-            Vyberte uzavřenou schůzku, pro kterou chcete zobrazit report.
-          </li>
-          <li>
-            Na detailu schůzky klikněte na tlačítko{" "}
-            <strong>Zobrazit report</strong>.
-          </li>
-          <li>
-            Report se zobrazí na obrazovce se seznamem hostů a výsledky
-            hlasování.
-          </li>
-        </ol>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Co report obsahuje?</strong> — Report obsahuje datum
-            schůzky, místo konání (pokud bylo zadáno), seznam hlasovaných hostů
-            a výsledky jejich hlasování (počty hlasů Ano/Ne/Zdržuji se).
-          </li>
-          <li>
-            <strong>Mohu report exportovat?</strong> — V aktuální verzi aplikace
-            je report dostupný pouze k zobrazení na obrazovce.
-          </li>
-        </ul>
-      </section>
+      <HelpSection
+        title="Akce"
+        intro="V Akcích se hlasuje o termínu nebo jiné volbě, třeba o místě. Hlasují členové i lidé mimo chapter, přes odkaz z mailu."
+        steps={[
+          "Klikněte na „+ Nová akce“. Vyplňte název, typ hlasování (jedna možnost, víc, nebo nejvýš N), typ možností (text, datum, datum a čas), kdo může hlasovat a do kdy platí odkaz. Uložte „Vytvořit akci“.",
+          "V detailu akce přidejte možnosti a účastníky. Lidi mimo chapter přes „Přidat externího účastníka“.",
+          "Klikněte na „Spustit akci“. Účastníkům odejde pozvánka s odkazem.",
+          "Po hlasování „Uzavřít akci“, vítěze označte „Označit vítěze“ a po akci „Označit jako konanou“.",
+        ]}
+        faq={[
+          {
+            q: "",
+            a: "Výsledky stáhnete v části „Report výsledků“ přes „Exportovat CSV“.",
+          },
+          {
+            q: "Účastník nemá mail.",
+            a: "V části „Účastníci“ mu ho pošlete znovu přes „Znovu odeslat“.",
+          },
+        ]}
+      />
+
+      <HelpSection
+        title="Časovače"
+        intro="Časovač odpočítává čas na projekci, třeba u prezentací členů na schůzce."
+        steps={[
+          "Na stránce Časovače vyplňte název a délku v sekundách a klikněte na „Vytvořit časovač“.",
+          "Zkopírujte oba odkazy. Zobrazovací patří na projekci, ovládací si nechte.",
+          "Na ovládacím odkazu časovač spustíte „Spustit“, zastavíte „Pauza“ a vrátíte „Reset“.",
+        ]}
+        note="Oba odkazy se ukážou jen jednou. Ze seznamu časovačů je ale zkopírujete znovu."
+        faq={[
+          {
+            q: "",
+            a: "Malé okno místo celé obrazovky: na konec zobrazovacího odkazu přidejte ?mini=1.",
+          },
+        ]}
+      />
+
+      <HelpSection
+        title="Pohovory s novými členy"
+        intro="V pátém a desátém měsíci členství dělá vedení s členem pohovor. Komu pohovor vychází, ukazuje stránka Pohovory a dashboard."
+        steps={[
+          "Klikněte na „Založit pohovor“, vyberte člena, typ (5 nebo 10 měsíců) a vedoucího pohovoru.",
+          "V detailu pohovoru pošlete vedoucímu odkaz na formulář. Vedoucí ho vyplní bez přihlášení.",
+          "Po vyplnění pošlete report přes „Odeslat report“. Po obou pohovorech je porovnají „Porovnat 5 vs 10“.",
+        ]}
+        faq={[
+          {
+            q: "",
+            a: "Otázky upravíte ve „Správě otázek“. U každé zaškrtnete, jestli platí pro pohovor po 5, nebo po 10 měsících. Otázka, která pro daný pohovor neplatí, je ve formuláři přeškrtnutá.",
+          },
+          {
+            q: "U člena svítí „Neověřené datum vstupu“.",
+            a: "Datum vstupu doplní admin v Členech, podle něj se počítá, kdy pohovor vychází.",
+          },
+        ]}
+      />
+
+      <HelpSection
+        title="Provoz"
+        intro="Provoz ukazuje, co aplikace sama dělala: rozesílání odkazů, připomínky, reporty, varování a zásahy vedení. Filtrujete podle člena, schůzky, závažnosti a data."
+        faq={[
+          {
+            q: "Člen tvrdí, že mail nedostal.",
+            a: "Otevřete běh a podívejte se na „Stav u poskytovatele“. „Doručeno“ znamená, že mail dorazil, nejspíš je ve spamu. „Odmítnuto“ znamená špatnou adresu.",
+          },
+        ]}
+      />
 
       <section>
         <h2 className="text-lg font-semibold mb-3">
@@ -287,48 +218,10 @@ export function ModeratorHelp() {
           </li>
           <li>
             <strong>Změna člena, který téma přináší.</strong> U zapsaného případu jde jen
-            smazat a zapsat znovu, zájmy se přitom ztratí.
+            stáhnout a zapsat znovu, zájmy se přitom ztratí.
           </li>
           <li>
             <strong>Vrátit potvrzení.</strong> Slouží jen na opravu překlepu.
-          </li>
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Omezení role Moderátora</h2>
-        <p className="text-sm text-text-muted mb-3">
-          Role moderátora je určena pro řízení schůzek a hlasování. Některé
-          administrativní funkce jsou vyhrazeny pouze pro roli Admin a moderátor
-          k nim nemá přístup.
-        </p>
-        <p className="text-sm font-medium mb-2">Co moderátor nemůže:</p>
-        <ul className="list-disc list-inside text-sm space-y-1 mb-3">
-          <li>
-            Spravovat členy (přidat, smazat, revokovat magic link) — sekce
-            /admin/members.
-          </li>
-          <li>Mazat hosty ze systému — pouze editace.</li>
-          <li>
-            Spravovat kategorie (přidávat, přejmenovávat, mazat) — sekce
-            /admin/categories.
-          </li>
-          <li>Měnit hesla jiných uživatelů — sekce Nastavení.</li>
-          <li>Přidávat nové moderátory nebo adminy.</li>
-        </ul>
-        <p className="text-sm font-medium mb-2">
-          Postup v případě potřeby adminské funkce:
-        </p>
-        <ol className="list-decimal list-inside space-y-1 text-sm mb-3">
-          <li>Identifikujte, jakou adminskou akci potřebujete.</li>
-          <li>Kontaktujte admina aplikace s konkrétním požadavkem.</li>
-          <li>Admin provede akci v sekci /admin.</li>
-        </ol>
-        <ul className="text-sm space-y-1">
-          <li>
-            <strong>Jak poznám, že jsem moderátor a ne admin?</strong> — V
-            navigaci se vám nezobrazuje sekce <strong>Admin</strong> (položky
-            Členové a Kategorie). Pokud ji vidíte, máte roli Admin.
           </li>
         </ul>
       </section>
@@ -392,6 +285,11 @@ export function ModeratorHelp() {
           </li>
         </ul>
       </section>
+
+      <HelpSection
+        title="Co dělá jen admin"
+        intro="Moderátor nespravuje členy a jejich role, nemění cizí hesla, nemaže hosty, schůzky ani akce a nepřejmenovává ani nemaže kategorie. O to požádejte admina. Sekci Admin s položkami Členové a Kategorie vidí v menu jen admin."
+      />
     </div>
   );
 }
