@@ -2,7 +2,8 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAuth, requireManagementRole } from "@/lib/auth/guards";
+import { requireAuth, requirePermission } from "@/lib/auth/guards";
+import { can } from "@/lib/auth/permissions";
 import {
   confirmOfferGuarded,
   createContactItemWithLimit,
@@ -41,6 +42,8 @@ import {
   validateOfferInput,
 } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
+import { getMemberById } from "@/lib/db/queries/members";
+import { isMemberActive } from "@/lib/members/activity";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import type { OpsEventInput } from "@/lib/ops/types";
 import type { SessionData } from "@/lib/auth/session";
@@ -53,15 +56,13 @@ import type { ActionResult } from "@/lib/types";
  * Guard na začátku každé akce je závazný a hlídá ho statický test
  * (scripts/test-iter-035-burza.ts): `requireAuth` pro saveOffer, confirmOffer,
  * removeOffer, setHelpUsed, removeHelp, saveContactItem, removeContactItem a
- * setContactUsed, `requireManagementRole` pro recordHelpFor a removeContactUse. U akcí s `requireAuth` platí autorita ve WHERE příkazu
+ * setContactUsed, `requirePermission("burza.manage")` pro recordHelpFor a removeContactUse. U akcí s `requireAuth` platí autorita ve WHERE příkazu
  * (`$target = $me OR $isManagement`, `$isManagement` ze session).
  *
  * Bez transakcí (LL-003): každá akce je jeden SQL příkaz a log až po něm.
  * Do logu ani do `detail` nejde e-mailová adresa, text řádku, kontakt ani
  * poznámka. Žádné maily.
  */
-
-const MANAGEMENT_ROLES: Array<"admin" | "moderator"> = ["admin", "moderator"];
 
 function errClass(err: unknown): string {
   return err instanceof Error ? err.name : typeof err;
@@ -74,8 +75,9 @@ function dbErrorCode(err: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
+/** iter-037 (arch 6.6): právo `burza.manage` místo role (admin má všechna práva). */
 function isManagementSession(session: SessionData): boolean {
-  return session.managementRole === "admin" || session.managementRole === "moderator";
+  return can(session, "burza.manage");
 }
 
 /** LL-011: sestavení vstupu i zápis uvnitř try, nikdy neshodí akci. */
@@ -95,6 +97,18 @@ function eventCtx(session: SessionData): BurzaEventCtx {
     actorId: session.memberId,
     isManagement: isManagementSession(session),
   };
+}
+
+/**
+ * iter-037 (security L-3, review MIN-4): vedení nezapisuje za neaktivního člena.
+ * Vlastník je aktivní vždy (neaktivní má prázdnou session). Hláška česky, SQL
+ * v `createOfferGuarded` a spol. je druhá pojistka.
+ */
+async function inactiveTargetError(targetId: string, actorId: string): Promise<string | null> {
+  if (targetId === actorId) return null;
+  const target = await getMemberById(targetId);
+  if (!target) return MESSAGES.memberGone;
+  return isMemberActive(target, todayInPrague()) ? null : MESSAGES.memberInactive;
 }
 
 function revalidateOffers(): void {
@@ -140,6 +154,9 @@ export async function saveOfferAction(
   }
 
   try {
+    const blocked = await inactiveTargetError(input.memberId, actor.memberId);
+    if (blocked) return { success: false, error: blocked };
+
     const args = {
       targetId: input.memberId,
       actorId: actor.memberId,
@@ -249,6 +266,8 @@ async function recordHelp(opts: {
       today,
     });
     if (why.helperName === null) return { success: false, error: MESSAGES.memberGone };
+    if (!why.helperActive) return { success: false, error: MESSAGES.cardUnavailable };
+    if (!why.recipientActive) return { success: false, error: MESSAGES.memberInactive };
     if (!why.hasOffer) return { success: false, error: MESSAGES.helperGone(why.helperName) };
     if (why.recordedId) {
       return { success: true, data: { recorded: true, already: true, helpId: why.recordedId } };
@@ -321,7 +340,7 @@ export async function recordHelpForAction(
   recipientId: string,
   note?: string | null
 ): Promise<ActionResult<RecordHelpResult>> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("burza.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -396,6 +415,9 @@ export async function saveContactItemAction(
   }
 
   try {
+    const blocked = await inactiveTargetError(input.memberId, actor.memberId);
+    if (blocked) return { success: false, error: blocked };
+
     const owner = created
       ? await createContactItemWithLimit({
           targetId: input.memberId,
@@ -490,6 +512,7 @@ export async function setContactUsedAction(
           recipientId: actor.memberId,
         });
         if (!why.exists) return { success: false, error: MESSAGES.contactGone };
+        if (!why.ownerActive) return { success: false, error: MESSAGES.cardUnavailable };
         if (why.own) return { success: false, error: MESSAGES.contactSelf };
         if (!why.recordedId) return { success: false, error: MESSAGES.generic };
       }
@@ -505,7 +528,7 @@ export async function setContactUsedAction(
 
 /** Smazání záznamu o využití kontaktu: jen vedení (člen odškrtává přepínačem). */
 export async function removeContactUseAction(useId: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("burza.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 

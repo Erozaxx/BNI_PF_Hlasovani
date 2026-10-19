@@ -74,7 +74,7 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const AUTH = "requireAuth";
-const MGMT = "requireManagementRole";
+const MGMT = "requirePermission";
 
 /** Očekávaný guard per akce (arch 5.1 po Z3 a Z4, sloupec Guard je závazný). */
 const GUARD_TABLE: Record<string, string> = {
@@ -99,7 +99,7 @@ function actionGuards(src: string): Record<string, string> {
   while ((m = re.exec(src))) starts.push({ name: m[1], at: m.index });
   starts.forEach((s, i) => {
     const body = src.slice(s.at, i + 1 < starts.length ? starts[i + 1].at : src.length);
-    const first = /await (requireAuth|requireManagementRole|requireAdmin)\(/.exec(body);
+    const first = /await (requireAuth|requirePermission|requireAdmin)\(/.exec(body);
     out[s.name] = first ? first[1] : "";
   });
   return out;
@@ -396,11 +396,11 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "10b. test testu: akce vedení s requireAuth místo requireManagementRole test shodí (řetězec v paměti)",
+    name: "10b. test testu: akce vedení s requireAuth místo requirePermission test shodí (řetězec v paměti)",
     run: () => {
       const src = readSrc("actions/burza.ts");
       const broken = src.replace(
-        /(export async function recordHelpForAction[\s\S]*?)await requireManagementRole\(/,
+        /(export async function recordHelpForAction[\s\S]*?)await requirePermission\(/,
         "$1await requireAuth("
       );
       assert.notEqual(broken, src, "záměna se musela provést");
@@ -408,7 +408,7 @@ const cases: TestCase[] = [
       assert.ok(problems.some((p) => p.startsWith("recordHelpForAction")), problems.join("; "));
       const extra = src + "\nexport async function neznamaAkce() { await requireAuth(); }\n";
       assert.ok(guardMismatches(extra).some((p) => p.includes("neznamaAkce")));
-      const missing = src.replace(/await requireManagementRole\(MANAGEMENT_ROLES\)/, "undefined");
+      const missing = src.replace(/await requirePermission\("burza.manage"\)/, "undefined");
       assert.ok(guardMismatches(missing).length > 0);
     },
   },
@@ -435,7 +435,7 @@ const cases: TestCase[] = [
         assert.ok(/await requirePageSession\(/.test(stripComments(readFileSync(f, "utf8"))), relative(ROOT, f));
       }
       const pomoc = readSrc("app/(app)/burza/pomoc/page.tsx");
-      assert.ok(pomoc.includes('requirePageSession({ role: "management", denyTo: "/burza" })'));
+      assert.ok(pomoc.includes('requirePageSession({ permission: "burza.manage", denyTo: "/burza" })'));
       assert.ok(!/burza/i.test(readRaw("middleware.ts")));
     },
   },

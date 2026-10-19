@@ -97,7 +97,12 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Akce byla spustena.");
+        const skippedInactive = result.data?.skippedInactive ?? 0;
+        setSuccessMsg(
+          skippedInactive > 0
+            ? `Akce byla spustena. Přeskočeno, neaktivní: ${skippedInactive}`
+            : "Akce byla spustena."
+        );
         router.refresh();
       }
     });

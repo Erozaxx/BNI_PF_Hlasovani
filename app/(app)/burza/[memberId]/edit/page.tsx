@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getOfferForEdit } from "@/lib/db/queries/burza";
 import { canEditOffer, isUuid } from "@/lib/burza/rules";
 import { OfferForm } from "@/components/burza/OfferForm";
@@ -17,8 +18,7 @@ export default async function EditOfferPage({
   // Neplatné UUID by Postgres odmítl chybou 22P02 a stránka by spadla na 500.
   if (!isUuid(memberId)) notFound();
 
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "burza.manage");
   // Bez práva (cizí řádek, člen bez role) přesměrování: z rozdílu 404 a
   // přesměrování se nepozná, jestli UUID patří členovi, a nic se nenačte.
   if (!canEditOffer({ memberId: session.memberId, isManagement }, memberId)) {

@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { meetingMemberLink, meetingMemberReminder, meeting } from "@/lib/db/schema";
+import { meetingMemberLink, meetingMemberReminder, meeting, member } from "@/lib/db/schema";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 import { decideMeetingTokenAccess } from "./meeting-token-access";
 
 function getDb() {
@@ -52,8 +53,11 @@ export async function verifyMeetingToken(
       tokenHash: meetingMemberLink.tokenHash,
       expiresAt: meetingMemberLink.expiresAt,
       revokedAt: meetingMemberLink.revokedAt,
+      // iter-037 (T-003b): neaktivní člen = odkaz neplatí (hlas ani poznámka).
+      memberActive: sql<boolean>`${memberActiveSql("member")}`,
     })
     .from(meetingMemberLink)
+    .innerJoin(member, eq(member.id, meetingMemberLink.memberId))
     .where(eq(meetingMemberLink.tokenHash, tokenHash))
     .limit(1);
 
@@ -75,6 +79,7 @@ export async function verifyMeetingToken(
         tokenHash: meetingMemberLink.tokenHash,
         revokedAt: meetingMemberLink.revokedAt,
         expiresAt: meetingMemberLink.expiresAt,
+        memberActive: sql<boolean>`${memberActiveSql("member")}`,
       })
       .from(meetingMemberReminder)
       .innerJoin(
@@ -84,6 +89,7 @@ export async function verifyMeetingToken(
           eq(meetingMemberLink.memberId, meetingMemberReminder.memberId)
         )
       )
+      .innerJoin(member, eq(member.id, meetingMemberLink.memberId))
       .where(eq(meetingMemberReminder.tokenHash, tokenHash))
       .limit(1);
 

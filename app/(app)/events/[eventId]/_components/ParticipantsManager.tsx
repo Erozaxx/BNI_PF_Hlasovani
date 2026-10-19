@@ -24,6 +24,8 @@ interface Participant {
   createdAt: Date;
   memberName: string | null;
   memberEmail: string | null;
+  /** iter-037: členové deaktivovaní k dnešku jsou `false`, externí vždy `true`. */
+  memberActive: boolean;
   voteCount: number;
 }
 
@@ -121,7 +123,11 @@ export function ParticipantsManager({
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg(`Odesláno: ${result.data!.sent} emailů${result.data!.skipped > 0 ? `, přeskočeno: ${result.data!.skipped} (bez emailu)` : ""}.`);
+        const inactive = result.data!.skippedInactive;
+        setSuccessMsg(
+          `Odesláno: ${result.data!.sent} emailů${result.data!.skipped > 0 ? `, přeskočeno: ${result.data!.skipped} (bez emailu)` : ""}.` +
+            (inactive > 0 ? ` Přeskočeno, neaktivní: ${inactive}` : "")
+        );
       }
     });
   }
@@ -184,6 +190,7 @@ export function ParticipantsManager({
                     <Badge variant={member ? "info" : "neutral"}>
                       {member ? "Clen BNI" : "Externi"}
                     </Badge>
+                    {!p.memberActive && <Badge variant="warning">Neaktivní</Badge>}
                     {tokenActive ? (
                       <Badge variant="success">Token aktivni</Badge>
                     ) : (
@@ -199,20 +206,22 @@ export function ParticipantsManager({
                 </div>
 
                 <div className="flex flex-wrap gap-2 shrink-0">
-                  {/* Copy magic link */}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleCopyLink(p.id)}
-                    loading={isThisPending && pendingId === p.id}
-                    disabled={isPending}
-                    title="Zkopirovat magic link (stejny odkaz jako v emailu)"
-                  >
-                    {copiedId === p.id ? "Kopirovano!" : "Kopirovat link"}
-                  </Button>
+                  {/* Copy magic link (neaktivnímu členovi se odkaz nezobrazuje) */}
+                  {p.memberActive && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleCopyLink(p.id)}
+                      loading={isThisPending && pendingId === p.id}
+                      disabled={isPending}
+                      title="Zkopirovat magic link (stejny odkaz jako v emailu)"
+                    >
+                      {copiedId === p.id ? "Kopirovano!" : "Kopirovat link"}
+                    </Button>
+                  )}
 
                   {/* Resend email — only in active state, only if email exists */}
-                  {event.status === "active" && email && (
+                  {event.status === "active" && email && p.memberActive && (
                     <Button
                       variant="secondary"
                       size="sm"

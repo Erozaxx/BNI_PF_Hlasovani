@@ -1,8 +1,9 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { getMemberById } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { markLinkEmailSent } from "@/lib/db/queries/meeting-member-links";
 import {
   regenerateMeetingToken,
@@ -35,13 +36,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   // 1. Auth check
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
+  const { session } = authz;
 
   const { id: meetingId, memberId } = await params;
 
@@ -59,6 +56,11 @@ export async function POST(
 
   if (!memberData.email) {
     return err(422, "Member has no email address");
+  }
+
+  // iter-037 (T-003b, gate sekce 5): neaktivnímu členovi odkaz neposíláme.
+  if (!isMemberActive(memberData, pragueToday())) {
+    return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
   }
 
   // iter-027 (T-005, arch 6.5): ruční "Poslat odkaz" — jeden běh, source

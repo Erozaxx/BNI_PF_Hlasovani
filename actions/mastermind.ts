@@ -2,8 +2,10 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireAuth, requireManagementRole } from "@/lib/auth/guards";
+import { requireAuth, requirePermission } from "@/lib/auth/guards";
+import { can } from "@/lib/auth/permissions";
 import { getMemberById } from "@/lib/db/queries/members";
+import { isMemberActive } from "@/lib/members/activity";
 import {
   addInterest,
   confirmPresentedGuarded,
@@ -46,7 +48,7 @@ import type { ActionResult } from "@/lib/types";
  *
  * Guard na začátku každé akce je závazný a hlídá ho statický test
  * (scripts/test-iter-033-mastermind.ts): `requireAuth` pro create, update,
- * remove a setInterest, `requireManagementRole` pro schedule, unschedule,
+ * remove a setInterest, `requirePermission("mastermind.manage")` pro schedule, unschedule,
  * confirm a undo. U akcí s `requireAuth` platí autorita ve WHERE příkazu
  * (`member_id = $me OR $isManagement`, `$isManagement` ze session).
  *
@@ -54,14 +56,13 @@ import type { ActionResult } from "@/lib/types";
  * po něm. Do logu ani do `detail` nejde e-mailová adresa, téma ani text.
  */
 
-const MANAGEMENT_ROLES: Array<"admin" | "moderator"> = ["admin", "moderator"];
-
 function errClass(err: unknown): string {
   return err instanceof Error ? err.name : typeof err;
 }
 
+/** iter-037 (arch 6.6): právo `mastermind.manage` místo role (admin má všechna práva). */
 function isManagementSession(session: SessionData): boolean {
-  return session.managementRole === "admin" || session.managementRole === "moderator";
+  return can(session, "mastermind.manage");
 }
 
 /** LL-011: sestavení vstupu i zápis uvnitř try, nikdy neshodí akci. */
@@ -121,6 +122,9 @@ export async function createCaseAction(
       if (!isUuid(forId)) return { success: false, error: MESSAGES.invalidInput };
       const target = await getMemberById(forId);
       if (!target) return { success: false, error: "Člen nebyl nalezen." };
+      if (!isMemberActive(target, todayInPrague())) {
+        return { success: false, error: MESSAGES.memberInactive };
+      }
       targetId = target.id;
       targetName = target.name;
     }
@@ -228,7 +232,7 @@ export async function setInterestAction(
       if (!inserted) {
         // Nic nevzniklo: případ neexistuje, je vlastní, odprezentovaný, nebo zájem už byl.
         const current = await getCaseById(caseId);
-        if (!current) return { success: false, error: MESSAGES.notFound };
+        if (!current) return { success: false, error: MESSAGES.unavailable };
         if (
           !canSetInterest(
             { memberId: actor.memberId, isManagement: false },
@@ -245,7 +249,7 @@ export async function setInterestAction(
       const removed = await removeInterest(caseId, actor.memberId);
       if (!removed) {
         const current = await getCaseById(caseId);
-        if (!current) return { success: false, error: MESSAGES.notFound };
+        if (!current) return { success: false, error: MESSAGES.unavailable };
         if (current.status === "presented") {
           return { success: false, error: MESSAGES.presentedInterest };
         }
@@ -273,7 +277,7 @@ export async function scheduleCaseAction(
   caseId: string,
   date: string
 ): Promise<ActionResult<ScheduleResult>> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -332,7 +336,7 @@ export async function scheduleCaseAction(
 
 /** Vrácení do zásobníku, přihlášky se vrací na zájmy. */
 export async function unscheduleCaseAction(caseId: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -355,7 +359,7 @@ export async function unscheduleCaseAction(caseId: string): Promise<ActionResult
 
 /** Potvrzení „Odprezentováno“ až v den interní nebo po ní. */
 export async function confirmPresentedAction(caseId: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -386,7 +390,7 @@ export async function confirmPresentedAction(caseId: string): Promise<ActionResu
 
 /** Vrácení potvrzení (K13), jen oprava překlepu. `warn` v logu. */
 export async function undoPresentedAction(caseId: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
   const actor = auth.session;
 

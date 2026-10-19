@@ -209,6 +209,7 @@ export function SortableMeetingGuestList({
 
   return (
     <DndContext
+      id="meeting-guests-dnd"
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}

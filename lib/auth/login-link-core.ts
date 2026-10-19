@@ -7,6 +7,7 @@
  * DATABASE_URL).
  */
 import { createHash, randomBytes } from "node:crypto";
+import { hasPasswordAccess } from "@/lib/auth/permissions";
 
 // ── Konstanty (jediné místo, změna délky je jeden řádek bez migrace) ──
 
@@ -232,10 +233,22 @@ export interface LoginLinkMemberMatch {
   name: string;
   email: string | null;
   managementRole: string | null;
+  /** iter-037 (T-003b): člen má funkci (věta o heslu v mailu platí i pro držitele funkce). */
+  hasFunction?: boolean;
+  /**
+   * iter-037 (T-003b): aktivní k dnešku. `false` = deaktivovaný, mail neodejde
+   * a odpověď i doba zůstanou stejné jako u ostatních větví. Chybějící pole =
+   * aktivní.
+   */
+  active?: boolean;
 }
 
 export type LoginLinkPlan =
-  | { send: false; reason: "ip-blocked" | "email-blocked" | "no-member" | "no-email"; message: string }
+  | {
+      send: false;
+      reason: "ip-blocked" | "email-blocked" | "no-member" | "no-email" | "inactive";
+      message: string;
+    }
   | {
       send: true;
       reason: "send";
@@ -263,6 +276,7 @@ export function planLoginLinkRequest(input: {
     };
   }
   if (!input.member) return { send: false, reason: "no-member", message };
+  if (input.member.active === false) return { send: false, reason: "inactive", message };
   if (!input.member.email) return { send: false, reason: "no-email", message };
   return {
     send: true,
@@ -270,7 +284,7 @@ export function planLoginLinkRequest(input: {
     memberId: input.member.id,
     memberName: input.member.name,
     email: input.member.email,
-    isManagement: !!input.member.managementRole,
+    isManagement: !!input.member.managementRole || !!input.member.hasFunction,
     message,
   };
 }
@@ -286,6 +300,8 @@ export interface LoginStartMember {
   email: string | null;
   managementRole: string | null;
   passwordHash: string | null;
+  /** iter-037 (T-003b): držitel funkce bez role má heslo také. */
+  hasFunction?: boolean;
 }
 
 export type LoginStartPlan =
@@ -299,7 +315,9 @@ export type LoginStartPlan =
  * je mezi členy veřejně známé a heslo má throttle). Opouští se tím původní
  * návrh arch 6.4 a 6.7. Naopak člena a neexistující e-mail rozlišit nejde:
  * všechno ostatní jde do větve odkazu se stejnou odpovědí a dobou.
- * Do "password" se jde jen s rolí A heslem. Povýšený nebo resetovaný člen
+ * Do "password" se jde jen s rolí NEBO funkcí (T-003b, `hasPasswordAccess`) A
+ * heslem. Neaktivní člen jde na krok hesla stejně (odpověď se neliší), o
+ * pozastavení se dozví až po správném hesle (K18). Povýšený nebo resetovaný člen
  * vedení má v `passwordHash` zámkový hash (ne NULL), takže jde také na krok
  * hesla, i když si heslo ještě nenastavil. Probíhající reset se tím nepozná,
  * proto krok hesla nabízí nápovědu a odkaz. Role s NULL hashem po migraci
@@ -311,6 +329,8 @@ export function planLoginStart(input: {
 }): LoginStartPlan {
   if (input.blocked) return { next: "blocked", message: THROTTLE_BLOCKED_TEXT };
   const m = input.member;
-  if (m && m.managementRole && m.passwordHash) return { next: "password" };
+  if (m && m.passwordHash && hasPasswordAccess({ managementRole: m.managementRole, hasFunction: !!m.hasFunction })) {
+    return { next: "password" };
+  }
   return { next: "link" };
 }

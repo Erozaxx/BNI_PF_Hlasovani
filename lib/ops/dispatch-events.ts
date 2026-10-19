@@ -91,10 +91,14 @@ export function recipientEvent(
 }
 
 function skippedMessage(
-  reason: "no-email" | "revoked" | "already-sent",
+  reason: "inactive" | "no-email" | "revoked" | "already-sent",
   memberName: string
 ): string {
   switch (reason) {
+    case "inactive":
+      // iter-037: do logu se neaktivní nezapisují (voting-dispatch), větev jen
+      // pro vyčerpávající typování. Bez jména, o deaktivaci se v logu nemluví.
+      return "Člen je neaktivní, přeskočeno.";
     case "no-email":
       return `${memberName} nema e-mailovou adresu, preskoceno.`;
     case "revoked":

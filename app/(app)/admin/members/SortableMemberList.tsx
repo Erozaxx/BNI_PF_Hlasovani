@@ -22,13 +22,14 @@ import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { MemberActions } from "./MemberActions";
-import { DeleteMemberButton } from "./DeleteMemberButton";
-import { EditMemberCompanyForm } from "./EditMemberCompanyForm";
-import { EditMemberEmailForm } from "./EditMemberEmailForm";
-import { EditMemberJoinedAtForm } from "./EditMemberJoinedAtForm";
-import { MemberAccessControls } from "./MemberAccessControls";
+import { roleLabel } from "@/lib/members/labels";
 
+/**
+ * iter-037 (T-003c, arch 8.1): seznam členů jako karty. Tabulka na 390 px
+ * přetékala a deaktivace ani funkce se do buňky nevejdou. Údaje člena se
+ * upravují na stránce člena (`/admin/members/[id]`), tady jen přehled,
+ * štítky a přetahování pořadí.
+ */
 export interface MemberRow {
   id: string;
   name: string;
@@ -36,12 +37,10 @@ export interface MemberRow {
   company: string | null;
   obor: string | null;
   managementRole: string | null;
-  /** iter-032: jen příznak, hash se do klienta nikdy neposílá. */
-  hasPassword: boolean;
-  magicTokenHash: string | null;
-  tokenUsed: boolean;
-  /** "YYYY-MM-DD" (arch 7.1, iter-020) — BNI entry date, admin-editable. */
-  joinedAt: string;
+  /** Název funkce z katalogu (Prezident, Viceprezident, Člen výboru) nebo `null`. */
+  functionName: string | null;
+  /** „Neaktivní do 30. 11. 2026“ / „Neaktivní do odvolání“, u aktivního `null`. */
+  inactiveLabel: string | null;
   /** Number of interview records (any status) that would cascade-delete with this member (R-11). */
   interviewCount: number;
   /** From getInterviewDueList() (arch iter-023 T-001 §3.1), unchanged upstream logic. */
@@ -51,7 +50,7 @@ export interface MemberRow {
 
 /**
  * Chip linking to a pre-filled "founding interview" form (arch iter-023 T-001
- * §3.2). Plain <Link> wrapping a <Badge> (<span>) — no interactive descendant,
+ * §3.2). Plain <Link> wrapping a <Badge> (<span>), no interactive descendant,
  * not nested inside another <Link>/<button> (iter-022 lesson, kept even though
  * that regression never actually happened, see decision_iter-023_T-002 §3).
  */
@@ -69,7 +68,7 @@ function DueChip({
       href={`/interviews?memberId=${memberId}&type=${type}`}
       title={`Založit pohovor ${label}`}
       aria-label={`Založit pohovor ${label}`}
-      className="hover:opacity-80"
+      className="inline-flex items-center min-h-[44px] hover:opacity-80"
     >
       <Badge variant={variant}>{label}</Badge>
     </Link>
@@ -78,11 +77,9 @@ function DueChip({
 
 interface SortableMemberListProps {
   members: MemberRow[];
-  /** iter-032 (4.2): řádek přihlášeného admina má výběr role zakázaný. */
-  currentMemberId: string;
 }
 
-/** Drag handle icon (≡). */
+/** Drag handle icon (≡), cíl klepnutí 44 px. */
 function DragHandle({
   attributes,
   listeners,
@@ -94,7 +91,7 @@ function DragHandle({
     <button
       type="button"
       aria-label="Přetáhnout pro změnu pořadí"
-      className="cursor-grab touch-none select-none px-1 text-text-muted hover:text-text-main active:cursor-grabbing"
+      className="flex h-11 w-11 shrink-0 cursor-grab touch-none select-none items-center justify-center text-text-muted hover:text-text-main active:cursor-grabbing"
       {...attributes}
       {...(listeners as Record<string, unknown>)}
     >
@@ -103,105 +100,57 @@ function DragHandle({
   );
 }
 
-function SortableMemberRow({
-  m,
-  index,
-  currentMemberId,
-}: {
-  m: MemberRow;
-  index: number;
-  currentMemberId: string;
-}) {
+function SortableMemberCard({ m }: { m: MemberRow }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: m.id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.6 : m.inactiveLabel ? 0.7 : 1,
   };
 
+  const role = roleLabel(m.managementRole);
+  const secondLine = [m.email, m.company].filter(Boolean).join(" · ");
+
   return (
-    <tr
+    <li
       ref={setNodeRef}
       style={style}
-      className={`border-b border-border ${index % 2 === 1 ? "bg-background" : ""} ${
-        isDragging ? "bg-background" : ""
-      }`}
+      className="flex items-start gap-1 rounded-lg border border-border bg-surface p-2 sm:p-3"
     >
-      <td className="px-2 py-3 align-top">
-        <DragHandle attributes={attributes} listeners={listeners} />
-      </td>
-      <td className="px-4 py-3 font-medium">
-        <div>{m.name}</div>
-        {(m.due5 || m.due10) && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {m.due5 && <DueChip type="month_5" memberId={m.id} />}
-            {m.due10 && <DueChip type="month_10" memberId={m.id} />}
-          </div>
-        )}
-      </td>
-      <td className="px-4 py-3 text-text-muted">
-        <div>{m.email || "—"}</div>
-        <EditMemberEmailForm memberId={m.id} initialEmail={m.email ?? null} />
-      </td>
-      <td className="px-4 py-3">
-        <div className="text-sm text-text-muted">{m.company || "—"}</div>
-        <EditMemberCompanyForm
-          memberId={m.id}
-          initialCompany={m.company ?? null}
-          initialObor={m.obor ?? null}
-        />
-      </td>
-      <td className="px-4 py-3 text-text-muted">{m.obor || "—"}</td>
-      <td className="px-4 py-3 text-text-muted">
-        <div>{new Date(`${m.joinedAt}T00:00:00Z`).toLocaleDateString("cs-CZ")}</div>
-        <EditMemberJoinedAtForm memberId={m.id} initialJoinedAt={m.joinedAt} />
-      </td>
-      <td className="px-4 py-3 align-top">
-        <MemberAccessControls
-          memberId={m.id}
-          memberName={m.name}
-          email={m.email}
-          managementRole={
-            m.managementRole === "admin" || m.managementRole === "moderator"
-              ? m.managementRole
-              : null
-          }
-          hasPassword={m.hasPassword}
-          isSelf={m.id === currentMemberId}
-        />
-      </td>
-      <td className="px-4 py-3">
-        {m.tokenUsed ? (
-          <Badge variant="neutral">Pouzit</Badge>
-        ) : m.magicTokenHash ? (
-          <Badge variant="success">Aktivni</Badge>
-        ) : (
-          <span className="text-text-muted">—</span>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-col gap-2">
-          <MemberActions memberId={m.id} hasToken={Boolean(m.magicTokenHash)} />
-          <DeleteMemberButton
-            memberId={m.id}
-            memberName={m.name}
-            interviewCount={m.interviewCount}
-          />
+      <DragHandle attributes={attributes} listeners={listeners} />
+      <div className="min-w-0 flex-1 py-1">
+        <div className="font-medium break-words">{m.name}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {m.functionName && <Badge variant="category">{m.functionName}</Badge>}
+          {role && <Badge variant={m.managementRole === "admin" ? "danger" : "info"}>{role}</Badge>}
+          {m.inactiveLabel && <Badge variant="warning">{m.inactiveLabel}</Badge>}
+          {m.due5 && <DueChip type="month_5" memberId={m.id} />}
+          {m.due10 && <DueChip type="month_10" memberId={m.id} />}
         </div>
-      </td>
-    </tr>
+        {secondLine && (
+          <div className="mt-1 text-sm text-text-muted break-all">{secondLine}</div>
+        )}
+      </div>
+      <Link
+        href={`/admin/members/${m.id}`}
+        aria-label={`Upravit člena ${m.name}`}
+        className="inline-flex min-h-[44px] shrink-0 items-center px-3 text-sm font-medium text-primary hover:underline focus:outline-none focus:shadow-focus"
+      >
+        Upravit ›
+      </Link>
+    </li>
   );
 }
 
-export function SortableMemberList({ members, currentMemberId }: SortableMemberListProps) {
+export function SortableMemberList({ members }: SortableMemberListProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [items, setItems] = useState<MemberRow[]>(members);
 
   // Sync local optimistic state with server props after router.refresh()
-  // (e.g. when a member is added/removed/imported) — otherwise the new row
+  // (e.g. when a member is added/removed/imported), otherwise the new row
   // would not appear until a hard reload (H-1).
   useEffect(() => {
     setItems(members);
@@ -233,52 +182,33 @@ export function SortableMemberList({ members, currentMemberId }: SortableMemberL
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      showToast("success", "Poradi clenu ulozeno.");
+      showToast("success", "Pořadí členů uloženo.");
       router.refresh();
     } catch {
       setItems(previous); // rollback
-      showToast("error", "Nepodarilo se ulozit poradi.");
+      showToast("error", "Nepodařilo se uložit pořadí.");
     }
   }
 
   return (
-    <div className="overflow-x-auto">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+    // Stabilní `id` (backlog iter-037): bez něj dnd-kit generuje `DndDescribedBy-N`
+    // s počítadlem, které se liší na serveru a v klientu (hydratační varování).
+    <DndContext
+      id="members-dnd"
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={items.map((m) => m.id)}
+        strategy={verticalListSortingStrategy}
       >
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-2 border-primary text-left">
-              <th className="px-2 py-3 font-semibold" aria-label="Poradi"></th>
-              <th className="px-4 py-3 font-semibold">Jmeno</th>
-              <th className="px-4 py-3 font-semibold">Email</th>
-              <th className="px-4 py-3 font-semibold">Firma</th>
-              <th className="px-4 py-3 font-semibold">Obor</th>
-              <th className="px-4 py-3 font-semibold">Datum vstupu</th>
-              <th className="px-4 py-3 font-semibold">Role</th>
-              <th className="px-4 py-3 font-semibold">Token</th>
-              <th className="px-4 py-3 font-semibold">Akce</th>
-            </tr>
-          </thead>
-          <tbody>
-            <SortableContext
-              items={items.map((m) => m.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {items.map((m, i) => (
-                <SortableMemberRow
-                  key={m.id}
-                  m={m}
-                  index={i}
-                  currentMemberId={currentMemberId}
-                />
-              ))}
-            </SortableContext>
-          </tbody>
-        </table>
-      </DndContext>
-    </div>
+        <ul className="space-y-2">
+          {items.map((m) => (
+            <SortableMemberCard key={m.id} m={m} />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
   );
 }

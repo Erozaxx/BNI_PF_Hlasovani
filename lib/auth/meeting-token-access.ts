@@ -13,7 +13,8 @@
  *
  * Pořadí (4.5, krok 3): `link_token_hash !== l.token_hash` (jen u aliasu z
  * připomínky — přegenerování zneplatní i alias, N-6 se tím nerozšiřuje) →
- * invalid; `revoked_at` → revoked; `expires_at < now` → expired; jinak ok
+ * invalid; neaktivní člen (iter-037, deaktivace včetně data) → revoked;
+ * `revoked_at` → revoked; `expires_at < now` → expired; jinak ok
  * s `linkId`/`memberId`/`meetingId` Z ŘÁDKU ODKAZU (`link`), nikdy z
  * připomínky — přesně ten řádek, který vidí i hlavní cesta.
  *
@@ -35,6 +36,12 @@ export interface MeetingTokenAccessLink {
   tokenHash: string;
   revokedAt: Date | null;
   expiresAt: Date | null;
+  /**
+   * iter-037 (T-003b, arch 5.2): člen je aktivní k dnešku (`memberActiveSql`
+   * z JOINu na `member`). Odkaz se při deaktivaci neruší, jen přestane platit,
+   * po datu zase funguje (pokud mezitím nevypršel). Chybějící pole = aktivní.
+   */
+  memberActive?: boolean;
 }
 
 export function decideMeetingTokenAccess(i: {
@@ -46,6 +53,10 @@ export function decideMeetingTokenAccess(i: {
 
   if (source.kind === "reminder" && source.linkTokenHash !== link.tokenHash) {
     return { status: "invalid" };
+  }
+
+  if (link.memberActive === false) {
+    return { status: "revoked" };
   }
 
   if (link.revokedAt !== null) {

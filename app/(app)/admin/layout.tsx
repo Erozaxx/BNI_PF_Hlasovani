@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 
 export default async function AdminLayout({
   children,
@@ -8,8 +8,11 @@ export default async function AdminLayout({
 }) {
   const session = await getSession();
 
-  if (session.managementRole !== "admin") {
-    redirect("/dashboard");
+  // iter-037 (arch 6.3): jen ověření session. Práva stránek pod /admin hlídá
+  // `requirePageSession({ permission })` v každé stránce. Middleware roli admin
+  // pro /admin/* už nekontroluje (jen existenci session).
+  if (!session.memberId) {
+    redirect("/login");
   }
 
   return <>{children}</>;

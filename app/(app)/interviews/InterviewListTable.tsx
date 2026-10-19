@@ -63,9 +63,12 @@ function leaderLabel(m: LeaderOption): string {
 export function InterviewListTable({
   rows,
   members,
+  inactiveMemberIds = [],
 }: {
   rows: InterviewListRow[];
   members: LeaderOption[];
+  /** Neaktivní členové: současný vedoucí z nich dostane štítek „(neaktivní)“ (MIN-6). */
+  inactiveMemberIds?: readonly string[];
 }) {
   const searchParams = useSearchParams();
   const options = useMemo(() => interviewListFilterOptions(rows), [rows]);
@@ -179,6 +182,7 @@ export function InterviewListTable({
                             key={`${row.id}:${row.leaderId ?? ""}`}
                             row={row}
                             members={members}
+                            inactiveMemberIds={inactiveMemberIds}
                             filters={filters}
                           />
                         </td>
@@ -259,10 +263,12 @@ function LinkStateLabel({ row }: { row: InterviewListRow }) {
 function LeaderCell({
   row,
   members,
+  inactiveMemberIds,
   filters,
 }: {
   row: InterviewListRow;
   members: LeaderOption[];
+  inactiveMemberIds: readonly string[];
   filters: InterviewListFilters;
 }) {
   const router = useRouter();
@@ -361,7 +367,10 @@ function LeaderCell({
       >
         {row.leaderId === null && <option value="">Nepřiřazeno</option>}
         {leaderMissing && (
-          <option value={row.leaderId ?? ""}>{row.leaderName ?? "Neznámý vedoucí"}</option>
+          <option value={row.leaderId ?? ""}>
+            {row.leaderName ?? "Neznámý vedoucí"}
+            {row.leaderId !== null && inactiveMemberIds.includes(row.leaderId) ? " (neaktivní)" : ""}
+          </option>
         )}
         {members.map((m) => (
           <option key={m.id} value={m.id}>

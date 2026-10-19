@@ -8,6 +8,11 @@
  * měsíc). Data a časy se čtou přetypované na text, aby je driver nepřevedl
  * na Date v lokálním pásmu.
  *
+ * iter-037 (T-003b, arch 5.2): karty a kontakty neaktivního člena jsou
+ * neviditelné (přehledy, pracovní seznamy vedení, výběry), nový zápis
+ * „Využil(a) jsem“ k jeho kartě nejde. Existující zápisy zůstávají a vedení je
+ * vidí na `/burza/pomoc` beze změny.
+ *
  * Z členské tabulky se čte jen jméno, firma a obor. Burza nečte kontaktní
  * údaje členů z účtu, kontakt píše člen sám (Z1, statický test to hlídá).
  *
@@ -16,6 +21,7 @@
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 import {
   CONTACT_ITEMS_LIMIT,
   HELP_RECORDS_LIMIT,
@@ -57,7 +63,7 @@ export async function getOffersForOverview(): Promise<OfferRow[]> {
     SELECT o.member_id, m.name, m.company, m.obor, o.offer, o.contact, o.note,
            to_char(o.confirmed_at AT TIME ZONE 'Europe/Prague', 'YYYY-MM-DD') AS confirmed_day
     FROM burza_offer o
-    JOIN member m ON m.id = o.member_id
+    JOIN member m ON m.id = o.member_id AND ${memberActiveSql("m")}
     ORDER BY m.name, o.member_id
   `);
   return result.rows.map((r) => ({
@@ -95,7 +101,7 @@ export async function getOfferForEdit(memberId: string): Promise<OfferForEdit | 
     SELECT m.id, m.name, (o.member_id IS NOT NULL) AS has_offer, o.offer, o.contact, o.note
     FROM member m
     LEFT JOIN burza_offer o ON o.member_id = m.id
-    WHERE m.id = ${memberId}::uuid
+    WHERE m.id = ${memberId}::uuid AND ${memberActiveSql("m")}
   `);
   const r = result.rows[0];
   if (!r) return null;
@@ -119,7 +125,8 @@ export async function getMembersWithoutOffer(): Promise<MemberName[]> {
   const result = await getDb().execute<{ id: string; name: string }>(sql`
     SELECT m.id, m.name
     FROM member m
-    WHERE NOT EXISTS (SELECT 1 FROM burza_offer o WHERE o.member_id = m.id)
+    WHERE ${memberActiveSql("m")}
+      AND NOT EXISTS (SELECT 1 FROM burza_offer o WHERE o.member_id = m.id)
     ORDER BY m.name, m.id
   `);
   return result.rows.map((r) => ({ id: r.id, name: r.name }));
@@ -134,16 +141,17 @@ export async function getOfferHolderNames(): Promise<MemberName[]> {
   const result = await getDb().execute<{ id: string; name: string }>(sql`
     SELECT m.id, m.name
     FROM member m
-    WHERE EXISTS (SELECT 1 FROM burza_offer o WHERE o.member_id = m.id)
+    WHERE ${memberActiveSql("m")}
+      AND EXISTS (SELECT 1 FROM burza_offer o WHERE o.member_id = m.id)
     ORDER BY m.name, m.id
   `);
   return result.rows.map((r) => ({ id: r.id, name: r.name }));
 }
 
-/** Všichni členové (jen id a jméno), pro výběr „Komu“ na `/burza/pomoc`. */
+/** Všichni aktivní členové (jen id a jméno), pro výběr „Komu“ na `/burza/pomoc`. */
 export async function getMemberNames(): Promise<MemberName[]> {
   const result = await getDb().execute<{ id: string; name: string }>(sql`
-    SELECT id, name FROM member ORDER BY name, id
+    SELECT m.id, m.name FROM member m WHERE ${memberActiveSql("m")} ORDER BY m.name, m.id
   `);
   return result.rows.map((r) => ({ id: r.id, name: r.name }));
 }
@@ -256,6 +264,15 @@ export interface OfferOwner {
 }
 
 /**
+ * iter-037 (security L-3, review MIN-4): zápis do burzy za neaktivního člena
+ * neprojde ani přímým voláním. UI neaktivní nenabízí, tohle je poslední pojistka
+ * na serveru. `t` je alias z uzavřeného typu `MemberAlias`.
+ */
+function targetActiveSql(targetId: string) {
+  return sql`EXISTS (SELECT 1 FROM member t WHERE t.id = ${targetId}::uuid AND ${memberActiveSql("t")})`;
+}
+
+/**
  * Založení řádku: jen INSERT, existující řádek se nepřepíše. Vrací vlastníka,
  * nebo `null` (0 řádků: řádek mezitím vznikl, nebo autorita nesedí).
  */
@@ -266,6 +283,7 @@ export async function createOfferGuarded(args: OfferWriteArgs): Promise<OfferOwn
       SELECT ${args.targetId}::uuid, ${args.offer}::text, ${args.contact}::text,
              ${args.note}::text, ${args.actorId}::uuid
        WHERE (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+         AND ${targetActiveSql(args.targetId)}
       ON CONFLICT (member_id) DO NOTHING
       RETURNING member_id
     )
@@ -289,6 +307,7 @@ export async function updateOfferGuarded(args: OfferWriteArgs): Promise<OfferOwn
              confirmed_at = now(), updated_at = now()
        WHERE member_id = ${args.targetId}::uuid
          AND (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+         AND ${targetActiveSql(args.targetId)}
       RETURNING member_id
     )
     SELECT s.member_id, m.name FROM s JOIN member m ON m.id = s.member_id
@@ -358,6 +377,8 @@ export async function recordHelpGuarded(args: {
     SELECT o.member_id, ${args.recipientId}::uuid, ${args.today}::date, ${month}::date,
            ${args.note}::text, ${args.createdBy}::uuid
       FROM burza_offer o
+      JOIN member hm ON hm.id = o.member_id AND ${memberActiveSql("hm")}
+      JOIN member rm ON rm.id = ${args.recipientId}::uuid AND ${memberActiveSql("rm")}
      WHERE o.member_id = ${args.helperId}::uuid AND o.member_id <> ${args.recipientId}::uuid
        AND o.member_id <> ${args.createdBy}::uuid
     ON CONFLICT (helper_id, recipient_id, used_month) DO NOTHING
@@ -369,6 +390,10 @@ export async function recordHelpGuarded(args: {
 export interface HelpMissReason {
   /** Jméno pomocníka, `null` když člen neexistuje. */
   helperName: string | null;
+  /** iter-037: pomocník je aktivní (neaktivní = „Karta teď není k dispozici.“). */
+  helperActive: boolean;
+  /** Příjemce je aktivní a existuje (neaktivnímu zapisuje pomoc jen vedení, server to odmítne). */
+  recipientActive: boolean;
   hasOffer: boolean;
   /** Záznam na dvojici za tento měsíc už je. */
   recordedId: string | null;
@@ -383,10 +408,14 @@ export async function getHelpMissReason(args: {
   const month = monthStart(args.today);
   const result = await getDb().execute<{
     name: string | null;
+    helper_active: boolean | null;
+    recipient_active: boolean | null;
     has_offer: boolean;
     recorded_id: string | null;
   }>(sql`
     SELECT (SELECT m.name FROM member m WHERE m.id = ${args.helperId}::uuid) AS name,
+           (SELECT ${memberActiveSql("m")} FROM member m WHERE m.id = ${args.helperId}::uuid) AS helper_active,
+           (SELECT ${memberActiveSql("rm")} FROM member rm WHERE rm.id = ${args.recipientId}::uuid) AS recipient_active,
            EXISTS (SELECT 1 FROM burza_offer o WHERE o.member_id = ${args.helperId}::uuid) AS has_offer,
            (SELECT h.id FROM burza_help h
              WHERE h.helper_id = ${args.helperId}::uuid
@@ -397,6 +426,8 @@ export async function getHelpMissReason(args: {
   const r = result.rows[0];
   return {
     helperName: r?.name ?? null,
+    helperActive: r?.helper_active !== false,
+    recipientActive: r?.recipient_active !== false,
     hasOffer: Boolean(r?.has_offer),
     recordedId: r?.recorded_id ?? null,
   };
@@ -489,7 +520,7 @@ export async function getContactItemsForOverview(): Promise<ContactItemRow[]> {
   }>(sql`
     SELECT c.id, c.member_id, m.name, m.company, m.obor, c.label, c.created_at::text AS created_at
     FROM burza_contact c
-    JOIN member m ON m.id = c.member_id
+    JOIN member m ON m.id = c.member_id AND ${memberActiveSql("m")}
     ORDER BY m.name, c.member_id, c.created_at, c.id
   `);
   return result.rows.map((r) => ({
@@ -539,7 +570,7 @@ export interface ContactItemsForEdit {
 export async function getContactItemsForEdit(memberId: string): Promise<ContactItemsForEdit | null> {
   const [member, items] = await Promise.all([
     getDb().execute<{ id: string; name: string }>(sql`
-      SELECT id, name FROM member WHERE id = ${memberId}::uuid
+      SELECT m.id, m.name FROM member m WHERE m.id = ${memberId}::uuid AND ${memberActiveSql("m")}
     `),
     getDb().execute<{ id: string; label: string }>(sql`
       SELECT id, label FROM burza_contact
@@ -627,6 +658,7 @@ export async function createContactItemWithLimit(args: {
       INSERT INTO burza_contact (member_id, label, updated_by)
       SELECT ${args.targetId}::uuid, ${args.label}::text, ${args.actorId}::uuid
        WHERE (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+         AND ${targetActiveSql(args.targetId)}
          AND (SELECT count(*) FROM burza_contact WHERE member_id = ${args.targetId}::uuid) < ${CONTACT_ITEMS_LIMIT}::int
       RETURNING member_id
     )
@@ -650,6 +682,7 @@ export async function updateContactItemGuarded(args: {
          SET label = ${args.label}::text, updated_by = ${args.actorId}::uuid, updated_at = now()
        WHERE id = ${args.contactId}::uuid AND member_id = ${args.targetId}::uuid
          AND (${args.targetId}::uuid = ${args.actorId}::uuid OR ${args.isManagement}::boolean)
+         AND ${targetActiveSql(args.targetId)}
       RETURNING member_id
     )
     SELECT s.member_id, m.name FROM s JOIN member m ON m.id = s.member_id
@@ -693,6 +726,7 @@ export async function setContactUsedGuarded(args: {
     INSERT INTO burza_contact_use (contact_id, helper_id, recipient_id, used_on)
     SELECT c.id, c.member_id, ${args.recipientId}::uuid, ${args.today}::date
       FROM burza_contact c
+      JOIN member hm ON hm.id = c.member_id AND ${memberActiveSql("hm")}
      WHERE c.id = ${args.contactId}::uuid AND c.member_id <> ${args.recipientId}::uuid
     ON CONFLICT (contact_id, recipient_id) DO NOTHING
     RETURNING id
@@ -716,6 +750,8 @@ export async function unsetContactUsedGuarded(args: {
 export interface ContactUseMissReason {
   /** Položka existuje. */
   exists: boolean;
+  /** iter-037: nabízející je aktivní (neaktivní = „Karta teď není k dispozici.“). */
+  ownerActive: boolean;
   /** Položka patří přihlášenému. */
   own: boolean;
   /** Záznam na (položka, já) už je. */
@@ -729,9 +765,12 @@ export async function getContactUseMissReason(args: {
 }): Promise<ContactUseMissReason> {
   const result = await getDb().execute<{
     owner_id: string | null;
+    owner_active: boolean | null;
     recorded_id: string | null;
   }>(sql`
     SELECT (SELECT c.member_id FROM burza_contact c WHERE c.id = ${args.contactId}::uuid) AS owner_id,
+           (SELECT ${memberActiveSql("m")} FROM burza_contact c JOIN member m ON m.id = c.member_id
+             WHERE c.id = ${args.contactId}::uuid) AS owner_active,
            (SELECT u.id FROM burza_contact_use u
              WHERE u.contact_id = ${args.contactId}::uuid
                AND u.recipient_id = ${args.recipientId}::uuid
@@ -740,6 +779,7 @@ export async function getContactUseMissReason(args: {
   const r = result.rows[0];
   return {
     exists: Boolean(r?.owner_id),
+    ownerActive: r?.owner_active !== false,
     own: r?.owner_id === args.recipientId,
     recordedId: r?.recorded_id ?? null,
   };
@@ -752,7 +792,7 @@ export interface RemovedContactUseRow {
   recipientId: string | null;
 }
 
-/** Smazání záznamu o využití kontaktu vedením (volá jen akce s `requireManagementRole`). */
+/** Smazání záznamu o využití kontaktu vedením (volá jen akce s `requirePermission("burza.manage")`). */
 export async function removeContactUseGuarded(useId: string): Promise<RemovedContactUseRow | null> {
   const result = await getDb().execute<{
     id: string;

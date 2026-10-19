@@ -344,7 +344,9 @@ const cases: TestCase[] = [
       const detail = readFileSync(join(ROOT, "app/(app)/interviews/[id]/page.tsx"), "utf8");
       // D3: seřazené pole se mapuje do ChangeLeaderForm
       assert.match(detail, /const\s+members\s*=\s*sortMembersByName\(allMembers\)/);
-      assert.match(detail, /<ChangeLeaderForm[\s\S]*?members=\{members\.map\(/);
+      // iter-037 (T-003b): do výběru vedoucího jdou jen aktivní (+ současný vedoucí),
+      // pořadí zůstává z `members` (sortMembersByName).
+      assert.match(detail, /<ChangeLeaderForm[\s\S]*?members=\{members\s*\.filter\([\s\S]*?\.map\(/);
       // D4: příjemci reportu ze seřazeného pole
       assert.match(detail, /const\s+reportRecipients\s*=\s*members\s*\.filter/);
       assert.match(detail, /<SendInterviewReportForm[\s\S]*?recipients=\{reportRecipients\}/);
@@ -374,7 +376,7 @@ const cases: TestCase[] = [
       }
       const src = readFileSync(join(base, "page.tsx"), "utf8");
       assert.ok(!src.includes("InterviewDueSection"));
-      assert.ok(src.includes('requirePageSession({ role: "management" })'));
+      assert.ok(src.includes('requirePageSession({ permission: "interviews.manage" })'));
     },
   },
   {

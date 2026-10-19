@@ -3,6 +3,7 @@ import {
   getMemberByTokenHash,
   getMemberByPreviousTokenHash,
   updateMagicToken,
+  updateMagicTokenAs,
 } from "@/lib/db/queries/members";
 import { createSession } from "@/lib/auth/session";
 import { sendMagicLinkEmail } from "@/lib/email/resend";
@@ -27,6 +28,22 @@ export async function generateMagicToken(memberId: string): Promise<string> {
   await updateMagicToken(memberId, tokenHash, expiresAt);
 
   return rawToken;
+}
+
+/**
+ * Totéž pro ruční akci vedení (M-1): osobní odkaz admina vystaví jen admin.
+ * Vrací `null`, když zápis neprošel (cíl je admin a volající není).
+ */
+export async function generateMagicTokenAs(
+  memberId: string,
+  actorId: string
+): Promise<string | null> {
+  const rawToken = randomUUID();
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+
+  const ok = await updateMagicTokenAs(memberId, tokenHash, expiresAt, actorId);
+  return ok ? rawToken : null;
 }
 
 /**

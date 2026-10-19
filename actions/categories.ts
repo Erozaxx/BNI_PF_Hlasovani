@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   createCategory as dbCreateCategory,
   renameCategory as dbRenameCategory,
@@ -15,7 +15,7 @@ import type { ActionResult } from "@/lib/types";
 export async function createCategoryAction(
   name: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("categories.create");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
@@ -38,7 +38,7 @@ export async function createCategoryAction(
  * Guests referencing this category will have their categoryId set to NULL.
  */
 export async function deleteCategoryAction(id: string): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin"]);
+  const auth = await requirePermission("categories.manage");
   if (!auth.success) return auth;
 
   if (!id || !id.trim()) {
@@ -67,7 +67,7 @@ export async function renameCategoryAction(
   id: string,
   name: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("categories.manage");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {

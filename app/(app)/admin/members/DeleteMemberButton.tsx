@@ -17,25 +17,28 @@ export function DeleteMemberButton({
   memberId,
   memberName,
   interviewCount,
+  redirectTo,
 }: {
   memberId: string;
   memberName: string;
   /** Interviews (any status) that would cascade-delete with this member (R-11). */
   interviewCount: number;
+  /** Stránka člena po smazání vede zpět na seznam. */
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
 
   async function handleDelete() {
-    // R-11: member.id CASCADE deletes interview history too — warn with the
+    // R-11: member.id CASCADE deletes interview history too, warn with the
     // count before the irreversible action, don't block it.
     const interviewWarning =
       interviewCount > 0
-        ? `\n\nUpozorneni: Clen ma ${interviewCount} ${pohovorLabel(interviewCount)} — budou smazany.`
+        ? `\n\nUpozornění: člen má ${interviewCount} ${pohovorLabel(interviewCount)}, budou smazány.`
         : "";
     const confirmed = window.confirm(
-      `Opravdu smazat clena "${memberName}"? Tato akce je nevratna.${interviewWarning}`
+      `Opravdu smazat člena „${memberName}“? Tato akce je nevratná.${interviewWarning}`
     );
     if (!confirmed) return;
 
@@ -45,11 +48,12 @@ export function DeleteMemberButton({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", `Clen "${memberName}" byl smazan.`);
+        showToast("success", `Člen „${memberName}“ byl smazán.`);
+        if (redirectTo) router.push(redirectTo);
         router.refresh();
       }
     } catch {
-      showToast("error", "Nepodarilo se smazat clena.");
+      showToast("error", "Nepodařilo se smazat člena.");
     } finally {
       setLoading(false);
     }
@@ -60,6 +64,7 @@ export function DeleteMemberButton({
       type="button"
       variant="danger"
       size="sm"
+      className="min-h-[44px]"
       loading={loading}
       onClick={handleDelete}
     >

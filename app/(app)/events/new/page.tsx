@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { EventForm } from "./_components/EventForm";
 
 export default async function NewEventPage() {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "events.manage" });
 
   return (
     <div className="space-y-6 max-w-2xl">

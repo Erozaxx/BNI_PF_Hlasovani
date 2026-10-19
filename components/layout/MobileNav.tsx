@@ -4,13 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/actions/auth";
 
+/** iter-037: položky menu podle práv session (počítá layout přes `can`). */
+export interface MobileNavShow {
+  events: boolean;
+  timers: boolean;
+  interviews: boolean;
+  status: boolean;
+  members: boolean;
+  categories: boolean;
+  settings: boolean;
+}
+
 interface MobileNavProps {
-  isAdmin: boolean;
-  isManagement: boolean;
+  show: MobileNavShow;
   name: string;
 }
 
-export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
+export function MobileNav({ show, name }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDetailsElement>(null);
 
@@ -86,7 +96,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
         >
           Burza pomoci
         </Link>
-        {isManagement && (
+        {show.events && (
           <Link
             href="/events"
             className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
@@ -95,7 +105,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             Akce
           </Link>
         )}
-        {isManagement && (
+        {show.timers && (
           <Link
             href="/timers"
             className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
@@ -104,7 +114,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             Časovače
           </Link>
         )}
-        {isManagement && (
+        {show.interviews && (
           <Link
             href="/interviews"
             className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
@@ -113,7 +123,7 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
             Pohovory
           </Link>
         )}
-        {isManagement && (
+        {show.status && (
           <Link
             href="/status"
             className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
@@ -136,26 +146,30 @@ export function MobileNav({ isAdmin, isManagement, name }: MobileNavProps) {
         >
           Nápověda
         </Link>
-        {isAdmin && (
+        {(show.members || show.categories) && (
           <>
             <hr className="my-2 border-border" />
-            <Link
-              href="/admin/members"
-              className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-              onClick={() => setOpen(false)}
-            >
-              Členové
-            </Link>
-            <Link
-              href="/admin/categories"
-              className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-              onClick={() => setOpen(false)}
-            >
-              Kategorie
-            </Link>
+            {show.members && (
+              <Link
+                href="/admin/members"
+                className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+                onClick={() => setOpen(false)}
+              >
+                Členové
+              </Link>
+            )}
+            {show.categories && (
+              <Link
+                href="/admin/categories"
+                className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+                onClick={() => setOpen(false)}
+              >
+                Kategorie
+              </Link>
+            )}
           </>
         )}
-        {isManagement && (
+        {show.settings && (
           <>
             <hr className="my-2 border-border" />
             <Link

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManagementRole, requireAdmin } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   createGuest as dbCreateGuest,
   updateGuest as dbUpdateGuest,
@@ -31,7 +31,7 @@ export async function createGuestAction(
   company?: string,
   email?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("guests.manage");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
@@ -83,7 +83,7 @@ export async function updateGuestAction(
   company?: string,
   email?: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("guests.manage");
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
@@ -115,7 +115,7 @@ export async function updateGuestAction(
  * Delete a guest and all related data (notes, votes, meeting_guests). Requires admin role.
  */
 export async function deleteGuestAction(id: string): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("guests.delete");
   if (!auth.success) return auth;
 
   try {
@@ -137,7 +137,7 @@ export async function updateGuestCategoryAction(
   id: string,
   categoryId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("guests.manage");
   if (!auth.success) return auth;
 
   if (!categoryId) {
@@ -226,7 +226,7 @@ export async function promoteGuestToMemberAction(
   guestId: string,
   opts?: { confirmRepair?: boolean }
 ): Promise<PromoteGuestResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("guests.promote");
   if (!auth.success) return auth;
 
   const parsed = promoteGuestSchema.safeParse({ guestId });

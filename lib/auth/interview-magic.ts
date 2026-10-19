@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from "crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { interviewLink, interview } from "@/lib/db/schema";
+import { interviewLink, interview, member } from "@/lib/db/schema";
+import { memberActiveSql } from "@/lib/db/queries/member-active";
 import { throttleCheck, throttleFail } from "@/lib/auth/throttle";
 
 function getDb() {
@@ -184,9 +185,12 @@ export async function verifyInterviewToken(
       expiresAt: interviewLink.expiresAt,
       revokedAt: interviewLink.revokedAt,
       interviewStatus: interview.status,
+      // iter-037 (T-003b): vedoucí pohovoru je neaktivní = odkaz neplatí.
+      leaderActive: sql<boolean>`${memberActiveSql("member")}`,
     })
     .from(interviewLink)
     .innerJoin(interview, eq(interviewLink.interviewId, interview.id))
+    .innerJoin(member, eq(member.id, interviewLink.leaderId))
     .where(eq(interviewLink.tokenHash, tokenHash))
     .limit(1);
 
@@ -208,6 +212,11 @@ export async function verifyInterviewToken(
   }
 
   if (link.interviewStatus === "cancelled") {
+    await throttleFail(throttleKey);
+    return { status: "invalid" };
+  }
+
+  if (!link.leaderActive) {
     await throttleFail(throttleKey);
     return { status: "invalid" };
   }

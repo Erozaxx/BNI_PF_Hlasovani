@@ -8,12 +8,18 @@
  */
 
 export type DispatchMode = "start" | "resend";
-export type SkipReason = "no-email" | "revoked" | "already-sent";
+export type SkipReason = "inactive" | "no-email" | "revoked" | "already-sent";
 
 export interface PlanMember {
   memberId: string;
   memberName: string;
   memberEmail: string | null;
+  /**
+   * iter-037 (T-003b, arch 5.2): člen je aktivní k dnešku (`isMemberActive`).
+   * Neaktivní dostane `skip "inactive"` PŘED `no-email`, odkaz se mu nezakládá
+   * a do „Rozesláno X z Y“ se nepočítá.
+   */
+  active: boolean;
 }
 
 export interface PlanLink {
@@ -51,11 +57,15 @@ export interface DispatchPlan {
     skippedNoEmail: number;
     skippedRevoked: number;
     skippedAlreadySent: number;
+    /** iter-037: deaktivovaní členové (řádky v `rows`, ale mimo `totalMembers`). */
+    skippedInactive: number;
   };
 }
 
 /**
  * Rozhodne akci pro jednoho člena. Pravidla, v tomto pořadí (sekce 3.2):
+ * 0. Neaktivní člen (iter-037) → skip "inactive". První, před "no-email".
+ *    Odkaz se mu nezakládá.
  * 1. Člen bez e-mailu (null i "") → skip "no-email". Odkaz se mu nezakládá.
  * 2. Odkaz existuje a revokedAt != null → skip "revoked". Hromadné rozeslání
  *    revokaci nesmí přebít.
@@ -70,6 +80,9 @@ function planAction(
   link: PlanLink | undefined,
   mode: DispatchMode
 ): PlanAction {
+  if (!member.active) {
+    return { kind: "skip", reason: "inactive" };
+  }
   if (!member.memberEmail) {
     return { kind: "skip", reason: "no-email" };
   }
@@ -122,18 +135,25 @@ export function planVotingDispatch(input: PlanInput): DispatchPlan {
   const skippedAlreadySent = rows.filter(
     (r) => r.action.kind === "skip" && r.action.reason === "already-sent"
   ).length;
+  const skippedInactive = rows.filter(
+    (r) => r.action.kind === "skip" && r.action.reason === "inactive"
+  ).length;
+  const activeRows = input.members.filter((m) => m.active);
 
   return {
     rows,
     toSend,
     linksToCreate,
     counts: {
-      totalMembers: rows.length,
-      withEmail: rows.filter((r) => !!r.memberEmail).length,
+      // iter-037: jen aktivní členové ("Rozesláno X z Y"), neaktivní jsou v `rows`
+      // se `skip "inactive"`, ale do Y se nepočítají.
+      totalMembers: activeRows.length,
+      withEmail: activeRows.filter((m) => !!m.memberEmail).length,
       willSend: toSend.length,
       skippedNoEmail,
       skippedRevoked,
       skippedAlreadySent,
+      skippedInactive,
     },
   };
 }

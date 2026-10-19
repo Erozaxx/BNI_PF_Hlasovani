@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { drizzle } from "drizzle-orm/neon-http";
 import { inArray, eq, max, asc } from "drizzle-orm";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getSql } from "@/lib/db/client";
 import { category, guest, meetingGuest } from "@/lib/db/schema";
 import { getMeetingById } from "@/lib/db/queries/meetings";
@@ -82,13 +82,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // 1. Auth check
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute(["meetings.manage", "guests.manage"]);
+  if ("response" in authz) return authz.response;
 
   const { id: meetingId } = await params;
 

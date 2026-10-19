@@ -89,6 +89,10 @@ export const MESSAGES = {
   denied: "Na tuhle akci nemáš oprávnění.",
   generic: "Akci se nepodařilo provést.",
   memberGone: "Člen už v aplikaci není.",
+  // iter-037 (T-003b, gate sekce 5): karta neaktivního člena je skrytá.
+  cardUnavailable: "Karta teď není k dispozici.",
+  // iter-037 (security L-3): vedení nezapisuje za neaktivního člena.
+  memberInactive: "Člen je neaktivní, zápis za něj nejde.",
   offerEmpty: "Napiš, s čím pomůžeš.",
   offerGone: "Řádek už v burze není.",
   alreadyCreated: "Řádek mezitím někdo založil. Načti stránku znovu.",

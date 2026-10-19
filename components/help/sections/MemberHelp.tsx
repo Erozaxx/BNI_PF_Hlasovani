@@ -44,7 +44,7 @@ export function MemberHelp() {
         faq={[
           {
             q: "Mail nepřišel.",
-            a: "Mrkněte do spamu. Když tam není, máte v chapteru nejspíš jinou adresu. Zkuste ji, nebo napište někomu z vedení.",
+            a: "Mrkněte do spamu. Když tam není, máte v chapteru nejspíš jinou adresu. Zkuste ji. Když nepřijde ani druhý mail, napište vedení chapteru.",
           },
           {
             q: "Odkaz píše, že už neplatí.",

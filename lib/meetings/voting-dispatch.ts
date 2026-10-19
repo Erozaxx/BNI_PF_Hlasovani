@@ -50,6 +50,7 @@ import {
   getConflictingMeeting,
 } from "@/lib/db/queries/meetings";
 import { getMembers } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import {
   getMeetingLinkRows,
   markLinkEmailSent,
@@ -106,7 +107,7 @@ export type DispatchOutcome =
   // kterého se nic neudělalo (žádný token, žádný mail, žádná značka).
   // Doženě ho ranní cron.
   | { status: "scheduled" }
-  | { status: "skipped"; reason: "no-email" | "revoked" | "already-sent" }
+  | { status: "skipped"; reason: "inactive" | "no-email" | "revoked" | "already-sent" }
   | { status: "error"; reason: string };
 
 export interface DispatchRecipient {
@@ -143,7 +144,7 @@ export type VotingDispatchResult =
       transitioned: boolean; // krok 6 opravdu změnil řádek
       votingClosesAt: string; // ISO
       linkExpiresAt: string; // ISO
-      totalMembers: number; // VŠICHNI členové v systému
+      totalMembers: number; // VŠICHNI AKTIVNÍ členové (iter-037: neaktivní se nepočítají)
       linksCreated: number;
       counts: { sent: number; skipped: number; error: number; scheduled: number };
       recipients: DispatchRecipient[]; // VŠICHNI členové, nikdy zkrácené
@@ -240,8 +241,13 @@ async function runVotingDispatchInner(
     };
   }
 
+  // iter-037 (T-003b, arch 5.3): plán potřebuje i neaktivní řádky kvůli
+  // `skip "inactive"`, proto `getMembers()` a příznak `active`, ne
+  // `getActiveMembers()`. Příjemci jsou jen aktivní členové s e-mailem.
   const allMembers = await getMembers();
-  const membersWithEmail = allMembers.filter((m) => !!m.email);
+  const todayPrague = pragueToday(now);
+  const isActive = (m: (typeof allMembers)[number]) => isMemberActive(m, todayPrague);
+  const membersWithEmail = allMembers.filter((m) => !!m.email && isActive(m));
   if (membersWithEmail.length === 0) {
     return {
       ok: false,
@@ -270,6 +276,7 @@ async function runVotingDispatchInner(
       memberId: m.id,
       memberName: m.name,
       memberEmail: m.email ?? null,
+      active: isActive(m),
     })),
     links: existingLinks.map((l) => ({
       memberId: l.memberId,
@@ -345,7 +352,9 @@ async function runVotingDispatchInner(
         outcome: { status: "skipped", reason: row.action.reason },
       };
       recipients.push(recipient);
-      if (!isDefer) {
+      // iter-037: o deaktivaci se do ops logu nic nezapisuje (neaktivní člen se
+      // jen nepočítá), proto `skip "inactive"` nemá vlastní záznam.
+      if (!isDefer && row.action.reason !== "inactive") {
         // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
         // po recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok
         // 8 samotný se nemění.

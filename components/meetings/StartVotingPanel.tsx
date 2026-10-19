@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { votingClosesAtFor, isDeliveryDue } from "@/lib/meetings/voting-window";
 import { deliveryHint, type DeliveryHint } from "@/lib/meetings/morning-dispatch";
 
-type SkipReason = "no-email" | "revoked" | "already-sent";
+type SkipReason = "inactive" | "no-email" | "revoked" | "already-sent";
 
 type DispatchOutcome =
   | { status: "sent" }
@@ -56,6 +56,7 @@ interface StartVotingPanelProps {
 }
 
 const SKIP_LABEL: Record<SkipReason, string> = {
+  inactive: "preskoceno: neaktivni",
   "no-email": "preskoceno: bez e-mailu",
   revoked: "preskoceno: odkaz revokovan",
   "already-sent": "preskoceno: odkaz jiz odeslan",

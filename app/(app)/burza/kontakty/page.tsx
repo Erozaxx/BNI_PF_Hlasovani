@@ -1,4 +1,5 @@
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getContactItemsForOverview, getMyContactState } from "@/lib/db/queries/burza";
 import { TEXTS, sortContactItems } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
@@ -14,8 +15,7 @@ import { MyContactsBox } from "@/components/burza/MyContactsBox";
  */
 export default async function BurzaContactsPage() {
   const session = await requirePageSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "burza.manage");
 
   const [items, state] = await Promise.all([
     getContactItemsForOverview(),

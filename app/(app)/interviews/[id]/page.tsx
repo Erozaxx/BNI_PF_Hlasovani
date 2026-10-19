@@ -6,6 +6,7 @@ import {
   getInterviewQuestionsWithAnswers,
 } from "@/lib/db/queries/interviews";
 import { getMembers } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { sortMembersByName } from "@/lib/interviews/list-filters";
 import { getInterviewLinkStatus } from "@/lib/auth/interview-magic";
 import { buildInterviewReportHtml } from "@/lib/email/interview-report";
@@ -42,7 +43,7 @@ export default async function InterviewDetailPage({
 }) {
   const { id } = await params;
 
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ permission: "interviews.manage" });
 
   const detail = await getInterviewDetail(id);
   if (!detail) {
@@ -98,7 +99,7 @@ export default async function InterviewDetailPage({
   });
 
   const reportRecipients = members
-    .filter((m) => Boolean(m.email))
+    .filter((m) => Boolean(m.email) && isMemberActive(m, pragueToday()))
     .map((m) => ({ id: m.id, name: m.name }));
 
   return (
@@ -155,11 +156,15 @@ export default async function InterviewDetailPage({
         <ChangeLeaderForm
           interviewId={detail.id}
           currentLeaderId={detail.leaderId}
-          members={members.map((m) => ({
-            id: m.id,
-            name: m.name,
-            email: m.email ?? null,
-          }))}
+          // iter-037 (K13): vedoucí jen aktivní. Současný vedoucí zůstane ve
+          // výběru, i když je neaktivní, ať je jasné, kdo to teď je.
+          members={members
+            .filter((m) => m.id === detail.leaderId || isMemberActive(m, pragueToday()))
+            .map((m) => ({
+              id: m.id,
+              name: isMemberActive(m, pragueToday()) ? m.name : `${m.name} (neaktivní)`,
+              email: m.email ?? null,
+            }))}
           disabled={detail.status !== "open"}
         />
       </Card>

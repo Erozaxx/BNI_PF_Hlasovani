@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getCasesForOverview, getThursdayData, type CaseListRow } from "@/lib/db/queries/mastermind";
 import { todayInPrague } from "@/lib/meetings/voting-window";
 import { sortCases } from "@/lib/mastermind/sort";
@@ -38,8 +39,7 @@ function byDate(a: CaseListRow, b: CaseListRow): number {
 
 export default async function MastermindPage() {
   const session = await requirePageSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "mastermind.manage");
   const viewer = { memberId: session.memberId, name: session.name, isManagement };
   const today = todayInPrague();
 

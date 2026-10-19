@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 
 export default async function SettingsPage() {
-  const session = await requirePageSession({ role: "management" });
+  const session = await requirePageSession({ passwordSession: true });
   const member = session.memberId ? await getMemberById(session.memberId) : null;
   const hasPassword = !!member?.passwordHash;
 

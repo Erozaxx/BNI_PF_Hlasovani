@@ -10,7 +10,8 @@
  *   3. validace hesla (nevalidní heslo odkaz nespálí),
  *   4. bcrypt, až teď (L-1: náhodný token nestojí CPU),
  *   5. atomické spotřebování (ze dvou souběžných kliků projde jeden),
- *   6. uložení hesla jen členovi, který roli v DB pořád má.
+ *   6. uložení hesla jen členovi, který roli NEBO funkci v DB pořád má
+ *      (a je aktivní, T-003b).
  */
 import {
   LINK_INVALID_TEXT,
@@ -30,7 +31,7 @@ export interface SetPasswordConsumeDeps {
   setPassword(
     memberId: string,
     passwordHash: string
-  ): Promise<{ sessionVersion: number; managementRole: string; name: string } | null>;
+  ): Promise<{ sessionVersion: number; managementRole: string | null; name: string } | null>;
 }
 
 export type SetPasswordConsumeResult =
@@ -38,7 +39,8 @@ export type SetPasswordConsumeResult =
       ok: true;
       memberId: string;
       name: string;
-      managementRole: string;
+      /** `null` u držitele funkce bez role (T-003b). */
+      managementRole: string | null;
       sessionVersion: number;
     }
   | { ok: false; error: string };
@@ -83,7 +85,8 @@ export async function runSetPasswordConsume(
 
   const updated = await deps.setPassword(memberId, passwordHash);
   if (!updated) {
-    // Roli mezitím odebral admin. Odkaz je spotřebovaný, admin pošle nový.
+    // Roli i funkci mezitím odebral admin, nebo je člen neaktivní. Odkaz je
+    // spotřebovaný, admin pošle nový.
     return { ok: false, error: LINK_INVALID_TEXT };
   }
 

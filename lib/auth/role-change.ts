@@ -32,6 +32,12 @@ export function decideRoleChange(input: {
   actorId: string;
   target: RoleChangeTarget | null;
   newRole: RoleChoice;
+  /**
+   * Počet aktivních účtů se správou členů (role admin nebo funkce s
+   * `members.manage`) VČETNĚ cíle, když o správu členů přijde. T-003b:
+   * volající (`setMemberRoleAction`) počítá `ostatní + 1`, když cíl správu
+   * členů ztrácí, jinak aspoň 2, takže `<= 1` blokuje právě poslední účet.
+   */
   adminCount: number;
 }): RoleChangeDecision {
   const { actorId, target, adminCount } = input;
@@ -69,7 +75,7 @@ export function roleChangeErrorText(
     case "self":
       return "Vlastní roli měnit nejde.";
     case "last-admin":
-      return "Posledního admina nejde sesadit.";
+      return "Posledního aktivního admina sesadit nejde.";
     case "no-email":
       return "Člen nemá e-mail. Nejdřív mu ho doplň, odkaz pro nastavení hesla jde na e-mail.";
   }

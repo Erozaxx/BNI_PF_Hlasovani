@@ -460,7 +460,7 @@ const cases: TestCase[] = [
 
   // ── 7. deriveRunStatus pro access.* (U1: včetně password-link-copied) ──
   {
-    name: "7. každý access.* (5 druhů) je terminální, vrátí ok i po 2 hodinách a má štítek na /status",
+    name: "7. každý access.* (9 druhů) je terminální, vrátí ok i po 2 hodinách a má štítek na /status",
     run: () => {
       const kinds: OpsEventKind[] = [
         "access.role-changed",
@@ -468,6 +468,10 @@ const cases: TestCase[] = [
         "access.password-set",
         "access.password-link-copied",
         "access.password-link-resent",
+        "access.functions-changed",
+        "access.magic-link-revoked",
+        "access.member-deactivated",
+        "access.member-reactivated",
       ];
       for (const kind of kinds) {
         assert.ok(TERMINAL_KINDS.includes(kind), kind);
@@ -493,15 +497,32 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "8b. stránky pod app/(app)/admin volají requirePageSession({ role: \"admin\" })",
+    name: "8b. stránky pod app/(app)/admin volají requirePageSession({ permission })",
     run: () => {
       const pages = walk(join(ROOT, "app", "(app)", "admin")).filter((f) => f.endsWith("page.tsx"));
       assert.ok(pages.length >= 2, `nalezeno jen ${pages.length} admin stránek`);
       const weak = pages.filter(
         (f) =>
-          !/await requirePageSession\(\s*\{[^}]*role:\s*"admin"/.test(stripComments(readFileSync(f, "utf8")))
+          !/await requirePageSession\(\s*\{[^}]*permission:\s*"/.test(stripComments(readFileSync(f, "utf8")))
       );
       assert.deepEqual(weak.map((f) => relative(ROOT, f)), []);
+      // NIT-4: nejen jakékoli právo, ale právo odpovídající stránce
+      const EXPECTED: Record<string, string> = {
+        "admin/categories/page.tsx": "categories.manage",
+        "admin/members/page.tsx": "members.manage",
+        "admin/members/[id]/page.tsx": "members.manage",
+      };
+      for (const f of pages) {
+        const rel = relative(join(ROOT, "app", "(app)"), f).split("\\").join("/");
+        const perm = EXPECTED[rel];
+        assert.ok(perm, `stránka ${rel} nemá očekávané právo v tabulce`);
+        assert.ok(
+          new RegExp(`await requirePageSession\\(\\s*\\{[^}]*permission:\\s*"${perm.replace(".", "\\.")}"`).test(
+            stripComments(readFileSync(f, "utf8"))
+          ),
+          `${rel}: očekáváno ${perm}`
+        );
+      }
     },
   },
   {
@@ -689,7 +710,7 @@ const cases: TestCase[] = [
     run: () => {
       const src = readSrc("actions/member-access.ts");
       const copy = declaration(src, "issueSetPasswordLinkForCopyAction");
-      assert.ok(copy.includes("requireAdmin()"));
+      assert.ok(copy.includes('requirePermission("access.manage")'));
       assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{ allowExpired: false \}\)/.test(copy));
       assert.ok(/if \(!url\) return \{ success: false/.test(copy));
       assert.ok(!copy.includes("issueSetPasswordLink("), "nový odkaz bez povýšení nebo resetu nevzniká");
@@ -704,7 +725,7 @@ const cases: TestCase[] = [
     run: () => {
       const src = readSrc("actions/member-access.ts");
       const resend = declaration(src, "resendSetPasswordLinkAction");
-      assert.ok(resend.includes("requireAdmin()"));
+      assert.ok(resend.includes('requirePermission("access.manage")'));
       assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{ allowExpired: true \}\)/.test(resend));
       for (const forbidden of ["lockHash(", "resetPasswordGuarded(", "setMemberRoleGuarded(", "issueSetPasswordLink("]) {
         assert.ok(!resend.includes(forbidden), forbidden);
@@ -742,7 +763,8 @@ const cases: TestCase[] = [
           assert.ok(!/\b(url|token|password|passwordHash|http)\b/i.test(obj), `${rel}: ${obj.slice(0, 80)}`);
         }
       }
-      assert.equal(found, 5, "5 zápisů access.*");
+      // iter-037 (T-003b): šestý zápis je `access.functions-changed` (setMemberFunctionAction).
+      assert.equal(found, 6, "6 zápisů access.*");
     },
   },
   {
@@ -909,11 +931,8 @@ const cases: TestCase[] = [
       assert.ok(link.includes("setMessage(null)") && link.includes("setFormError(null)"));
       // L-2: nápověda pod heslem.
       assert.ok(src.includes("Heslo ještě nemáš? Nastav si ho odkazem z mailu"));
-      // /magic má diakritiku.
-      const magic = readSrc("app/(auth)/magic/page.tsx");
-      for (const bad of ["Nacitani", "Neplatny", "prihlas", "Zpet", "Overuji", "Pozadejte", "odeslan"]) {
-        assert.ok(!magic.includes(bad), `magic/page.tsx: ${bad}`);
-      }
+      // iter-037 (T-003b): stránka /magic je smazaná (mrtvá, nic na ni nevedlo),
+      // test 12d v test-iter-037-members.ts hlídá, že neexistuje.
     },
   },
   {

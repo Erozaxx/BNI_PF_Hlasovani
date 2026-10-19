@@ -187,10 +187,10 @@ export function ImportMembersForm() {
             ref={fileInputRef}
             type="file"
             accept=".xlsx"
-            className="text-sm text-text-main file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90 cursor-pointer"
+            className="min-h-[44px] text-sm text-text-main file:mr-3 file:min-h-[44px] file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary/90 cursor-pointer"
           />
         </div>
-        <Button type="submit" variant="primary" size="sm">
+        <Button type="submit" variant="primary" size="sm" className="min-h-[44px]">
           Nahrát a zobrazit preview
         </Button>
       </form>
@@ -264,7 +264,7 @@ export function ImportMembersForm() {
                           checked={isChecked}
                           onChange={() => toggleRow(idx)}
                           onClick={(e) => e.stopPropagation()}
-                          className="cursor-pointer"
+                          className="h-5 w-5 cursor-pointer"
                         />
                       ) : null}
                     </td>
@@ -298,11 +298,12 @@ export function ImportMembersForm() {
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             type="button"
             variant="primary"
             size="sm"
+            className="min-h-[44px]"
             onClick={handleImport}
             disabled={selectedActionableCount === 0}
           >
@@ -312,6 +313,7 @@ export function ImportMembersForm() {
             type="button"
             variant="secondary"
             size="sm"
+            className="min-h-[44px]"
             onClick={handleCancel}
           >
             Zrusit
@@ -355,7 +357,7 @@ export function ImportMembersForm() {
             </ul>
           )}
         </div>
-        <Button type="button" variant="secondary" size="sm" onClick={handleReset}>
+        <Button type="button" variant="secondary" size="sm" className="min-h-[44px]" onClick={handleReset}>
           Nahrat dalsi soubor
         </Button>
       </div>

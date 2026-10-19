@@ -148,6 +148,7 @@ export function SortableQuestionList({ questions }: SortableQuestionListProps) {
 
   return (
     <DndContext
+      id="interview-questions-dnd"
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}

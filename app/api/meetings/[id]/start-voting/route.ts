@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { runVotingDispatch, type DispatchMode } from "@/lib/meetings/voting-dispatch";
 
@@ -55,12 +55,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("meetings.manage");
+  if ("response" in authz) return authz.response;
+  const { session } = authz;
 
   const { id: meetingId } = await params;
 

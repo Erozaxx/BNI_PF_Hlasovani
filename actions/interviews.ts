@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   createInterviewWithSnapshot,
   deleteInterview as dbDeleteInterview,
@@ -14,6 +14,7 @@ import {
   type InterviewType,
 } from "@/lib/db/queries/interviews";
 import { getMemberById } from "@/lib/db/queries/members";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import {
   generateOrRegenerateInterviewToken,
   buildInterviewUrl,
@@ -29,8 +30,11 @@ import {
 } from "@/lib/email/interview-report";
 import type { ActionResult } from "@/lib/types";
 
+/** iter-037 (T-003b, gate sekce 5): neaktivní člen nemůže být vedoucím pohovoru. */
+const LEADER_INACTIVE_TEXT = "Vedoucí pohovoru je neaktivní. Vyber jiného.";
+
 // Admin/mod interview management (arch sections 6, 8, 10; T-004a). Every
-// action here requires admin OR moderator (requireManagementRole) — there is
+// action here requires the permission `interviews.manage` (iter-037), there is
 // no session-based mutation path onto interview_answer anywhere in this file:
 // answers are read-only for mod/admin, the leader fills them in via the
 // scoped magic link (T-008), structurally, not just hidden in the UI.
@@ -58,7 +62,7 @@ export async function createInterviewAction(
   type: InterviewType,
   leaderId: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   if (!memberId) {
@@ -79,6 +83,10 @@ export async function createInterviewAction(
     const leaderExists = await getMemberById(leaderId);
     if (!leaderExists) {
       return { success: false, error: "Vedoucí nebyl nalezen." };
+    }
+    // Zpovídaný člen smí být neaktivní (K15), vedoucí ne.
+    if (!isMemberActive(leaderExists, pragueToday())) {
+      return { success: false, error: LEADER_INACTIVE_TEXT };
     }
 
     const result = await createInterviewWithSnapshot({
@@ -142,7 +150,7 @@ export async function updateInterviewLeaderAction(
   interviewId: string,
   newLeaderId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   if (!newLeaderId) {
@@ -164,6 +172,9 @@ export async function updateInterviewLeaderAction(
     const leaderExists = await getMemberById(newLeaderId);
     if (!leaderExists) {
       return { success: false, error: "Vedoucí nebyl nalezen." };
+    }
+    if (!isMemberActive(leaderExists, pragueToday())) {
+      return { success: false, error: LEADER_INACTIVE_TEXT };
     }
 
     // Revoke first (arch 8b ordering): the previous leader's link must die
@@ -206,7 +217,7 @@ export async function updateInterviewLeaderAction(
 export async function sendInterviewLinkAction(
   interviewId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   try {
@@ -230,6 +241,9 @@ export async function sendInterviewLinkAction(
     const leader = await getMemberById(detail.leaderId);
     if (!leader) {
       return { success: false, error: "Vedouci nebyl nalezen." };
+    }
+    if (!isMemberActive(leader, pragueToday())) {
+      return { success: false, error: LEADER_INACTIVE_TEXT };
     }
     if (!leader.email) {
       return {
@@ -293,7 +307,7 @@ export async function sendInterviewLinkAction(
 export async function deleteInterviewAction(
   interviewId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   try {
@@ -335,7 +349,7 @@ export async function sendInterviewReportAction(
   interviewId: string,
   recipientMemberId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   if (!recipientMemberId) {
@@ -360,6 +374,10 @@ export async function sendInterviewReportAction(
     }
     if (!recipient.email) {
       return { success: false, error: "Vybrany prijemce nema email." };
+    }
+    // iter-037 (security L-2): deaktivace vypíná maily, report neaktivnímu neodejde.
+    if (!isMemberActive(recipient, pragueToday())) {
+      return { success: false, error: "Příjemce je neaktivní. Vyber jiného člena." };
     }
 
     const questions = await getInterviewQuestionsWithAnswers(interviewId);
@@ -412,7 +430,7 @@ export async function sendInterviewCompareReportAction(
   memberId: string,
   recipientMemberId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("interviews.manage");
   if (!auth.success) return auth;
 
   if (!recipientMemberId) {
@@ -447,6 +465,10 @@ export async function sendInterviewCompareReportAction(
     }
     if (!recipient.email) {
       return { success: false, error: "Vybrany prijemce nema email." };
+    }
+    // iter-037 (security L-2): deaktivace vypíná maily, report neaktivnímu neodejde.
+    if (!isMemberActive(recipient, pragueToday())) {
+      return { success: false, error: "Příjemce je neaktivní. Vyber jiného člena." };
     }
 
     const { paired, onlyIn5, onlyIn10 } = pairInterviewAnswersForCompare(

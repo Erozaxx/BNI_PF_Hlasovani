@@ -3,6 +3,7 @@ import { getMeetings, getLastMeetingDatesForGuests } from "@/lib/db/queries/meet
 import { statusLabel } from "@/lib/meetings/statusLabel";
 import { getGuests } from "@/lib/db/queries/guests";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -21,9 +22,10 @@ export default async function DashboardPage() {
   const lastMeetingDates = recentGuestIds.length > 0
     ? await getLastMeetingDatesForGuests(recentGuestIds)
     : new Map<string, string>();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
+  const canMastermind = can(session, "mastermind.manage");
+  const canGuests = can(session, "guests.manage");
+  const canMeetings = can(session, "meetings.manage");
+  const canInterviews = can(session, "interviews.manage");
 
   const upcomingMeeting = meetings.find(
     (m) => m.status === "draft" || m.status === "active" || m.status === "voting"
@@ -55,29 +57,33 @@ export default async function DashboardPage() {
       ) : null}
 
       {/* Master mind (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
-      <DashboardMastermind memberId={session.memberId} isManagement={isManagement} />
+      <DashboardMastermind memberId={session.memberId} isManagement={canMastermind} />
 
       {/* Burza pomoci (iter-035, Z4): jen výzva vlastníkovi se starým řádkem */}
       <DashboardBurza memberId={session.memberId} />
 
       {/* Quick actions for management */}
-      {isManagement && (
+      {(canGuests || canMeetings) && (
         <div className="flex flex-wrap gap-3">
-          <Link href="/guests/new">
-            <Button variant="secondary" size="sm">
-              + Nový host
-            </Button>
-          </Link>
-          <Link href="/meetings">
-            <Button variant="secondary" size="sm">
-              Schůzky
-            </Button>
-          </Link>
+          {canGuests && (
+            <Link href="/guests/new">
+              <Button variant="secondary" size="sm">
+                + Nový host
+              </Button>
+            </Link>
+          )}
+          {canMeetings && (
+            <Link href="/meetings">
+              <Button variant="secondary" size="sm">
+                Schůzky
+              </Button>
+            </Link>
+          )}
         </div>
       )}
 
       {/* Pohovory k zalozeni (5/10 mesicu) — mod/admin only, arch section 7.2 */}
-      {isManagement && <InterviewDueSection />}
+      {canInterviews && <InterviewDueSection />}
 
       {/* Recent guests */}
       <section>

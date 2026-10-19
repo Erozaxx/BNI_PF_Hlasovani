@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { timer } from "@/lib/db/schema";
-import { requireManagementRole } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 
 /**
  * Latency padding: initial_seconds = display_seconds + LATENCY_PADDING_SECONDS.
@@ -27,7 +27,7 @@ export async function createTimerAction(
   name: string,
   displaySeconds: number
 ): Promise<{ viewToken: string; controlToken: string }> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("timers.manage");
   if (!auth.success) {
     throw new Error(auth.error);
   }
@@ -62,7 +62,7 @@ export async function createTimerAction(
  * Silently succeeds if token does not exist (idempotent).
  */
 export async function deleteTimerAction(controlToken: string): Promise<void> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("timers.manage");
   if (!auth.success) {
     throw new Error(auth.error);
   }
@@ -83,7 +83,7 @@ export async function deleteTimerAction(controlToken: string): Promise<void> {
 export async function regenerateViewTokenAction(
   controlToken: string
 ): Promise<{ newViewToken: string }> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("timers.manage");
   if (!auth.success) {
     throw new Error(auth.error);
   }

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session";
 import { getMeetingsForDates } from "@/lib/db/queries/meetings";
 import { todayInPrague } from "@/lib/meetings/voting-window";
 import { addDaysIso, findDraftWarnings } from "@/lib/meetings/draft-warning";
+import { can } from "@/lib/auth/permissions";
 
 /** "YYYY-MM-DD" -> "D. M." (bez roku — arch iter-026 8.2 doslova). */
 function formatDateShort(iso: string): string {
@@ -22,9 +23,7 @@ function formatDateShort(iso: string): string {
  */
 export async function DraftMeetingBanner() {
   const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
-  if (!isManagement) return null;
+  if (!can(session, "meetings.manage")) return null;
 
   const today = todayInPrague();
   const tomorrow = addDaysIso(today, 1);

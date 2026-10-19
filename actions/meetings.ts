@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManagementRole, requireAdmin } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   createMeeting as dbCreateMeeting,
   deleteMeeting as dbDeleteMeeting,
@@ -19,7 +19,7 @@ export async function createMeetingAction(
   date: string,
   location?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("meetings.manage");
   if (!auth.success) return auth;
 
   if (!date) {
@@ -46,7 +46,7 @@ export async function createMeetingAction(
 export async function deleteMeetingAction(
   meetingId: string
 ): Promise<ActionResult> {
-  const auth = await requireAdmin();
+  const auth = await requirePermission("meetings.delete");
   if (!auth.success) return auth;
 
   try {
@@ -73,7 +73,7 @@ export async function addGuestToMeetingAction(
   meetingId: string,
   guestId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("meetings.manage");
   if (!auth.success) return auth;
 
   try {
@@ -104,7 +104,7 @@ export async function removeGuestFromMeetingAction(
   meetingId: string,
   guestId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("meetings.manage");
   if (!auth.success) return auth;
 
   try {
@@ -126,7 +126,7 @@ export async function removeGuestFromMeetingAction(
 export async function closeVotingAction(
   meetingId: string
 ): Promise<ActionResult> {
-  const auth = await requireManagementRole(["admin", "moderator"]);
+  const auth = await requirePermission("meetings.manage");
   if (!auth.success) return auth;
 
   try {

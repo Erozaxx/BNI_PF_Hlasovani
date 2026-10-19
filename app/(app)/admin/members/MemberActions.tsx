@@ -10,14 +10,21 @@ import {
   sendMagicLinkEmailAction,
 } from "@/actions/members";
 
+/**
+ * iter-037 (T-003c, arch 8.2): osobní odkaz na stránce člena. Stav z
+ * `personalLinkState` („Platný do 24. 10.“, „Zneplatněný“, „Žádný“),
+ * u neaktivního člena je generování a odeslání nedostupné.
+ */
 interface MemberActionsProps {
   memberId: string;
   hasToken: boolean;
+  stateLabel: string;
+  isInactive: boolean;
 }
 
 const storageKey = (id: string) => `magic_link_${id}`;
 
-export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
+export function MemberActions({ memberId, hasToken, stateLabel, isInactive }: MemberActionsProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -50,19 +57,24 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
       } else if (result.data) {
         setMagicLink(result.data.magicLink);
         localStorage.setItem(storageKey(memberId), result.data.magicLink);
-        showToast("success", "Odkaz byl vygenerovan.");
+        showToast("success", "Odkaz byl vygenerován.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se vygenerovat odkaz.");
-      showToast("error", "Nepodarilo se vygenerovat odkaz.");
+      setError("Nepodařilo se vygenerovat odkaz.");
+      showToast("error", "Nepodařilo se vygenerovat odkaz.");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleRevoke() {
-    if (!confirm("Opravdu chcete revokovat pristupovy odkaz?")) return;
+    if (
+      !confirm(
+        "Osobní odkaz přestane platit hned a člen se odhlásí ze všech zařízení. Přihlásit se může dál, nový odkaz si vyžádá na přihlašovací stránce. Když ho chceš zablokovat, deaktivuj ho."
+      )
+    )
+      return;
     setLoading(true);
     setError("");
 
@@ -74,12 +86,12 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
       } else {
         setMagicLink("");
         localStorage.removeItem(storageKey(memberId));
-        showToast("success", "Odkaz byl revokovany.");
+        showToast("success", "Odkaz už neplatí.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se revokovat odkaz.");
-      showToast("error", "Nepodarilo se revokovat odkaz.");
+      setError("Odkaz se nepodařilo zneplatnit.");
+      showToast("error", "Odkaz se nepodařilo zneplatnit.");
     } finally {
       setLoading(false);
     }
@@ -107,57 +119,71 @@ export function MemberActions({ memberId, hasToken }: MemberActionsProps) {
       } else if (result.data) {
         setMagicLink(result.data.magicLink);
         localStorage.setItem(storageKey(memberId), result.data.magicLink);
-        showToast("success", "Email s odkazem byl odeslan.");
+        showToast("success", "E-mail s odkazem byl odeslán.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se odeslat email.");
-      showToast("error", "Nepodarilo se odeslat email.");
+      setError("Nepodařilo se odeslat e-mail.");
+      showToast("error", "Nepodařilo se odeslat e-mail.");
     } finally {
       setSendingEmail(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2">
+    <div className="flex flex-col gap-3">
+      <p className="text-sm">
+        <span className="text-text-muted">Stav: </span>
+        <span className="font-medium">{stateLabel}</span>
+      </p>
+
+      {isInactive && (
+        <p className="text-sm text-text-muted">Neaktivnímu členovi odkaz neposíláme.</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
           size="sm"
+          className="min-h-[44px]"
           onClick={handleGenerateLink}
           loading={loading}
+          disabled={isInactive}
         >
-          Generovat odkaz
+          Vygenerovat odkaz
         </Button>
         {hasToken && (
           <Button
             variant="danger"
             size="sm"
+            className="min-h-[44px]"
             onClick={handleRevoke}
             loading={loading}
           >
-            Revokovat
+            Zneplatnit odkaz
           </Button>
         )}
       </div>
 
-      {magicLink && (
-        <div className="flex items-center gap-2 mt-1">
+      {magicLink && !isInactive && (
+        <div className="flex flex-wrap items-center gap-2">
           <input
             readOnly
             value={magicLink}
-            className="text-xs bg-background border border-border rounded px-2 py-1 flex-1 min-w-0"
+            aria-label="Osobní odkaz"
+            className="h-11 min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-xs"
           />
-          <Button variant="secondary" size="sm" onClick={handleCopy}>
-            {copied ? "Zkopírovano ✓" : "Kopírovat"}
+          <Button variant="secondary" size="sm" className="min-h-[44px]" onClick={handleCopy}>
+            {copied ? "Zkopírováno" : "Kopírovat"}
           </Button>
           <Button
             variant="secondary"
             size="sm"
+            className="min-h-[44px]"
             onClick={handleSendEmail}
             loading={sendingEmail}
           >
-            Poslat emailem
+            Poslat e-mailem
           </Button>
         </div>
       )}

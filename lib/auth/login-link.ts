@@ -18,6 +18,7 @@ import {
   upsertSetPasswordLink,
 } from "@/lib/db/queries/login-links";
 import { createSession } from "@/lib/auth/session";
+import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { throttleCheck, throttleFail, throttleHit } from "@/lib/auth/throttle";
 import {
   LINK_INVALID_TEXT,
@@ -87,7 +88,21 @@ export async function requestLoginLink(
     );
     const blocked = findBlockedRule(rules, counts);
     const member = blocked ? null : await getMemberByEmail(email);
-    const plan = planLoginLinkRequest({ blocked, member });
+    // iter-037 (T-003b): deaktivovaný člen mail nedostane, odpověď a doba se
+    // neliší (`reason: "inactive"` je jen v plánu, ven nejde).
+    const plan = planLoginLinkRequest({
+      blocked,
+      member: member
+        ? {
+            id: member.id,
+            name: member.name,
+            email: member.email,
+            managementRole: member.managementRole,
+            hasFunction: member.hasFunction,
+            active: isMemberActive(member, pragueToday()),
+          }
+        : null,
+    });
 
     if (plan.send) {
       const token = generateLinkToken();
@@ -174,6 +189,9 @@ export async function consumeLoginLink(
 
     const member = await getMemberById(memberId);
     if (!member) return { ok: false, error: LINK_INVALID_TEXT };
+    // iter-037 (T-003b): druhá pojistka k zneplatnění odkazů při deaktivaci
+    // (souběh: odkaz vznikl těsně před deaktivací).
+    if (!isMemberActive(member, pragueToday())) return { ok: false, error: LINK_INVALID_TEXT };
 
     await createSession(
       {
@@ -223,7 +241,7 @@ export async function consumeSetPasswordLink(
     await createSession(
       {
         memberId: result.memberId,
-        managementRole: result.managementRole as "admin" | "moderator",
+        managementRole: (result.managementRole as "admin" | "moderator" | null) ?? null,
         authMethod: "password",
         name: result.name,
       },

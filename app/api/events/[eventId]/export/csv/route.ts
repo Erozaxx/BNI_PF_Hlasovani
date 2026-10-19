@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getEventById, getEventOptions, getEventParticipants } from "@/lib/db/queries/events";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
@@ -23,14 +23,8 @@ export async function GET(
   { params }: { params: Promise<{ eventId: string }> }
 ) {
   // Auth: require managementRole
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-
-  if (!isManagement) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const authz = await requirePermissionForRoute("events.manage", { status: 403 });
+  if ("response" in authz) return authz.response;
 
   const { eventId } = await params;
 

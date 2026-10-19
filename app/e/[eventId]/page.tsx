@@ -31,6 +31,11 @@ export default async function EventPage({ params, searchParams }: PageProps) {
 
   const { event, participant } = result;
 
+  // iter-037 (T-003b): deaktivovaný člen má odkaz neplatný (po datu zase funguje).
+  if (!participant.memberActive) {
+    notFound();
+  }
+
   // Verify the eventId in URL matches participant's event
   if (event.id !== params.eventId) {
     notFound();

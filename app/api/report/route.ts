@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendReport } from "@/lib/email/resend";
 import { getSession } from "@/lib/auth/session";
+import { can } from "@/lib/auth/permissions";
 
 /**
  * POST /api/report
@@ -72,12 +73,9 @@ async function checkAuthorization(request: NextRequest): Promise<boolean> {
 
   // Check admin session
   try {
+    // iter-037 (arch 6.6): právo `meetings.manage` (admin i vedení s funkcí).
     const session = await getSession();
-    if (session.memberId && session.managementRole === "admin") {
-      return true;
-    }
-    // Also allow moderator to trigger reports
-    if (session.memberId && session.managementRole === "moderator") {
+    if (session.memberId && can(session, "meetings.manage")) {
       return true;
     }
   } catch {

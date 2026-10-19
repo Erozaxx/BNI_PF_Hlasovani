@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMemberCount, reorderMembers } from "@/lib/db/queries/members";
 
 function err(status: number, message: string) {
@@ -13,17 +13,12 @@ function err(status: number, message: string) {
  * Persists display_order = index for each member (sequential UPDATEs, no
  * transaction — LL-003).
  *
- * Auth: admin or moderator session required (management-only, behind session
- * guard in middleware).
+ * Auth: právo `members.manage` (`requirePermissionForRoute` níž), middleware
+ * hlídá jen existenci session.
  */
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
-  if (!isManagement) {
-    return err(401, "Unauthorized");
-  }
+  const authz = await requirePermissionForRoute("members.manage");
+  if ("response" in authz) return authz.response;
 
   let body: unknown;
   try {

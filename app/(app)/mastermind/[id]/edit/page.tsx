@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getCaseById } from "@/lib/db/queries/mastermind";
 import { canEdit, caseDescription, isUuid } from "@/lib/mastermind/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
@@ -20,8 +21,7 @@ export default async function EditMastermindCasePage({
   const found = await getCaseById(id);
   if (!found) notFound();
 
-  const isManagement =
-    session.managementRole === "admin" || session.managementRole === "moderator";
+  const isManagement = can(session, "mastermind.manage");
   const allowed = canEdit(
     { memberId: session.memberId, isManagement },
     { memberId: found.memberId, status: found.status, internalDate: found.internalDate },

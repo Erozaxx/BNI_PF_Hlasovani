@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getGuests } from "@/lib/db/queries/guests";
 import { getCategoriesWithGuests } from "@/lib/db/queries/categories";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { getLastMeetingDatesForGuests } from "@/lib/db/queries/meetings";
 import { GuestCard } from "@/components/guests/GuestCard";
 import { PromoteGuestButton } from "@/components/guests/PromoteGuestButton";
@@ -26,15 +27,14 @@ export default async function GuestsPage({
     ? await getLastMeetingDatesForGuests(guestIds)
     : new Map<string, string>();
 
-  const isManagement =
-    session.managementRole === "admin" ||
-    session.managementRole === "moderator";
+  const canManageGuests = can(session, "guests.manage");
+  const canPromoteGuests = can(session, "guests.promote");
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-text-main">Hosté</h1>
-        {isManagement && (
+        {canManageGuests && (
           <Link href="/guests/new">
             <Button variant="primary" size="sm">
               + Přidat hosta
@@ -64,7 +64,7 @@ export default async function GuestsPage({
                     interactive
                   />
                 </Link>
-                {isManagement && (
+                {canPromoteGuests && (
                   <PromoteGuestButton
                     guestId={g.id}
                     guestName={g.name}
