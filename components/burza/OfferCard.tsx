@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { HelpButton } from "@/components/burza/HelpButton";
-import { formatMonthYear, helpButtonState } from "@/lib/burza/rules";
+import { HelpUsedToggle } from "@/components/burza/HelpUsedToggle";
+import { canRecordHelp, formatMonthYear } from "@/lib/burza/rules";
 
 export interface OfferCardData {
   memberId: string;
@@ -18,7 +18,7 @@ export interface OfferCardData {
  * Karta řádku burzy (6.3, Z2, Z4). Jméno, firma a obor z `member`, „S čím
  * pomůžu“, kontakt a poznámka jako prostý text (bez automatických odkazů),
  * prázdný kontakt a poznámka = pomlčka. Bez štítku „Zapsalo vedení“, bez
- * veřejného počtu pomoci. „Pomohl(a) mi“ je sekundární tlačítko na cizí kartě.
+ * veřejného počtu pomoci. „Využil(a) jsem“ je přepínač na cizí kartě.
  */
 export function OfferCard({
   data,
@@ -33,7 +33,7 @@ export function OfferCard({
   recordedHelpId: string | null;
 }) {
   const subtitle = [data.company, data.obor].filter((v): v is string => !!v && v.trim().length > 0).join(" · ");
-  const help = helpButtonState(viewerId, data.memberId, recordedHelpId);
+  const canUse = canRecordHelp(viewerId, data.memberId);
 
   return (
     <article className="min-w-0 rounded-card border border-border bg-surface p-4 shadow-card sm:p-5">
@@ -56,10 +56,10 @@ export function OfferCard({
         <p className="text-xs text-text-muted">potvrzeno {formatMonthYear(data.confirmedDay)}</p>
       </div>
 
-      {(help !== "none" || viewerIsManagement) && (
+      {(canUse || viewerIsManagement) && (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {help !== "none" && (
-            <HelpButton
+          {canUse && (
+            <HelpUsedToggle
               key={`${data.memberId}-${recordedHelpId ?? "none"}`}
               helperId={data.memberId}
               initialHelpId={recordedHelpId}

@@ -66,7 +66,9 @@ export type OpsEventKind =
   // vedení do cizích dat, nikdy text řádku, kontakt, poznámka ani e-mail.
   | "burza.offer-by-management"
   | "burza.offer-removed"
-  | "burza.help-removed";
+  | "burza.help-removed"
+  | "burza.contact-by-management"
+  | "burza.contact-use-removed";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).
@@ -94,6 +96,8 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "burza.offer-by-management",
   "burza.offer-removed",
   "burza.help-removed",
+  "burza.contact-by-management",
+  "burza.contact-use-removed",
 ];
 
 /**

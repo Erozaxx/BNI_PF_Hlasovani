@@ -65,6 +65,8 @@ export const KIND_LABELS: Record<string, string> = {
   "burza.offer-by-management": "Burza: řádek zapsalo vedení",
   "burza.offer-removed": "Burza: řádek smazán vedením",
   "burza.help-removed": "Burza: záznam pomoci smazán",
+  "burza.contact-by-management": "Burza: kontakt zapsalo vedení",
+  "burza.contact-use-removed": "Burza: využití kontaktu smazáno",
 };
 
 export function kindLabel(kind: string): string {

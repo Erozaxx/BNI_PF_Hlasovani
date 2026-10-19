@@ -5,26 +5,39 @@ import { revalidatePath } from "next/cache";
 import { requireAuth, requireManagementRole } from "@/lib/auth/guards";
 import {
   confirmOfferGuarded,
+  createContactItemWithLimit,
   createOfferGuarded,
+  getContactUseMissReason,
   getHelpMissReason,
   recordHelpGuarded,
+  removeContactItemGuarded,
+  removeContactUseGuarded,
   removeHelpGuarded,
   removeOfferGuarded,
+  setContactUsedGuarded,
+  unsetContactUsedGuarded,
+  unsetHelpUsedGuarded,
+  updateContactItemGuarded,
   updateOfferGuarded,
 } from "@/lib/db/queries/burza";
 import {
+  contactItemEvent,
+  contactUseRemovedEvent,
   helpRemovedEvent,
   offerEvent,
   type BurzaEventCtx,
+  type ContactItemEventAction,
   type OfferEventAction,
 } from "@/lib/burza/events";
 import {
   MESSAGES,
+  canEditContacts,
   canEditOffer,
   isUuid,
   mapDbError,
+  validateBoolean,
+  validateContactLabel,
   validateHelpNote,
-  validateIsNew,
   validateOfferInput,
 } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
@@ -39,8 +52,8 @@ import type { ActionResult } from "@/lib/types";
  *
  * Guard na začátku každé akce je závazný a hlídá ho statický test
  * (scripts/test-iter-035-burza.ts): `requireAuth` pro saveOffer, confirmOffer,
- * removeOffer, recordHelp a removeHelp, `requireManagementRole` pro
- * recordHelpFor. U akcí s `requireAuth` platí autorita ve WHERE příkazu
+ * removeOffer, setHelpUsed, removeHelp, saveContactItem, removeContactItem a
+ * setContactUsed, `requireManagementRole` pro recordHelpFor a removeContactUse. U akcí s `requireAuth` platí autorita ve WHERE příkazu
  * (`$target = $me OR $isManagement`, `$isManagement` ze session).
  *
  * Bez transakcí (LL-003): každá akce je jeden SQL příkaz a log až po něm.
@@ -115,7 +128,7 @@ export async function saveOfferAction(
   if (typeof input !== "object" || input === null) {
     return { success: false, error: MESSAGES.invalidInput };
   }
-  if (!isUuid(input.memberId) || !validateIsNew(input.isNew)) {
+  if (!isUuid(input.memberId) || !validateBoolean(input.isNew)) {
     return { success: false, error: MESSAGES.invalidInput };
   }
   const parsed = validateOfferInput(input);
@@ -247,21 +260,59 @@ async function recordHelp(opts: {
   }
 }
 
-/** „Pomohl(a) mi“: příjemce je vždy přihlášený člen ze session. Přijímá cílový stav, ne přepínač. */
-export async function recordHelpAction(
-  helperId: string,
-  note?: string | null
-): Promise<ActionResult<RecordHelpResult>> {
+export type SetHelpUsedInput = {
+  helperId: string;
+  /** Cílový stav přepínače (ne přepínání). */
+  used: boolean;
+  /** `id` záznamu, který karta ukazovala jako zaškrtnutý (pro odškrtnutí). */
+  helpId: string | null;
+};
+
+/**
+ * Přepínač „Využil(a) jsem“ na záložce Pomoc: příjemce je vždy přihlášený člen
+ * ze session, ne sám sobě. `used: true` zapíše záznam za tento měsíc (nebo
+ * vrátí už existující), `used: false` smaže přesně `helpId` (ne podle měsíce,
+ * přelom měsíce) a 0 i 1 řádek je úspěch.
+ */
+export async function setHelpUsedAction(
+  input: SetHelpUsedInput
+): Promise<ActionResult<{ used: boolean; helpId: string | null }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
   const actor = auth.session;
 
-  return recordHelp({
-    helperId,
-    recipientId: actor.memberId,
-    createdBy: actor.memberId,
-    note,
-  });
+  if (typeof input !== "object" || input === null) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+  if (!isUuid(input.helperId) || !validateBoolean(input.used)) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+
+  if (input.used) {
+    const res = await recordHelp({
+      helperId: input.helperId,
+      recipientId: actor.memberId,
+      createdBy: actor.memberId,
+      note: null,
+    });
+    if (!res.success) return res;
+    return { success: true, data: { used: true, helpId: res.data?.helpId ?? null } };
+  }
+
+  if (!isUuid(input.helpId)) return { success: false, error: MESSAGES.invalidInput };
+  try {
+    await unsetHelpUsedGuarded({
+      helpId: input.helpId,
+      recipientId: actor.memberId,
+      helperId: input.helperId,
+    });
+    revalidatePath("/burza");
+    revalidatePath("/burza/pomoc");
+    return { success: true, data: { used: false, helpId: null } };
+  } catch (err) {
+    console.error(`[setHelpUsedAction] failed: ${errClass(err)}`);
+    return { success: false, error: mapDbError(dbErrorCode(err)) };
+  }
 }
 
 /** Zápis vedením podle hlášení: pomocník i příjemce z formuláře. */
@@ -301,6 +352,174 @@ export async function removeHelpAction(helpId: string): Promise<ActionResult> {
     return { success: true };
   } catch (err) {
     console.error(`[removeHelpAction] failed: ${errClass(err)}`);
+    return { success: false, error: mapDbError(dbErrorCode(err)) };
+  }
+}
+
+// ── Kontakty ──
+
+function revalidateContacts(): void {
+  revalidatePath("/burza/kontakty");
+  revalidatePath("/burza/kontakty/[memberId]", "page");
+}
+
+export type SaveContactItemInput = {
+  /** Komu položka patří (vlastník, nebo vedení za člena). */
+  memberId: string;
+  /** `null` = založení s limitem, jinak úprava. */
+  contactId: string | null;
+  label: string;
+};
+
+/** Založení (s limitem 10) a úprava položky „Na koho mám kontakt“. */
+export async function saveContactItemAction(
+  input: SaveContactItemInput
+): Promise<ActionResult<{ created: boolean }>> {
+  const auth = await requireAuth();
+  if (!auth.success) return auth;
+  const actor = auth.session;
+
+  if (typeof input !== "object" || input === null) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+  if (!isUuid(input.memberId)) return { success: false, error: MESSAGES.invalidInput };
+  const created = input.contactId === null;
+  if (!created && !isUuid(input.contactId)) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+  const label = validateContactLabel(input.label);
+  if (!label.ok) return { success: false, error: label.error };
+
+  const isManagement = isManagementSession(actor);
+  if (!canEditContacts({ memberId: actor.memberId, isManagement }, input.memberId)) {
+    return { success: false, error: MESSAGES.denied };
+  }
+
+  try {
+    const owner = created
+      ? await createContactItemWithLimit({
+          targetId: input.memberId,
+          actorId: actor.memberId,
+          isManagement,
+          label: label.value,
+        })
+      : await updateContactItemGuarded({
+          contactId: input.contactId as string,
+          targetId: input.memberId,
+          actorId: actor.memberId,
+          isManagement,
+          label: label.value,
+        });
+    if (!owner) {
+      return {
+        success: false,
+        error: created ? MESSAGES.contactLimit : MESSAGES.contactDeletedMeanwhile,
+      };
+    }
+    const action: ContactItemEventAction = created ? "create" : "update";
+    await safeLog(() => contactItemEvent(eventCtx(actor), owner, action));
+    revalidateContacts();
+    return { success: true, data: { created } };
+  } catch (err) {
+    console.error(`[saveContactItemAction] failed: ${errClass(err)}`);
+    return { success: false, error: mapDbError(dbErrorCode(err)) };
+  }
+}
+
+/** Smazání položky: vlastník svou, vedení kteroukoli. Záznamy využití zůstanou. */
+export async function removeContactItemAction(contactId: string): Promise<ActionResult> {
+  const auth = await requireAuth();
+  if (!auth.success) return auth;
+  const actor = auth.session;
+
+  if (!isUuid(contactId)) return { success: false, error: MESSAGES.invalidInput };
+
+  try {
+    const owner = await removeContactItemGuarded({
+      contactId,
+      actorId: actor.memberId,
+      isManagement: isManagementSession(actor),
+    });
+    if (!owner) return { success: false, error: MESSAGES.contactGone };
+    await safeLog(() => contactItemEvent(eventCtx(actor), owner, "remove"));
+    revalidateContacts();
+    revalidatePath("/burza/pomoc");
+    return { success: true };
+  } catch (err) {
+    console.error(`[removeContactItemAction] failed: ${errClass(err)}`);
+    return { success: false, error: mapDbError(dbErrorCode(err)) };
+  }
+}
+
+export type SetContactUsedInput = {
+  contactId: string;
+  /** Cílový stav přepínače (ne přepínání). */
+  used: boolean;
+};
+
+/**
+ * Přepínač „Využil(a) jsem“ na záložce Kontakty: příjemce je přihlášený člen
+ * ze session, vlastní položku zaškrtnout nejde. Idempotentní oběma směry.
+ */
+export async function setContactUsedAction(
+  input: SetContactUsedInput
+): Promise<ActionResult<{ used: boolean }>> {
+  const auth = await requireAuth();
+  if (!auth.success) return auth;
+  const actor = auth.session;
+
+  if (typeof input !== "object" || input === null) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+  if (!isUuid(input.contactId) || !validateBoolean(input.used)) {
+    return { success: false, error: MESSAGES.invalidInput };
+  }
+
+  try {
+    if (!input.used) {
+      await unsetContactUsedGuarded({ contactId: input.contactId, recipientId: actor.memberId });
+    } else {
+      const id = await setContactUsedGuarded({
+        contactId: input.contactId,
+        recipientId: actor.memberId,
+        today: todayInPrague(),
+      });
+      if (!id) {
+        const why = await getContactUseMissReason({
+          contactId: input.contactId,
+          recipientId: actor.memberId,
+        });
+        if (!why.exists) return { success: false, error: MESSAGES.contactGone };
+        if (why.own) return { success: false, error: MESSAGES.contactSelf };
+        if (!why.recordedId) return { success: false, error: MESSAGES.generic };
+      }
+    }
+    revalidateContacts();
+    revalidatePath("/burza/pomoc");
+    return { success: true, data: { used: input.used } };
+  } catch (err) {
+    console.error(`[setContactUsedAction] failed: ${errClass(err)}`);
+    return { success: false, error: mapDbError(dbErrorCode(err)) };
+  }
+}
+
+/** Smazání záznamu o využití kontaktu: jen vedení (člen odškrtává přepínačem). */
+export async function removeContactUseAction(useId: string): Promise<ActionResult> {
+  const auth = await requireManagementRole(MANAGEMENT_ROLES);
+  if (!auth.success) return auth;
+  const actor = auth.session;
+
+  if (!isUuid(useId)) return { success: false, error: MESSAGES.invalidInput };
+
+  try {
+    const removed = await removeContactUseGuarded(useId);
+    if (!removed) return { success: false, error: MESSAGES.helpGone };
+    await safeLog(() => contactUseRemovedEvent(eventCtx(actor), removed));
+    revalidateContacts();
+    revalidatePath("/burza/pomoc");
+    return { success: true };
+  } catch (err) {
+    console.error(`[removeContactUseAction] failed: ${errClass(err)}`);
     return { success: false, error: mapDbError(dbErrorCode(err)) };
   }
 }

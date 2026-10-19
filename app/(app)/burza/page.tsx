@@ -8,10 +8,11 @@ import {
 import { TEXTS, sortOffers } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
 import { MyOfferBox } from "@/components/burza/MyOfferBox";
+import { BurzaTabs } from "@/components/burza/BurzaTabs";
 import { OfferList } from "@/components/burza/OfferList";
 
 /**
- * Burza pomoci (iter-035). Vše za přihlášením. Nahoře hranice, box s vlastním
+ * Burza pomoci, záložka Pomoc (iter-035). Vše za přihlášením. Nahoře záložky, hranice, box s vlastním
  * řádkem, hledání a karty abecedně. Vedení navíc vidí pracovní seznam „Bez
  * řádku“ a odkaz na záznamy pomoci (Z4: žádné „K potvrzení“).
  */
@@ -35,8 +36,11 @@ export default async function BurzaPage() {
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-text-main">Burza pomoci</h1>
-        <p className="mt-2 text-sm text-text-muted">{TEXTS.boundary}</p>
       </div>
+
+      <BurzaTabs active="help" />
+
+      <p className="text-sm text-text-muted">{TEXTS.boundary}</p>
 
       <MyOfferBox
         memberId={session.memberId}

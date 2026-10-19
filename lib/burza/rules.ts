@@ -29,6 +29,10 @@ export const HELP_WINDOW_MONTHS = 6;
 export const HELP_RECORDS_MONTHS = 12;
 /** Strop počtu záznamů na `/burza/pomoc`. */
 export const HELP_RECORDS_LIMIT = 200;
+/** Položka „Na koho mám kontakt“: délka v UI (DB dovolí 400). */
+export const CONTACT_LABEL_MAX = 150;
+/** Nejvíc položek kontaktů na člena (K18). */
+export const CONTACT_ITEMS_LIMIT = 10;
 
 // ── Texty (Z7, LL-014). Členské stránky tykají, nápověda vyká. ──
 
@@ -43,7 +47,39 @@ export const TEXTS = {
   emptyBurza: "Burza je zatím prázdná.",
   noResults: "Nic nenalezeno.",
   staleOwn: "Tvůj řádek v burze je starší než 3 měsíce. Platí pořád?",
-  helpHint: "Stačí jedna věta, s čím ti pomohl(a).",
+  // iter-035 doplnění (gate T-012, sekce 5, texty doslova)
+  tabsLabel: "Burza pomoci",
+  tabHelp: "Pomoc",
+  tabContacts: "Kontakty",
+  usedToggle: "Využil(a) jsem",
+  usedThisMonth: "tento měsíc",
+  contactsIntro: "Kontakt tu přímo není. Když ho chceš, řekni si tomu, kdo ho nabízí.",
+  myContactsTitle: "Tvoje kontakty",
+  noContacts: "Ještě tu nemáš žádný kontakt.",
+  addContact: "Přidat kontakt",
+  editContacts: "Upravit kontakty",
+  contactsSearch: "Hledat (jméno, obor, kontakt)",
+  contactLabel: "Na koho mám kontakt",
+  emptyContacts: "Od ostatních tu zatím žádný kontakt není.",
+  manageOwnTitle: "Tvoje kontakty v burze",
+  backToContacts: "Zpět na Kontakty",
+  contactHint:
+    "Třeba ředitel logistiky ve firmě X. Jméno ani telefon toho člověka sem nepiš, kdo kontakt chce, řekne si tobě.",
+  contactAdd: "Přidat",
+  contactLimitFull: "Víc než 10 kontaktů tu mít nejde. Když chceš přidat další, nějaký smaž.",
+  contactDeleteConfirm: "Opravdu smazat tento kontakt?",
+  contactAdded: "Kontakt přidán.",
+  contactSaved: "Kontakt uložen.",
+  contactDeleted: "Kontakt smazán.",
+  contactUseDeleteConfirm: "Opravdu smazat záznam o využití kontaktu?",
+  helpDeleteConfirm: "Opravdu smazat záznam pomoci?",
+  helpKindLabel: "Pomoc",
+  contactGoneKindLabel: "Kontakt, který už v burze není",
+  myContactsCount: (n: number) => `Zapsané kontakty: ${n} z ${CONTACT_ITEMS_LIMIT}`,
+  contactsUsedByOthers: (n: number) =>
+    `Tvoje kontakty využili ostatní za posledních 6 měsíců: ${n}`,
+  manageOtherTitle: (name: string) => `Kontakty v burze: ${name}`,
+  offeredBy: (parts: string) => `Nabízí: ${parts}`,
 } as const;
 
 // ── Texty hlášek (sdílené akcemi a testy) ──
@@ -63,6 +99,11 @@ export const MESSAGES = {
     "Pomoc, kterou jsi poskytl(a) ty, zapíše někdo jiný z vedení nebo ten, komu jsi pomohl(a).",
   helperGone: (name: string) => `${name} už v burze není.`,
   alreadyRecorded: "Tento měsíc už zapsáno.",
+  contactEmpty: "Napiš, na koho máš kontakt.",
+  contactGone: "Kontakt už v burze není.",
+  contactSelf: "Vlastní kontakt si zaškrtnout nejde.",
+  contactDeletedMeanwhile: "Kontakt mezitím někdo smazal. Načti stránku znovu.",
+  contactLimit: "Víc než 10 kontaktů tu mít nejde.",
 } as const;
 
 // ── Validace vstupu ──
@@ -124,9 +165,23 @@ export function validateHelpNote(note: unknown): HelpNoteResult {
   return { ok: true, value: t };
 }
 
-/** `isNew` musí být boolean (Z3), cokoli jiného = `MESSAGES.invalidInput`. */
-export function validateIsNew(v: unknown): v is boolean {
+/** `isNew` a cílový stav přepínače musí být boolean, cokoli jiného = `MESSAGES.invalidInput`. */
+export function validateBoolean(v: unknown): v is boolean {
   return typeof v === "boolean";
+}
+
+export type ContactLabelResult = { ok: true; value: string } | { ok: false; error: string };
+
+/**
+ * Položka „Na koho mám kontakt“: řetězec, `trim`, vnitřní bílé znaky na jednu
+ * mezeru (jednořádkové), prázdné = `contactEmpty`, nad 150 = `invalidInput`.
+ */
+export function validateContactLabel(v: unknown): ContactLabelResult {
+  if (typeof v !== "string") return { ok: false, error: MESSAGES.invalidInput };
+  const label = v.replace(/\s+/g, " ").trim();
+  if (label.length === 0) return { ok: false, error: MESSAGES.contactEmpty };
+  if (label.length > CONTACT_LABEL_MAX) return { ok: false, error: MESSAGES.invalidInput };
+  return { ok: true, value: label };
 }
 
 /**
@@ -173,24 +228,14 @@ export function canEditOffer(actor: Actor, targetId: string): boolean {
   return actor.isManagement || actor.memberId === targetId;
 }
 
-/** Tlačítko „Pomohl(a) mi“ je jen na cizí kartě. */
+/** Přepínač „Využil(a) jsem“ je jen na cizí kartě (pomoc i kontakt). */
 export function canRecordHelp(viewerId: string, helperId: string): boolean {
   return viewerId !== helperId;
 }
 
-export type HelpButtonState = "none" | "button" | "recorded";
-
-/**
- * Stav pomoci na kartě: vlastní karta nic, cizí s už zapsaným záznamem tento
- * měsíc „zapsáno“, jinak tlačítko.
- */
-export function helpButtonState(
-  viewerId: string,
-  helperId: string,
-  recordedHelpId: string | null
-): HelpButtonState {
-  if (!canRecordHelp(viewerId, helperId)) return "none";
-  return recordedHelpId ? "recorded" : "button";
+/** Položky kontaktů smí psát, měnit a mazat vlastník a vedení (stejně jako řádek). */
+export function canEditContacts(actor: Actor, targetId: string): boolean {
+  return canEditOffer(actor, targetId);
 }
 
 /** Záznam pomoci smaže příjemce svůj, vedení jakýkoli. */
@@ -244,6 +289,41 @@ export function matchesQuery(row: SearchableOffer, query: string): boolean {
   return words.every((w) => haystack.includes(w));
 }
 
+export interface ContactItemSortable {
+  id: string;
+  memberId: string;
+  name: string;
+  createdAt: string;
+}
+
+/** Jméno nabízejícího (česká kolace), pak pořadí přidání, pak `id`. Vstup se nemění. */
+export function sortContactItems<T extends ContactItemSortable>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const byName = compareNames(a.name, b.name);
+    if (byName !== 0) return byName;
+    if (a.memberId !== b.memberId) return a.memberId < b.memberId ? -1 : 1;
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+export interface SearchableContact {
+  name: string;
+  company: string | null;
+  obor: string | null;
+  label: string;
+}
+
+/** Hledání v textu položky, jménu, firmě a oboru; stejná normalizace jako `matchesQuery`. */
+export function matchesContactQuery(row: SearchableContact, query: string): boolean {
+  const words = normalizeText(query).split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) return true;
+  const haystack = normalizeText(
+    [row.name, row.company ?? "", row.obor ?? "", row.label].join(" ")
+  );
+  return words.every((w) => haystack.includes(w));
+}
+
 // ── Dashboard (Z4): jen výzva vlastníkovi se starým řádkem ──
 
 export interface DashboardBurzaInput {
@@ -278,4 +358,38 @@ export function helpPartyLabel(p: HelpParties): { recipient: string; createdBy: 
   else if (p.recipientId !== null && p.createdBy === p.recipientId) createdBy = "sám/sama";
   else createdBy = p.createdByName ?? "autor už není členem";
   return { recipient, createdBy };
+}
+
+// ── Společný seznam pomoci a využitých kontaktů (vedení, /burza/pomoc) ──
+
+export interface MergeableUse {
+  id: string;
+  /** „YYYY-MM-DD“ */
+  usedOn: string;
+  /** Text, ISO nebo `timestamptz::text`, řadí se jako řetězec. */
+  createdAt: string;
+}
+
+/**
+ * Spojí oba druhy záznamů, seřadí podle dne sestupně, pak `createdAt`
+ * sestupně, pak `id`, a ořízne na `limit`. Druh nese samotný řádek.
+ */
+export function mergeUseRecords<T extends MergeableUse>(
+  help: readonly T[],
+  contacts: readonly T[],
+  limit: number
+): T[] {
+  return [...help, ...contacts]
+    .sort((a, b) => {
+      if (a.usedOn !== b.usedOn) return a.usedOn < b.usedOn ? 1 : -1;
+      if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    })
+    .slice(0, Math.max(0, limit));
+}
+
+/** První část řádku záznamu: „Pomoc“, „Kontakt: {text}“, nebo smazaná položka. */
+export function recordKindLabel(kind: "help" | "contact", contactLabel: string | null): string {
+  if (kind === "help") return TEXTS.helpKindLabel;
+  return contactLabel === null ? TEXTS.contactGoneKindLabel : `Kontakt: ${contactLabel}`;
 }

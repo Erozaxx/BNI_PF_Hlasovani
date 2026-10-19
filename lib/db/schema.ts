@@ -1086,3 +1086,70 @@ export const burzaHelp = pgTable(
     recipientIdx: index("idx_bh_recipient").on(table.recipientId),
   })
 );
+
+// ============================================================
+// BURZA_CONTACT / BURZA_CONTACT_USE — iter-035 doplnění (T-013, arch T-011
+// sekce 3, gate T-012 Z9): položky „Na koho mám kontakt“ a jejich využití.
+// Pravdou je migrační skript scripts/migrate-iter-035b-burza-kontakty.ts,
+// tohle schéma slouží jen typům. `burza_offer` a `burza_help` se nemění.
+//
+// burza_contact: až 10 položek na člena (limit hlídá aplikace v jednom příkazu).
+// burza_contact_use: „kontakt využit“, natrvalo (UNIQUE položka + příjemce bez
+// času). Bez `created_by` (Z9): zapisuje vždy příjemce. `helper_id` je uložený
+// zvlášť, aby bod nabízejícího přežil smazání položky.
+// ============================================================
+export const burzaContact = pgTable(
+  "burza_contact",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    updatedBy: uuid("updated_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    labelLen: check(
+      "bc_label_len",
+      sql`char_length(btrim(${table.label})) BETWEEN 1 AND 400`
+    ),
+    memberIdx: index("idx_bc_member").on(table.memberId),
+  })
+);
+
+export const burzaContactUse = pgTable(
+  "burza_contact_use",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contactId: uuid("contact_id").references(() => burzaContact.id, {
+      onDelete: "set null",
+    }),
+    helperId: uuid("helper_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    usedOn: date("used_on").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    notSelf: check(
+      "bcu_not_self",
+      sql`${table.recipientId} IS NULL OR ${table.recipientId} <> ${table.helperId}`
+    ),
+    once: unique("bcu_once").on(table.contactId, table.recipientId),
+    helperUsedIdx: index("idx_bcu_helper_used").on(table.helperId, table.usedOn),
+    recipientIdx: index("idx_bcu_recipient").on(table.recipientId),
+  })
+);
