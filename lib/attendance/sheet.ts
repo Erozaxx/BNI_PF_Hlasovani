@@ -63,6 +63,7 @@ export const OVERVIEW_TEXTS = {
   title: "Přehled docházky",
   tabMine: "Moje",
   tabSheet: "Zápis",
+  tabPlan: "Omluvy",
   tabOverview: "Přehled",
   membersTitle: "Členové",
   absencesLabel: "absence",

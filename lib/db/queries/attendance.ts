@@ -17,6 +17,7 @@ import { getSql } from "@/lib/db/client";
 import { actorMayChangeSql, memberActiveSql } from "@/lib/db/queries/member-active";
 import { ATTENDANCE_START, MAX_ADVANCE_DAYS, SUBSTITUTE_NAME_MEMORY_LIMIT } from "@/lib/attendance/rules";
 import type { AuditRow, PresenceStatus, SheetRow } from "@/lib/attendance/sheet";
+import type { PlanEntry } from "@/lib/attendance/plan";
 
 function getDb() {
   return drizzle(getSql());
@@ -105,6 +106,41 @@ export async function listMeetingDates(from: string, to: string): Promise<string
     ORDER BY date
   `);
   return result.rows.map((r) => r.d);
+}
+
+/** Řádek kalendáře plánovaných omluv (iter-039). */
+export type PlannedAbsenceRow = PlanEntry;
+
+/**
+ * iter-039 (T-003, arch 5): omluvy všech AKTIVNÍCH členů v rozsahu `[from, to]`
+ * pro kalendář správce. Jen čtení. NEčte, kdo omluvu zapsal (K2), jen datum
+ * ohlášení v Europe/Prague. Smí se volat jen z `lib/attendance/plan-view.ts`,
+ * které ověří právo `attendance.view_all` (dotazy session nedostávají).
+ * Řazení jmen se dělá v TS (česká kolace).
+ */
+export async function listPlannedAbsences(from: string, to: string): Promise<PlannedAbsenceRow[]> {
+  const result = await getDb().execute<{
+    d: string;
+    id: string;
+    name: string;
+    substitute_name: string | null;
+    announced_on: string;
+  }>(sql`
+    SELECT a.absence_date::text AS d, m.id, m.name, a.substitute_name,
+           (a.created_at AT TIME ZONE 'Europe/Prague')::date::text AS announced_on
+    FROM member_absence a
+    JOIN member m ON m.id = a.member_id
+    WHERE a.absence_date >= ${from}::date AND a.absence_date <= ${to}::date
+      AND ${memberActiveSql("m")}
+    ORDER BY a.absence_date
+  `);
+  return result.rows.map((r) => ({
+    date: r.d,
+    memberId: r.id,
+    name: r.name,
+    substituteName: r.substitute_name,
+    announcedOn: r.announced_on,
+  }));
 }
 
 /** Výsledek uzavřených dní člena (`✓ N A` v minulosti). Neuzavřený den značku nemá. */
