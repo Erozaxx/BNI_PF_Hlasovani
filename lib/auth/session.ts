@@ -116,6 +116,7 @@ export const getSession = cache(async (): Promise<SessionData> => {
         authMethod: snapshot.authMethod,
         managementRole: snapshot.managementRole,
         functions: row.functions,
+        attendanceManager: row.attendanceManagerSince != null,
       }),
     ];
     snapshot.functionNames = row.functions.map((f) => f.name);

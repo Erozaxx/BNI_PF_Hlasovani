@@ -16,7 +16,7 @@ import {
 } from "@/lib/auth/permissions";
 
 /** Povolené aliasy tabulky `member` v dotazech. Přidávat jen pevné literály. */
-export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o";
+export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o" | "gm";
 
 export function memberActiveSql(alias: MemberAlias): SQL {
   const a = sql.raw(alias);

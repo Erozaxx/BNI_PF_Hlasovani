@@ -1,8 +1,50 @@
 import { HelpSection } from "@/components/help/HelpParts";
 
-export function ModeratorHelp() {
+interface ModeratorHelpProps {
+  /** Funkce vedení (session s heslem). Správce docházky přihlášený odkazem je nemá. */
+  showLeadership?: boolean;
+  /** Právo `attendance.view_all`: sekce „Docházka pro správce“. */
+  attendance?: boolean;
+  /** Právo `attendance.edit_history`: sekce „Opravy po uzávěrce“. */
+  attendanceHistory?: boolean;
+}
+
+export function ModeratorHelp({
+  showLeadership = true,
+  attendance = false,
+  attendanceHistory = false,
+}: ModeratorHelpProps = {}) {
   return (
     <div className="space-y-8">
+      {attendance && (
+        <>
+          <HelpSection
+            title="Docházka pro správce"
+            steps={[
+              "V den schůzky vám ráno před 7:00 přijde mail s odkazem na zápis. Platí 12 hodin a nepotřebuje přihlášení. Docházku najdete i v aplikaci v menu Docházka, záložka Zápis.",
+              "Zaškrtněte Přítomen u každého, kdo přišel. Když za člena přišel náhradník, zaškrtněte i „s náhradníkem“ a napište jméno. Ohlášený náhradník se vyplní sám.",
+              "Kdo se omluvil až ráno, tomu zaškrtněte Omluven(a).",
+              "Každé kliknutí se hned uloží. Když řádek mezitím změnil jiný správce, uvidíte jeho stav a hlášku. Klikněte znovu.",
+              "V 17:00 se den uzavře a přijde vám report. Potom už zápis nejde.",
+            ]}
+            faq={[
+              {
+                q: "Ranní mail nepřišel.",
+                a: "Mrkněte do spamu. Zapisovat můžete i přes menu Docházka.",
+              },
+            ]}
+          />
+          {attendanceHistory && (
+            <HelpSection
+              title="Opravy po uzávěrce"
+              intro="Opravit uzavřený nebo starší den může admin, Prezident a Viceprezident v záložce Zápis. Každá oprava se zapíše do historie oprav. Report se znovu neposílá."
+            />
+          )}
+        </>
+      )}
+
+      {showLeadership && (
+      <>
       <HelpSection
         title="Přihlášení vedení"
         steps={[
@@ -290,6 +332,8 @@ export function ModeratorHelp() {
         title="Co dělá jen admin"
         intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemění cizí hesla, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. To dělá admin, Prezident a Viceprezident. Sekci Admin s položkami Členové a Kategorie vidí v menu jen oni. Přidělování admina, funkcí a hesel a změny v účtu admina dělá jen admin."
       />
+      </>
+      )}
     </div>
   );
 }

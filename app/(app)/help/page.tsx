@@ -9,6 +9,8 @@ export default async function HelpPageRoute() {
       showLeadershipHelp={hasPasswordSession(session)}
       showAdminHelp={can(session, "members.manage")}
       canManageAccess={can(session, "access.manage")}
+      showAttendanceHelp={can(session, "attendance.view_all")}
+      showAttendanceHistoryHelp={can(session, "attendance.edit_history")}
     />
   );
 }

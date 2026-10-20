@@ -9,7 +9,9 @@
  * se počítají v `getSession()` z `member.management_role` a funkce člena:
  *
  * 1. přihlášení odkazem (`authMethod !== "password"`) = práva člena, tedy
- *    prázdná množina (iter-032 6.4), i pro Prezidenta a Viceprezidenta,
+ *    prázdná množina (iter-032 6.4), i pro Prezidenta a Viceprezidenta.
+ *    JEDINÁ výjimka (iter-038, K1 A): příznak Správce docházky přidá tři práva
+ *    docházky (`ATTENDANCE_MANAGER_PERMISSIONS`) bez ohledu na způsob přihlášení,
  * 2. admin = všechna práva,
  * 3. jinak je to SJEDNOCENÍ práv role a práv funkce. Role `moderator` dává
  *    `DEFAULT_FUNCTION_PERMISSIONS` (dnešní moderátor). Funkce (nejvýš jedna:
@@ -49,6 +51,12 @@ export const PERMISSIONS = [
   "members.delete",
   "access.manage",
   "functions.manage",
+  // iter-038 (arch 5.1): docházka. P a VP je dostanou značkou `admin-delegable`
+  // bez migrace dat, Člen výboru a moderátor ne (vidí jen svou docházku).
+  "attendance.record",
+  "attendance.view_all",
+  "attendance.audit_view",
+  "attendance.edit_history",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -69,6 +77,19 @@ export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
   "ops.view",
   "mastermind.manage",
   "burza.manage",
+];
+
+/**
+ * iter-038 (arch 5.2, gate K1 A, Z4): práva, která dává příznak „Správce
+ * docházky“ (`member.attendance_manager_since`) bez ohledu na způsob přihlášení,
+ * tedy i přihlášení odkazem z mailu. Přesně tři. `attendance.edit_history`
+ * (zpětné opravy) příznak nedává nikdy, ani Prezidentovi s příznakem přihlášenému
+ * odkazem. Jediné místo, kde se ta výjimka z iter-032 dělá, je `permissionsFor`.
+ */
+export const ATTENDANCE_MANAGER_PERMISSIONS: readonly Permission[] = [
+  "attendance.record",
+  "attendance.view_all",
+  "attendance.audit_view",
 ];
 
 /**
@@ -192,6 +213,22 @@ export function hasPasswordSession(
 }
 
 export function permissionsFor(input: {
+  authMethod: AuthMethod;
+  managementRole: "admin" | "moderator" | null;
+  functions: readonly MemberFunctionInfo[];
+  /** iter-038: člen má příznak Správce docházky (`attendance_manager_since`). */
+  attendanceManager: boolean;
+}): ReadonlySet<Permission> {
+  const result = new Set<Permission>(basePermissions(input));
+  // K1 A (gate Z4): příznak dává tři práva docházky i při přihlášení odkazem.
+  // Nic jiného z toho nevznikne, `attendance.edit_history` ani `members.*`.
+  if (input.attendanceManager) {
+    for (const p of ATTENDANCE_MANAGER_PERMISSIONS) result.add(p);
+  }
+  return result;
+}
+
+function basePermissions(input: {
   authMethod: AuthMethod;
   managementRole: "admin" | "moderator" | null;
   functions: readonly MemberFunctionInfo[];

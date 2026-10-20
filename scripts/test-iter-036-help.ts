@@ -250,6 +250,45 @@ const tests: TestCase[] = [
       assert.ok(src.includes("se přihlásí sám na přihlašovací stránce"));
     },
   },
+  {
+    name: "12. iter-038: nápověda člena má sekci Docházka za Burzou pomoci a odkazuje na popisky z UI",
+    run: () => {
+      const iBurza = titleIndex(MEMBER, "Burza pomoci");
+      const iAtt = titleIndex(MEMBER, "Docházka");
+      assert.ok(iBurza >= 0 && iAtt > iBurza, "sekce Docházka má být za Burzou pomoci");
+      assert.ok(MEMBER.includes("V menu Docházka klepněte na den."));
+      assert.ok(MEMBER.includes("do 7:30 v den schůzky"));
+      const rules = read("lib/attendance/rules.ts");
+      assert.ok(rules.includes("Nepřijdu, bez náhradníka") && rules.includes("Nepřijdu, pošlu náhradníka"));
+      assert.ok(read("app/(app)/layout.tsx").includes(">Docházka<"));
+      assert.ok(read("components/layout/MobileNav.tsx").includes("Docházka"));
+    },
+  },
+  {
+    name: "13. iter-038: nápověda vedení má sekce Docházka pro správce a Opravy po uzávěrce, jen s právem (T-003b)",
+    run: () => {
+      assert.ok(titleIndex(MODERATOR, "Docházka pro správce") >= 0);
+      assert.ok(titleIndex(MODERATOR, "Opravy po uzávěrce") > titleIndex(MODERATOR, "Docházka pro správce"));
+      assert.ok(MODERATOR.includes("V den schůzky vám ráno před 7:00 přijde mail s odkazem na zápis."));
+      assert.ok(MODERATOR.includes("Report se znovu neposílá."));
+      assert.ok(MODERATOR.includes("{attendance && (") && MODERATOR.includes("{attendanceHistory && ("));
+      assert.ok(read("app/(app)/help/page.tsx").includes('can(session, "attendance.view_all")'));
+    },
+  },
+  {
+    name: "14. iter-038: nápověda admina má sekci Správce docházky mezi Funkce a přístup a Kategorie, ráno před 7:00 (T-003c)",
+    run: () => {
+      const a = titleIndex(ADMIN, "Funkce a přístup");
+      const b = titleIndex(ADMIN, "Správce docházky");
+      const c = titleIndex(ADMIN, "Kategorie");
+      assert.ok(a >= 0 && b > a && c > b);
+      assert.ok(ADMIN.includes("zapněte Správce docházky"));
+      assert.ok(ADMIN.includes("ráno před 7:00 mail s odkazem na zápis a v 17:00 report"));
+      assert.ok(ADMIN.includes("Ranní mail chodí jen v den, kdy je v aplikaci založená schůzka."));
+      // popisek přepínače, na který nápověda odkazuje, existuje v UI
+      assert.ok(read("app/(app)/admin/members/AttendanceManagerToggle.tsx").includes("Správce docházky"));
+    },
+  },
 ];
 
 let failed = 0;

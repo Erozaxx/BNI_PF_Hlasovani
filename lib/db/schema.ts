@@ -6,6 +6,7 @@ import {
   boolean,
   integer,
   smallint,
+  bigint,
   date,
   jsonb,
   primaryKey,
@@ -80,6 +81,13 @@ export const member = pgTable(
       (): AnyPgColumn => member.id,
       { onDelete: "set null" }
     ),
+    // iter-038 (arch 4.1): příznak Správce docházky. `NULL` = není správce.
+    // Čte ho `getMemberAuthState` (bez migrace iter-038 spadne na 42703, R6).
+    attendanceManagerSince: timestamp("attendance_manager_since", { withTimezone: true }),
+    attendanceManagerBy: uuid("attendance_manager_by").references(
+      (): AnyPgColumn => member.id,
+      { onDelete: "set null" }
+    ),
   },
   (table) => ({
     inactiveUntilNeedsDeactivation: check(
@@ -112,6 +120,168 @@ export const member = pgTable(
     managementRoleIdx: index("idx_member_management_role").on(
       table.managementRole
     ),
+  })
+);
+
+// ============================================================
+// DOCHÁZKA (iter-038, arch 4.2)
+// ============================================================
+// Docházka je vázaná na DATUM (Europe/Prague), ne na schůzku. Bez řádku
+// `member_absence` je člen přítomný. Tabulky zakládá
+// scripts/migrate-iter-038-dochazka.ts (zdroj pravdy pro DDL, vč. triggeru
+// append-only nad `attendance_audit`).
+
+/** Ohlášená nepřítomnost člena (kalendář). `substitute_name` NULL = bez náhradníka. */
+export const memberAbsence = pgTable(
+  "member_absence",
+  {
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    absenceDate: date("absence_date").notNull(),
+    substituteName: text("substitute_name"),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    updatedBy: uuid("updated_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.memberId, table.absenceDate] }),
+    dateIdx: index("idx_member_absence_date").on(table.absenceDate),
+    subLen: check(
+      "ma_sub_len",
+      sql`${table.substituteName} IS NULL OR char_length(btrim(${table.substituteName})) BETWEEN 2 AND 80`
+    ),
+  })
+);
+
+/** Zápis správce: stav člena v daný den. `version` pro compare-and-set (T-003b). */
+export const attendanceRecord = pgTable(
+  "attendance_record",
+  {
+    attendanceDate: date("attendance_date").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    substituteName: text("substitute_name"),
+    source: text("source").notNull().default("manager"),
+    version: integer("version").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => member.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.attendanceDate, table.memberId] }),
+    memberIdx: index("idx_attendance_record_member").on(table.memberId, table.attendanceDate),
+    statusCheck: check("ar_status", sql`${table.status} IN ('absent', 'present', 'substitute')`),
+    sourceCheck: check("ar_source", sql`${table.source} IN ('manager', 'auto')`),
+    subCheck: check(
+      "ar_sub",
+      sql`(${table.status} = 'substitute') = (${table.substituteName} IS NOT NULL)`
+    ),
+    subLen: check(
+      "ar_sub_len",
+      sql`${table.substituteName} IS NULL OR char_length(btrim(${table.substituteName})) BETWEEN 2 AND 80`
+    ),
+  })
+);
+
+/** Paměť jmen náhradníků per člen (plní člen i správce). */
+export const memberSubstituteName = pgTable(
+  "member_substitute_name",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    memberNameUnique: uniqueIndex("msn_member_name").on(table.memberId, sql`lower(${table.name})`),
+    nameLen: check("msn_name_len", sql`char_length(btrim(${table.name})) BETWEEN 2 AND 80`),
+  })
+);
+
+/** Uzavření dne (cron 17:00, T-003c). */
+export const attendanceDay = pgTable(
+  "attendance_day",
+  {
+    attendanceDate: date("attendance_date").primaryKey(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    mode: text("mode"),
+    reportLate: boolean("report_late").notNull().default(false),
+  },
+  (table) => ({
+    modeCheck: check("ad_mode", sql`${table.mode} IS NULL OR ${table.mode} IN ('recorded', 'unrecorded')`),
+  })
+);
+
+/** Ranní odkaz správci (T-003c). V DB jen SHA-256 hash tokenu. */
+export const attendanceLink = pgTable(
+  "attendance_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    attendanceDate: date("attendance_date").notNull(),
+    tokenHash: text("token_hash").unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    resendEmailId: text("resend_email_id"),
+  },
+  (table) => ({
+    memberDateUnique: unique("attendance_link_member_date_unique").on(
+      table.memberId,
+      table.attendanceDate
+    ),
+  })
+);
+
+/** Kdo dostal report za den (jeden mail na příjemce a den, T-003c). */
+export const attendanceReportMail = pgTable(
+  "attendance_report_mail",
+  {
+    attendanceDate: date("attendance_date").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    resendEmailId: text("resend_email_id"),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.attendanceDate, table.memberId] }),
+  })
+);
+
+/**
+ * Zpětné opravy docházky, append-only (DB trigger, T-003b). Záměrně BEZ cizích
+ * klíčů na `member`: `ON DELETE SET NULL` by byl UPDATE a trigger by zablokoval
+ * mazání člena. Jména jsou snímky.
+ */
+export const attendanceAudit = pgTable(
+  "attendance_audit",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    actorId: uuid("actor_id"),
+    actorName: text("actor_name").notNull(),
+    memberId: uuid("member_id"),
+    memberName: text("member_name").notNull(),
+    attendanceDate: date("attendance_date").notNull(),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+  },
+  (table) => ({
+    dateIdx: index("idx_attendance_audit_date").on(table.attendanceDate),
+    memberIdx: index("idx_attendance_audit_member").on(table.memberId, table.attendanceDate),
+    fieldCheck: check("aa_field", sql`${table.field} IN ('presence', 'absence')`),
   })
 );
 
