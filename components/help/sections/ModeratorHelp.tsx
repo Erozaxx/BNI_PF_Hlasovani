@@ -32,6 +32,10 @@ export function ModeratorHelp({
                 q: "Ranní mail nepřišel.",
                 a: "Mrkněte do spamu. Zapisovat můžete i přes menu Docházka.",
               },
+              {
+                q: "Kdo se na schůzku omluvil?",
+                a: "V menu Docházka, záložka Omluvy. Číslo pod dnem je počet omluvených. Klepněte na den a pod kalendářem uvidíte, kdo se omluvil a jestli posílá náhradníka.",
+              },
             ]}
           />
           {attendanceHistory && (
