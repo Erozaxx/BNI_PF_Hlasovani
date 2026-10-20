@@ -132,6 +132,12 @@ export async function deactivateMemberGuarded(input: {
     ), links AS (
       UPDATE member_login_link SET used_at = now()
       WHERE member_id IN (SELECT id FROM upd) AND used_at IS NULL
+    ), alinks AS (
+      -- iter-038 (security L-4): ranní odkaz docházky přestane platit i po návratu
+      -- téhož dne (jinak by ho znovuaktivace oživila). Stejný příkaz, bez transakce.
+      UPDATE attendance_link SET revoked_at = now()
+      WHERE member_id IN (SELECT id FROM upd) AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
     ), mm AS (
       UPDATE mastermind_case c SET status = 'proposed', internal_date = NULL,
              scheduled_at = NULL, scheduled_by = NULL, updated_at = now()

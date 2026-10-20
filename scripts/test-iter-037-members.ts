@@ -202,7 +202,7 @@ const PAGE_TABLE: Array<[string, string]> = [
 ];
 
 const pw = (managementRole: "admin" | "moderator" | null, functions = [] as { name: string; permissions: string[] | null }[]) =>
-  permissionsFor({ authMethod: "password", managementRole, functions });
+  permissionsFor({ authMethod: "password", managementRole, functions, attendanceManager: false });
 
 const tests: TestCase[] = [
   {
@@ -224,7 +224,8 @@ const tests: TestCase[] = [
         assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `${p} nesmí být ve výchozí sadě`);
       }
       assert.equal(new Set(PERMISSIONS).size, PERMISSIONS.length, "katalog bez duplicit");
-      assert.equal(PERMISSIONS.length, 20);
+      // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history).
+      assert.equal(PERMISSIONS.length, 24);
     },
   },
   {
@@ -269,12 +270,13 @@ const tests: TestCase[] = [
       const fn = (name: string, permissions: string[] | null) => ({ name, permissions });
       // přihlášení odkazem nedává nic, ani adminovi ani Prezidentovi
       for (const method of ["magic_link", "email_link"] as const) {
-        assert.equal(permissionsFor({ authMethod: method, managementRole: "admin", functions: [] }).size, 0);
+        assert.equal(permissionsFor({ authMethod: method, managementRole: "admin", functions: [], attendanceManager: false }).size, 0);
         assert.equal(
           permissionsFor({
             authMethod: method,
             managementRole: "moderator",
             functions: [fn("Prezident", [ADMIN_DELEGABLE_MARKER])],
+            attendanceManager: false,
           }).size,
           0
         );
@@ -304,7 +306,7 @@ const tests: TestCase[] = [
       assert.equal(pw(null).size, 0);
       // přihlášení odkazem nedává nic ani držiteli funkce bez role
       assert.equal(
-        permissionsFor({ authMethod: "email_link", managementRole: null, functions: [fn("Prezident", [ADMIN_DELEGABLE_MARKER])] }).size,
+        permissionsFor({ authMethod: "email_link", managementRole: null, functions: [fn("Prezident", [ADMIN_DELEGABLE_MARKER])], attendanceManager: false }).size,
         0
       );
     },
@@ -331,6 +333,7 @@ const tests: TestCase[] = [
         authMethod: "password",
         managementRole: null,
         functions: [{ name: "Prezident", permissions: [ADMIN_DELEGABLE_MARKER] }],
+        attendanceManager: false,
       });
       for (const p of ["members.manage", "members.deactivate", "members.delete", "categories.manage", "guests.delete"] as Permission[]) {
         assert.ok(president.has(p), p);

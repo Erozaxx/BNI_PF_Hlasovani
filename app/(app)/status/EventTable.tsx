@@ -60,6 +60,16 @@ export const KIND_LABELS: Record<string, string> = {
   "access.member-reactivated": "Návrat člena",
   "access.magic-link-revoked": "Zneplatnění odkazu",
   "access.functions-changed": "Změna funkcí",
+  // iter-038 (arch 14)
+  "access.attendance-manager-changed": "Změna správce docházky",
+  "attendance.history-edited": "Oprava docházky",
+  "attendance.link-sent": "Odkaz na docházku odeslán",
+  "attendance.link-failed": "Odkaz na docházku neodešel",
+  "attendance.link-skipped": "Odkaz na docházku přeskočen",
+  "attendance.day-finalized": "Den docházky uzavřen",
+  "attendance.report-sent": "Report docházky odeslán",
+  "attendance.report-failed": "Report docházky neodešel",
+  "attendance.report-skipped": "Report docházky přeskočen",
   // iter-033 (arch 10.1): zásobník Master mind
   "mastermind.scheduled": "Master mind: zařazeno",
   "mastermind.unscheduled": "Master mind: vráceno do zásobníku",

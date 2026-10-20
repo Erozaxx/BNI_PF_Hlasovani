@@ -21,6 +21,7 @@ import { ExportListButton } from "./ExportListButton";
 import { SortableMeetingGuestList } from "./SortableMeetingGuestList";
 import { MemberLinksManager } from "./MemberLinksManager";
 import { statusLabel } from "@/lib/meetings/statusLabel";
+import { SHEET_TEXTS } from "@/lib/attendance/sheet";
 
 export default async function MeetingDetailPage({
   params,
@@ -126,6 +127,14 @@ export default async function MeetingDetailPage({
             <p className="text-sm text-text-muted mt-1">
               Místo: {meeting.location}
             </p>
+          )}
+          {can(session, "attendance.view_all") && (
+            <Link
+              href={`/dochazka/zapis?d=${meeting.date}`}
+              className="mt-1 inline-flex min-h-[44px] items-center text-sm text-navy hover:underline focus:outline-none focus:shadow-focus"
+            >
+              {SHEET_TEXTS.meetingLink}
+            </Link>
           )}
           {meeting.votingClosesAt && meeting.status === "voting" && (
             <p className="text-sm text-text-muted mt-1">

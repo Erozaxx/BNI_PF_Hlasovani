@@ -99,7 +99,12 @@ export function deriveRunStatus(events: RunStatusEvent[], now: Date): RunStatus 
     // o reminder.failed — jednotlivé selhání odeslání připomínky je stejná
     // třída chyby jako email.failed.
     const hasFailedRecipient = events.some(
-      (e) => e.kind === "email.failed" || e.kind === "reminder.failed"
+      (e) =>
+        e.kind === "email.failed" ||
+        e.kind === "reminder.failed" ||
+        // iter-038 (T-003c): ranní odkaz a report docházky, selhání jednoho příjemce.
+        e.kind === "attendance.link-failed" ||
+        e.kind === "attendance.report-failed"
     );
     // iter-028 (T-006, arch 7.1, F2): pád CELÉ fáze cronu (typicky fáze 8,
     // chybějící migrace, 6.5 "merge, pak migrace") se jinak ztratí, když je

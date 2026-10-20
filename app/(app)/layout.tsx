@@ -49,6 +49,7 @@ export default async function AppLayout({
           <NavLink href="/meetings">Schůzky</NavLink>
           <NavLink href="/mastermind">Master mind</NavLink>
           <NavLink href="/burza">Burza pomoci</NavLink>
+          <NavLink href="/dochazka">Docházka</NavLink>
           {show.events && <NavLink href="/events">Akce</NavLink>}
           {show.timers && <NavLink href="/timers">Časovače</NavLink>}
           {show.interviews && <NavLink href="/interviews">Pohovory</NavLink>}

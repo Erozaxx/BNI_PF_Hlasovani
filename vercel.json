@@ -4,6 +4,34 @@
     {
       "path": "/api/cron/close-voting",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/attendance",
+      "schedule": "0 17 * * *"
     }
   ]
 }

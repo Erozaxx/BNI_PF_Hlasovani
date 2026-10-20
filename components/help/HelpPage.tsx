@@ -10,21 +10,37 @@ interface HelpPageProps {
   showAdminHelp: boolean;
   /** Čtenář smí přidělovat admina, funkce a hesla (`access.manage`, jen admin). */
   canManageAccess?: boolean;
+  /** iter-038: právo `attendance.view_all` (správce docházky, i přihlášený odkazem). */
+  showAttendanceHelp?: boolean;
+  /** iter-038: právo `attendance.edit_history` (zpětné opravy). */
+  showAttendanceHistoryHelp?: boolean;
 }
 
-export function HelpPage({ showLeadershipHelp, showAdminHelp, canManageAccess = false }: HelpPageProps) {
+export function HelpPage({
+  showLeadershipHelp,
+  showAdminHelp,
+  canManageAccess = false,
+  showAttendanceHelp = false,
+  showAttendanceHistoryHelp = false,
+}: HelpPageProps) {
   const tabs = [
     {
       id: "member",
       label: "Pro člena",
       content: <MemberHelp />,
     },
-    ...(showLeadershipHelp
+    ...(showLeadershipHelp || showAttendanceHelp
       ? [
           {
             id: "moderator",
             label: "Pro vedení",
-            content: <ModeratorHelp />,
+            content: (
+              <ModeratorHelp
+                showLeadership={showLeadershipHelp}
+                attendance={showAttendanceHelp}
+                attendanceHistory={showAttendanceHistoryHelp}
+              />
+            ),
           },
         ]
       : []),

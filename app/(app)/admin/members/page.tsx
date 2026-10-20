@@ -62,6 +62,7 @@ export default async function AdminMembersPage() {
               managementRole: m.managementRole ?? null,
               functionName: functionMap.get(m.id)?.name ?? null,
               inactiveLabel: deactivationLabel(m, today, { withDate: true }),
+              attendanceManager: m.attendanceManagerSince != null,
               interviewCount: interviewCounts.get(m.id) ?? 0,
               due5: dueByMember.get(m.id)?.due5 ?? false,
               due10: dueByMember.get(m.id)?.due10 ?? false,

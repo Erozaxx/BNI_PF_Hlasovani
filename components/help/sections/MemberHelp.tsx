@@ -273,6 +273,30 @@ export function MemberHelp() {
           </li>
         </ul>
       </section>
+
+      <HelpSection
+        title="Docházka"
+        steps={[
+          "V menu Docházka klepněte na den.",
+          "Zvolte „Nepřijdu, bez náhradníka“, nebo „Nepřijdu, pošlu náhradníka“ a napište jméno. Uloží se hned.",
+          "Změnit nebo zrušit to můžete do 7:30 v den schůzky. Potom už to zapíše správce docházky.",
+        ]}
+        note="Bez záznamu počítáme, že přijdete. Náhradník se jako absence nepočítá. Na dashboardu vidíte své absence za posledních 6 měsíců."
+        faq={[
+          {
+            q: "Kdo vidí, že chybím?",
+            a: "Správci docházky, Prezident, Viceprezident a admin. Ostatní členové ne.",
+          },
+          {
+            q: "Proč mám absenci, i když jsem se omluvil(a)?",
+            a: "Omluva bez náhradníka se podle pravidel počítá jako absence. Když pošlete náhradníka, absence to není.",
+          },
+          {
+            q: "Jak smažu jméno náhradníka?",
+            a: "Dole na stránce Docházka v Uložených jménech.",
+          },
+        ]}
+      />
     </div>
   );
 }

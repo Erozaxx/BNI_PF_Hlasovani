@@ -66,6 +66,7 @@ export async function requirePasswordSession(): Promise<AuthSuccess | AuthFailur
  * `isManagement` ručně). Vrací buď session (`{ session }`), nebo hotovou
  * odpověď (`{ response }`). Bez práva i bez session je to 401 s českou
  * hláškou (QA S18), `status` jde přepsat tam, kde route dřív vracela jiný kód.
+ * `splitStatus` (iter-038) rozliší 401 bez session a 403 bez práva.
  *
  *   const authz = await requirePermissionForRoute("meetings.manage");
  *   if ("response" in authz) return authz.response;
@@ -73,13 +74,19 @@ export async function requirePasswordSession(): Promise<AuthSuccess | AuthFailur
  */
 export async function requirePermissionForRoute(
   permission: Permission | readonly Permission[],
-  opts?: { status?: number }
+  opts?: { status?: number; splitStatus?: boolean }
 ): Promise<{ session: SessionData } | { response: NextResponse }> {
   const session = await getSession();
   const required = Array.isArray(permission) ? permission : [permission];
   const allowed =
     !!session.memberId && required.every((p) => can(session, p as Permission));
   if (!allowed) {
+    // iter-038: `splitStatus` = 401 jen bez session, 403 pro přihlášeného bez práva.
+    if (opts?.splitStatus && session.memberId) {
+      return {
+        response: NextResponse.json({ error: NO_PERMISSION_MESSAGE }, { status: 403 }),
+      };
+    }
     return {
       response: NextResponse.json(
         { error: NO_PERMISSION_MESSAGE },

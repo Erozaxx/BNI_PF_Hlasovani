@@ -28,6 +28,7 @@ import { EditMemberEmailForm } from "../EditMemberEmailForm";
 import { EditMemberJoinedAtForm } from "../EditMemberJoinedAtForm";
 import { MemberAccessControls } from "../MemberAccessControls";
 import { MemberStatusControls } from "../MemberStatusControls";
+import { AttendanceManagerToggle } from "../AttendanceManagerToggle";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -92,6 +93,7 @@ export default async function AdminMemberPage({ params }: { params: { id: string
           {currentFunction && <Badge variant="category">{currentFunction.name}</Badge>}
           {role && <Badge variant={managementRole === "admin" ? "danger" : "info"}>{role}</Badge>}
           {inactiveLabel && <Badge variant="warning">{inactiveLabel}</Badge>}
+          {m.attendanceManagerSince && <Badge variant="info">Správce docházky</Badge>}
         </div>
       </div>
 
@@ -157,6 +159,18 @@ export default async function AdminMemberPage({ params }: { params: { id: string
             functions={functionChoices}
             currentFunctionId={currentFunctionId}
             isInactive={!active}
+          />
+        </Card>
+      )}
+
+      {/* iter-038 (arch 5.3, 15.3): příznak Správce docházky přiděluje, kdo spravuje členy */}
+      {!locked && can(session, "members.manage") && (
+        <Card>
+          <h2 className="text-lg font-semibold mb-3">Docházka</h2>
+          <AttendanceManagerToggle
+            memberId={m.id}
+            initialEnabled={m.attendanceManagerSince != null}
+            hasEmail={Boolean(m.email)}
           />
         </Card>
       )}

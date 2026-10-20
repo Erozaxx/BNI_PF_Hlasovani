@@ -104,6 +104,12 @@ export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
       />
 
       <HelpSection
+        title="Správce docházky"
+        intro="Na stránce člena v části Docházka zapněte Správce docházky. Člen pak v den založené schůzky dostane ráno před 7:00 mail s odkazem na zápis a v 17:00 report. Správce může být víc."
+        note="Ranní mail chodí jen v den, kdy je v aplikaci založená schůzka."
+      />
+
+      <HelpSection
         title="Kategorie"
         intro="Kategorie jsou obory hostů. Novou přidáte polem „Název kategorie“ a tlačítkem „Přidat“, název změníte „Přejmenovat“."
         note="Po smazání kategorie mají její hosté „[bez kategorie]“. Vrátit to nejde."

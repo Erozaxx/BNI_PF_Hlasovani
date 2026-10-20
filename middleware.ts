@@ -31,6 +31,8 @@ const PUBLIC_PATHS_EXACT = new Set([
   "/api/auth/magic",
   "/api/cron/close-voting",
   "/api/cron/renew-tokens",
+  // iter-038 (T-003c, LL-005): cron docházky (CRON_SECRET kontroluje handler).
+  "/api/cron/attendance",
   "/api/report",
 ]);
 
@@ -56,6 +58,16 @@ export async function middleware(request: NextRequest) {
   // Allow root page (redirects to /login in page.tsx)
   if (pathname === "/") {
     return NextResponse.next();
+  }
+
+  // iter-038 (T-003c, arch 9.3, LL-005): ranní odkaz správce docházky. Token v
+  // cestě je jediná autorita, bez session. Stránka i API se necachují a
+  // neposílají Referer (token je v URL).
+  if (pathname.startsWith("/d/") || pathname === "/api/d" || pathname.startsWith("/api/d/")) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
   }
 
   // Allow event voting paths (external participants without iron-session)
@@ -98,6 +110,15 @@ export async function middleware(request: NextRequest) {
 
   // Not authenticated → redirect to /login
   if (!session.memberId) {
+    // iter-038 (T-003e, QA N1): API docházky bez session vrací 401 JSON, ne 307
+    // na HTML stránku (klientský fetch by dostal HTML). Přihlášený bez práva
+    // dostane 403 z route. Ostatní API a všechny stránky se přesměrují jako dřív.
+    if (pathname === "/api/attendance" || pathname.startsWith("/api/attendance/")) {
+      return NextResponse.json(
+        { error: "Na tohle nemáš oprávnění." },
+        { status: 401, headers: { "Cache-Control": "no-store" } }
+      );
+    }
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

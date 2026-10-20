@@ -59,6 +59,23 @@ export type OpsEventKind =
   | "access.member-reactivated"
   | "access.magic-link-revoked"
   | "access.functions-changed"
+  // iter-038 (T-003a, arch 14): přidání a odebrání příznaku Správce docházky.
+  // Jednorázová událost s vlastním runId. Bez e-mailu a bez odkazu.
+  | "access.attendance-manager-changed"
+  // iter-038 (T-003b, arch 13.3, 14): zpětná oprava docházky s auditem.
+  // Jednorázová událost s vlastním runId. Bez hodnot a bez jmen náhradníků.
+  | "attendance.history-edited"
+  // iter-038 (T-003c, arch 14): ranní odkaz, uzavření dne a report. Události
+  // UVNITŘ běhu cronu (`cron.started` až `cron.finished`), proto NEjsou
+  // v TERMINAL_KINDS, jinak by první z nich přebila pozdější `cron.finished`
+  // v `deriveRunStatus`. Nikdy token, URL, e-mail ani jméno náhradníka.
+  | "attendance.link-sent"
+  | "attendance.link-failed"
+  | "attendance.link-skipped"
+  | "attendance.day-finalized"
+  | "attendance.report-sent"
+  | "attendance.report-failed"
+  | "attendance.report-skipped"
   // iter-033 (T-005, arch 10.1): zásobník „5 minut pro ostatní“. Jednorázové
   // události s vlastním runId, proto všechny v TERMINAL_KINDS. Nikdy nenesou
   // téma, text případu ani e-mailovou adresu.
@@ -98,6 +115,8 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "access.member-reactivated",
   "access.magic-link-revoked",
   "access.functions-changed",
+  "access.attendance-manager-changed",
+  "attendance.history-edited",
   "mastermind.scheduled",
   "mastermind.unscheduled",
   "mastermind.presented",

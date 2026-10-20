@@ -360,7 +360,9 @@ export async function deleteMember(id: string) {
  * `session_version`, role a funkce člena pro `getSession()` (iter-037, arch
  * 6.3). Jeden SELECT (LEFT JOIN na funkce), počet dotazů na požadavek je
  * stejný jako před iter-037. Bez migrace iter-037 spadne na 42P01 a
- * `getSession()` to vyřeší fail closed (R2).
+ * `getSession()` to vyřeší fail closed (R2). iter-038: čte i
+ * `attendance_manager_since`, bez migrace iter-038 spadne na 42703 a
+ * fail closed odhlásí všechny (R6), proto PROD migrace před preview i mergem.
  */
 export async function getMemberAuthState(
   memberId: string
@@ -371,6 +373,7 @@ export async function getMemberAuthState(
       managementRole: member.managementRole,
       deactivatedAt: member.deactivatedAt,
       inactiveUntil: member.inactiveUntil,
+      attendanceManagerSince: member.attendanceManagerSince,
       functionName: chapterFunction.name,
       functionPermissions: chapterFunction.permissions,
     })
@@ -385,6 +388,7 @@ export async function getMemberAuthState(
     managementRole: rows[0].managementRole,
     deactivatedAt: rows[0].deactivatedAt,
     inactiveUntil: rows[0].inactiveUntil,
+    attendanceManagerSince: rows[0].attendanceManagerSince,
     hasFunction: rows.some((r) => r.functionName !== null),
     functions: rows
       .filter((r) => r.functionName !== null)

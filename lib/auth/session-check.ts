@@ -32,6 +32,11 @@ export interface MemberAuthRow {
    * držitel role NEBO funkce, funkce bez role stačí.
    */
   hasFunction?: boolean;
+  /**
+   * iter-038 (arch 5.2): kdy člen dostal příznak Správce docházky, `null` =
+   * není správce. Chybějící pole = není (starší volající a testy).
+   */
+  attendanceManagerSince?: Date | string | null;
 }
 
 /**

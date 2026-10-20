@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InterviewDueSection } from "@/components/interviews/InterviewDueSection";
 import { DashboardMastermind } from "@/components/mastermind/DashboardMastermind";
 import { DashboardBurza } from "@/components/burza/DashboardBurza";
+import { DashboardAttendance } from "@/components/attendance/DashboardAttendance";
 
 export default async function DashboardPage() {
   const session = await requirePageSession();
@@ -61,6 +62,9 @@ export default async function DashboardPage() {
 
       {/* Burza pomoci (iter-035, Z4): jen výzva vlastníkovi se starým řádkem */}
       <DashboardBurza memberId={session.memberId} />
+
+      {/* Docházka (iter-038, arch 12.3): absence za plovoucích 6 měsíců, od 3 oranžově */}
+      <DashboardAttendance memberId={session.memberId} />
 
       {/* Quick actions for management */}
       {(canGuests || canMeetings) && (
