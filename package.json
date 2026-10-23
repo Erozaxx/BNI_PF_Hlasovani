@@ -34,6 +34,8 @@
     "test:iter-038": "npm run test:iter-038-attendance && npm run test:iter-037",
     "test:iter-039-omluvy": "tsx scripts/test-iter-039-omluvy.ts",
     "test:iter-039": "npm run test:iter-039-omluvy && npm run test:iter-038",
+    "test:iter-040-interni": "tsx scripts/test-iter-040-interni.ts",
+    "test:iter-040": "npm run test:iter-040-interni && npm run test:iter-039",
     "test:iter-035-burza": "tsx scripts/test-iter-035-burza.ts",
     "test:iter-035b-burza": "tsx scripts/test-iter-035b-burza.ts",
     "test:iter-035": "npm run test:iter-035b-burza && npm run test:iter-035-burza && npm run test:iter-033 && npm run test:iter-032-access",

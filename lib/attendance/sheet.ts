@@ -502,6 +502,8 @@ export interface DayPayload {
   unrecorded: boolean;
   /** Z2: dnešek bez založené schůzky a bez zápisu, zatržítka čekají na „Zapisovat i tak“. */
   guardUnrecordedDay: boolean;
+  /** iter-040 (M9): druh dne, `internal` = interní schůzka bez běžné. */
+  dayKind: "meeting" | "internal" | "none";
   finalized: boolean;
   rows: SheetRow[];
   /** Historie oprav dne, `null` bez práva `attendance.audit_view`. */
@@ -509,7 +511,7 @@ export interface DayPayload {
 }
 
 /**
- * Z2 (gate): dnešní den bez schůzky v aplikaci a bez jediného řádku zapsaného
+ * Z2 (gate): dnešní den bez schůzky v aplikaci (běžné i interní) a bez jediného řádku zapsaného
  * správcem. Jen UI pojistka, server zápis nechává (K5 A).
  */
 export function isGuardedDay(input: {
@@ -517,12 +519,15 @@ export function isGuardedDay(input: {
   today: string;
   mode: WriteMode;
   hasMeeting: boolean;
+  /** iter-040: na den je interní schůzka. */
+  hasInternal: boolean;
   hasManagerRecord: boolean;
 }): boolean {
   return (
     input.date === input.today &&
     input.mode === "normal" &&
     !input.hasMeeting &&
+    !input.hasInternal &&
     !input.hasManagerRecord
   );
 }

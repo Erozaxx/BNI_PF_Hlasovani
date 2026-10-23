@@ -26,7 +26,8 @@ export default async function AbsencePlanPage({
   });
   const params = await searchParams;
 
-  const today = pragueToday();
+  const now = new Date();
+  const today = pragueToday(now);
   const plan = await loadAbsencePlan(session, today);
   const initialSelected = pickInitialDay({
     today,
@@ -42,9 +43,12 @@ export default async function AbsencePlanPage({
       <h1 className="text-xl font-bold text-text-main">{PLAN_TEXTS.title}</h1>
       <AbsencePlanCalendar
         today={today}
+        serverNow={now.toISOString()}
         minMonth={plan.minMonth}
         maxMonth={plan.maxMonth}
         meetingDates={plan.meetingDates}
+        internalDates={plan.internalDates}
+        canManageInternal={plan.canManageInternal}
         rows={plan.rows}
         initialSelected={initialSelected}
       />

@@ -96,6 +96,8 @@ const TODAY_MODERATOR: Permission[] = [
   "ops.view",
   "mastermind.manage",
   "burza.manage",
+  // iter-040: moderátor a Člen výboru zakládají a ruší interní schůzky v docházce (gate K1 A).
+  "attendance.internal_manage",
 ];
 
 // Tabulka akce -> právo (arch 6.6, upravená o změny zadání).
@@ -224,8 +226,9 @@ const tests: TestCase[] = [
         assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `${p} nesmí být ve výchozí sadě`);
       }
       assert.equal(new Set(PERMISSIONS).size, PERMISSIONS.length, "katalog bez duplicit");
-      // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history).
-      assert.equal(PERMISSIONS.length, 24);
+      // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
+      // iter-040: +1 (attendance.internal_manage).
+      assert.equal(PERMISSIONS.length, 25);
     },
   },
   {

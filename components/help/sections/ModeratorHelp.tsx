@@ -7,12 +7,15 @@ interface ModeratorHelpProps {
   attendance?: boolean;
   /** Právo `attendance.edit_history`: sekce „Opravy po uzávěrce“. */
   attendanceHistory?: boolean;
+  /** iter-040: právo `attendance.internal_manage`: sekce „Interní schůzka“. */
+  internalMeetings?: boolean;
 }
 
 export function ModeratorHelp({
   showLeadership = true,
   attendance = false,
   attendanceHistory = false,
+  internalMeetings = false,
 }: ModeratorHelpProps = {}) {
   return (
     <div className="space-y-8">
@@ -45,6 +48,27 @@ export function ModeratorHelp({
             />
           )}
         </>
+      )}
+
+      {internalMeetings && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Interní schůzka</h2>
+          <p className="text-sm text-text-muted mb-3">
+            V menu Docházka klepněte na den a zvolte Založit interní schůzku.
+            Den se počítá do docházky: správci docházky dostanou ráno před 7:00
+            odkaz na zápis a v 17:00 report. Hosté ani hlasování se nezakládají.
+          </p>
+          <p className="text-sm text-text-muted mb-3">
+            Zrušit ji můžete do 17:00 v den schůzky, dokud správce docházky nic
+            nezapsal. Zrušením se smažou všechny omluvy členů na ten den. Členům
+            o tom mail nepřijde.
+          </p>
+          <p className="text-sm text-text-muted mb-3">
+            Když má být místo interní běžná schůzka, založte ji ve Schůzkách a
+            interní nerušte. Platí běžná a omluvy zůstanou. Když běžnou schůzku
+            potom smažete, platí zase interní.
+          </p>
+        </section>
       )}
 
       {showLeadership && (
@@ -225,7 +249,7 @@ export function ModeratorHelp({
           Master mind: zařazování
         </h2>
         <p className="text-sm text-text-muted mb-3">
-          Interní schůzky se v aplikaci nezakládají. Případ ze zásobníku
+          Interní schůzku založíte v menu Docházka. Případ ze zásobníku
           zařadíte na čtvrtek a pořadí zásobníku podle zájmu je jen podklad,
           o programu rozhoduje vedení.
         </p>

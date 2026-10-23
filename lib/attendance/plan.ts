@@ -23,7 +23,8 @@ import {
 
 export const PLAN_TEXTS = {
   title: "Omluvy",
-  legend: "Číslo pod dnem je počet omluvených. Podtržený den má schůzku v aplikaci.",
+  legend:
+    "Číslo pod dnem je počet omluvených. Podtržený den má založenou schůzku, zelený den interní schůzku.",
   empty: "–",
   link: "Zápis dne",
   prevMonth: "Předchozí měsíc",
@@ -84,11 +85,12 @@ export function planCountText(n: number): string {
 }
 
 /** `aria-label` dne: „čtvrtek 22. října, 3 omluvení, schůzka v aplikaci“. */
-export function planDayAria(date: string, count: number, hasMeeting: boolean): string {
+export function planDayAria(date: string, count: number, hasMeeting: boolean, hasInternal = false): string {
   const base = dayAriaLabel(date, { mark: "none", result: null, hasMeeting: false });
   const parts = [base];
   if (count > 0) parts.push(planCountText(count));
   if (hasMeeting) parts.push("schůzka v aplikaci");
+  else if (hasInternal) parts.push("interní schůzka");
   return parts.join(", ");
 }
 

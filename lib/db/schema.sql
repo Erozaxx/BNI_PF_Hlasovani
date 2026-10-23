@@ -270,3 +270,10 @@ CREATE TABLE auth_throttle (
     window_start TIMESTAMPTZ NOT NULL,
     count        INTEGER     NOT NULL DEFAULT 0
 );
+
+-- ATTENDANCE_INTERNAL_DAY (iter-040) - interni schuzka v dochazce, zruseni = DELETE radku
+CREATE TABLE IF NOT EXISTS attendance_internal_day (
+    attendance_date DATE        PRIMARY KEY,
+    created_by      UUID        REFERENCES member(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

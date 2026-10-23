@@ -24,7 +24,7 @@ function getDb() {
 }
 
 /** Dnešek v Praze jako `date`. */
-const TODAY_SQL = sql`(now() AT TIME ZONE 'Europe/Prague')::date`;
+export const TODAY_SQL = sql`(now() AT TIME ZONE 'Europe/Prague')::date`;
 
 /**
  * Pojistka „člen smí dnes změnit nepřítomnost na den D“ (arch 6.1): D je od
@@ -371,6 +371,8 @@ export interface DayMeta {
   dayMode: "recorded" | "unrecorded" | null;
   /** Na den existuje schůzka v aplikaci. */
   hasMeeting: boolean;
+  /** iter-040: na den je interní schůzka (`attendance_internal_day`). */
+  hasInternal: boolean;
   /** Na den je aspoň jeden řádek zapsaný správcem (Z2). */
   hasManagerRecord: boolean;
 }
@@ -381,11 +383,13 @@ export async function getDayMeta(date: string): Promise<DayMeta> {
     finalized_at: string | null;
     mode: string | null;
     has_meeting: boolean;
+    has_internal: boolean;
     has_manager: boolean;
   }>(sql`
     SELECT ${isoSql(sql`ad.finalized_at`)} AS finalized_at,
            ad.mode,
            EXISTS (SELECT 1 FROM meeting mt WHERE mt.date = ${date}::date) AS has_meeting,
+           EXISTS (SELECT 1 FROM attendance_internal_day i WHERE i.attendance_date = ${date}::date) AS has_internal,
            EXISTS (
              SELECT 1 FROM attendance_record r
              WHERE r.attendance_date = ${date}::date AND r.source = 'manager'
@@ -399,6 +403,7 @@ export async function getDayMeta(date: string): Promise<DayMeta> {
     finalizedAt: r?.finalized_at ?? null,
     dayMode: r?.mode === "recorded" || r?.mode === "unrecorded" ? r.mode : null,
     hasMeeting: Boolean(r?.has_meeting),
+    hasInternal: Boolean(r?.has_internal),
     hasManagerRecord: Boolean(r?.has_manager),
   };
 }

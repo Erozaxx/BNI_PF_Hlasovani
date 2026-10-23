@@ -280,6 +280,7 @@ export function MemberHelp() {
           "V menu Docházka klepněte na den.",
           "Zvolte „Nepřijdu, bez náhradníka“, nebo „Nepřijdu, pošlu náhradníka“ a napište jméno. Uloží se hned.",
           "Změnit nebo zrušit to můžete do 7:30 v den schůzky. Potom už to zapíše správce docházky.",
+          "Zelený den v kalendáři je interní schůzka. Počítá se do docházky jako běžná schůzka a omlouváte se stejně.",
         ]}
         note="Bez záznamu počítáme, že přijdete. Náhradník se jako absence nepočítá. Na dashboardu vidíte své absence za posledních 6 měsíců."
         faq={[
@@ -290,6 +291,10 @@ export function MemberHelp() {
           {
             q: "Proč mám absenci, i když jsem se omluvil(a)?",
             a: "Omluva bez náhradníka se podle pravidel počítá jako absence. Když pošlete náhradníka, absence to není.",
+          },
+          {
+            q: "Co se stane s mou omluvou, když se interní schůzka zruší?",
+            a: "Omluva na ten den se smaže a den se do docházky nepočítá. Když na ten den později vznikne běžná schůzka, omluvte se znovu.",
           },
           {
             q: "Jak smažu jméno náhradníka?",

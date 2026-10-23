@@ -63,6 +63,8 @@ export const KIND_LABELS: Record<string, string> = {
   // iter-038 (arch 14)
   "access.attendance-manager-changed": "Změna správce docházky",
   "attendance.history-edited": "Oprava docházky",
+  "attendance.internal-created": "Interní schůzka založena",
+  "attendance.internal-cancelled": "Interní schůzka zrušena",
   "attendance.link-sent": "Odkaz na docházku odeslán",
   "attendance.link-failed": "Odkaz na docházku neodešel",
   "attendance.link-skipped": "Odkaz na docházku přeskočen",

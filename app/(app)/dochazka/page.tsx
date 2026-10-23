@@ -21,6 +21,7 @@ import {
   listMyPastDays,
   listSubstituteNames,
 } from "@/lib/db/queries/attendance";
+import { listInternalDays } from "@/lib/db/queries/attendance-internal";
 import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { AttendanceTabs } from "@/components/attendance/AttendanceTabs";
@@ -44,9 +45,10 @@ export default async function AttendancePage() {
   const from = monthStart(minMonth.year, minMonth.month);
   const to = monthEnd(maxMonth.year, maxMonth.month);
 
-  const [absences, meetingDates, pastDays, names, absenceDays] = await Promise.all([
+  const [absences, meetingDates, internalDates, pastDays, names, absenceDays] = await Promise.all([
     listMyAbsences(memberId, from, to),
     listMeetingDates(from, to),
+    listInternalDays(from, to),
     listMyPastDays(memberId, from, today),
     listSubstituteNames(memberId),
     listMyAbsenceDays(memberId, windowStart, today),
@@ -79,6 +81,8 @@ export default async function AttendancePage() {
         minMonth={minMonth}
         maxMonth={maxMonth}
         meetingDates={meetingDates}
+        internalDates={internalDates}
+        canManageInternal={can(session, "attendance.internal_manage")}
         initialAbsences={absences}
         results={pastDays.map((p) => ({ date: p.date, status: p.status }))}
         initialNames={names}

@@ -9,10 +9,15 @@
 import { can, NO_PERMISSION_MESSAGE, type PermissionHolder } from "@/lib/auth/permissions";
 import { planRange, type PlanEntry, type PlanRange } from "@/lib/attendance/plan";
 import { listMeetingDates, listPlannedAbsences } from "@/lib/db/queries/attendance";
+import { listInternalDays } from "@/lib/db/queries/attendance-internal";
 
 export interface AbsencePlanData extends PlanRange {
   rows: PlanEntry[];
   meetingDates: string[];
+  /** iter-040: dny s interní schůzkou. */
+  internalDates: string[];
+  /** iter-040: smí zakládat a rušit interní schůzky (karta dne). */
+  canManageInternal: boolean;
 }
 
 export async function loadAbsencePlan(
@@ -23,9 +28,16 @@ export async function loadAbsencePlan(
     throw new Error(NO_PERMISSION_MESSAGE);
   }
   const range = planRange(today);
-  const [rows, meetingDates] = await Promise.all([
+  const [rows, meetingDates, internalDates] = await Promise.all([
     listPlannedAbsences(range.from, range.to),
     listMeetingDates(range.from, range.to),
+    listInternalDays(range.from, range.to),
   ]);
-  return { ...range, rows, meetingDates };
+  return {
+    ...range,
+    rows,
+    meetingDates,
+    internalDates,
+    canManageInternal: can(session, "attendance.internal_manage"),
+  };
 }

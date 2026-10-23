@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { InternalDayCard } from "@/components/attendance/InternalDayCard";
 import {
   GRID_WEEKDAYS,
   isThursday,
@@ -23,6 +24,7 @@ import {
   planSummary,
   type PlanEntry,
 } from "@/lib/attendance/plan";
+import { dayCellClass, dayNumberClass, dayTone } from "@/lib/attendance/internal";
 
 /**
  * iter-039 (T-003, arch 6, 7, 8): kalendář plánovaných omluv pro správce.
@@ -31,6 +33,10 @@ import {
  * čtení, stav výběru drží komponenta a zrcadlí ho do `?d=` přes
  * `history.replaceState` (žádný dotaz na server, žádný `router.refresh()`,
  * LL-017). Neimportuje nic z `@/lib/db`.
+ *
+ * iter-040: interní dny jsou zeleně, správce s právem `attendance.internal_manage`
+ * má pod seznamem dne kartu pro založení a zrušení. Po zrušení (Z2) se dni
+ * lokálně srovná počet i seznam omluvených, bez `router.refresh()`.
  */
 
 export interface AbsencePlanCalendarProps {
@@ -38,7 +44,12 @@ export interface AbsencePlanCalendarProps {
   today: string;
   minMonth: { year: number; month: number };
   maxMonth: { year: number; month: number };
+  /** Čas serveru při vykreslení (ISO), ať se hydratace shoduje. */
+  serverNow: string;
   meetingDates: string[];
+  /** iter-040: dny s interní schůzkou (zeleně). */
+  internalDates: string[];
+  canManageInternal: boolean;
   rows: PlanEntry[];
   /** Vybraný den při otevření. */
   initialSelected: string;
@@ -48,15 +59,46 @@ export function AbsencePlanCalendar({
   today,
   minMonth,
   maxMonth,
+  serverNow,
   meetingDates,
+  internalDates,
+  canManageInternal,
   rows,
   initialSelected,
 }: AbsencePlanCalendarProps) {
+  const [now, setNow] = useState(() => new Date(serverNow));
+  const [internals, setInternals] = useState<Set<string>>(() => new Set(internalDates));
+  /** Z2: dny, kterým zrušení interní schůzky smazalo omluvy (lokální stav). */
+  const [clearedDates, setClearedDates] = useState<Set<string>>(() => new Set());
+
+  // Hranice 17:00 se může přehoupnout, zatímco je stránka otevřená.
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   const [selected, setSelected] = useState(initialSelected);
   const [view, setView] = useState(() => monthOf(initialSelected));
 
   const meetings = useMemo(() => new Set(meetingDates), [meetingDates]);
-  const byDate = useMemo(() => groupPlan(rows), [rows]);
+  const byDate = useMemo(
+    () => groupPlan(rows.filter((r) => !clearedDates.has(r.date))),
+    [rows, clearedDates]
+  );
+
+  function onInternalChanged(
+    date: string,
+    state: "internal" | "none" | "meeting",
+    absencesDeleted: boolean
+  ) {
+    setInternals((prev) => {
+      const next = new Set(prev);
+      if (state === "internal") next.add(date);
+      else next.delete(date);
+      return next;
+    });
+    if (absencesDeleted) setClearedDates((prev) => new Set(prev).add(date));
+  }
 
   const viewIndex = view.year * 12 + view.month;
   const canPrev = viewIndex > minMonth.year * 12 + minMonth.month;
@@ -126,24 +168,18 @@ export function AbsencePlanCalendar({
                 const count = byDate[date]?.length ?? 0;
                 const past = date < today;
                 const thursday = isThursday(date);
-                const hasMeeting = meetings.has(date);
+                const tone = dayTone({ hasMeeting: meetings.has(date), hasInternal: internals.has(date) });
                 const isSelected = date === selected;
                 return (
                   <button
                     key={date}
                     type="button"
                     onClick={() => selectDay(date)}
-                    aria-label={planDayAria(date, count, hasMeeting)}
+                    aria-label={planDayAria(date, count, tone === "meeting", tone === "internal")}
                     aria-pressed={isSelected}
-                    className={[
-                      "flex min-h-[44px] flex-col items-center justify-center rounded-lg text-sm leading-tight",
-                      "focus:outline-none focus:shadow-focus",
-                      thursday ? "bg-navy-light font-semibold text-navy" : "text-text-main hover:bg-background",
-                      past && !thursday ? "text-text-muted" : "",
-                      isSelected ? "ring-2 ring-primary" : "",
-                    ].join(" ")}
+                    className={dayCellClass(tone, thursday, past, isSelected)}
                   >
-                    <span className={hasMeeting ? "underline decoration-2 underline-offset-2" : ""}>
+                    <span className={dayNumberClass(tone)}>
                       {Number(date.slice(8))}
                     </span>
                     <span className="h-4 text-xs font-semibold" aria-hidden="true">
@@ -187,6 +223,17 @@ export function AbsencePlanCalendar({
           </Link>
         )}
       </Card>
+
+      {canManageInternal && (
+        <InternalDayCard
+          key={selected}
+          date={selected}
+          now={now}
+          hasMeeting={meetings.has(selected)}
+          hasInternal={internals.has(selected)}
+          onChanged={onInternalChanged}
+        />
+      )}
     </div>
   );
 }

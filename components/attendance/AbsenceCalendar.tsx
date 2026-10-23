@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { DayPanel } from "@/components/attendance/DayPanel";
+import { InternalDayCard } from "@/components/attendance/InternalDayCard";
 import {
   setMyAbsenceAction,
   forgetSubstituteNameAction,
@@ -24,6 +25,7 @@ import {
   shiftMonth,
   type PastResult,
 } from "@/lib/attendance/rules";
+import { dayCellClass, dayNumberClass, dayTone } from "@/lib/attendance/internal";
 
 /**
  * iter-038 (T-003a, arch 7.1, 7.2): kalendář nepřítomnosti člena. Čtvrtky jsou
@@ -42,6 +44,10 @@ export interface AbsenceCalendarProps {
   minMonth: { year: number; month: number };
   maxMonth: { year: number; month: number };
   meetingDates: string[];
+  /** iter-040: dny s interní schůzkou (zeleně). */
+  internalDates: string[];
+  /** iter-040: člen smí zakládat a rušit interní schůzky (karta dne). */
+  canManageInternal: boolean;
   initialAbsences: { date: string; substituteName: string | null }[];
   results: { date: string; status: PastResult }[];
   initialNames: { id: string; name: string }[];
@@ -63,6 +69,8 @@ export function AbsenceCalendar({
   minMonth,
   maxMonth,
   meetingDates,
+  internalDates,
+  canManageInternal,
   initialAbsences,
   results,
   initialNames,
@@ -84,6 +92,8 @@ export function AbsenceCalendar({
   }, []);
 
   const meetings = useMemo(() => new Set(meetingDates), [meetingDates]);
+  // iter-040: interní dny drží komponenta lokálně, akce karty je mění (LL-017).
+  const [internals, setInternals] = useState<Set<string>>(() => new Set(internalDates));
   const resultByDate = useMemo(() => {
     const m: Record<string, PastResult> = {};
     for (const r of results) m[r.date] = r.status;
@@ -132,6 +142,28 @@ export function AbsenceCalendar({
       setError("Neuložilo se. Zkus to znovu.");
     } finally {
       setPending(false);
+    }
+  }
+
+  function onInternalChanged(
+    date: string,
+    state: "internal" | "none" | "meeting",
+    absencesDeleted: boolean
+  ) {
+    setInternals((prev) => {
+      const next = new Set(prev);
+      if (state === "internal") next.add(date);
+      else next.delete(date);
+      return next;
+    });
+    // Zrušení smazalo omluvy dne, kalendář člena je srovná z lokálního stavu.
+    if (absencesDeleted) {
+      setAbsences((prev) => {
+        if (!Object.prototype.hasOwnProperty.call(prev, date)) return prev;
+        const next = { ...prev };
+        delete next[date];
+        return next;
+      });
     }
   }
 
@@ -204,7 +236,7 @@ export function AbsenceCalendar({
                 const has = Object.prototype.hasOwnProperty.call(absences, date);
                 const mark = absenceMark(absences[date], has);
                 const thursday = isThursday(date);
-                const hasMeeting = meetings.has(date);
+                const tone = dayTone({ hasMeeting: meetings.has(date), hasInternal: internals.has(date) });
                 const isSelected = date === selected;
                 const glyph = result
                   ? pastResultGlyph(result)
@@ -218,17 +250,16 @@ export function AbsenceCalendar({
                     key={date}
                     type="button"
                     onClick={() => selectDay(date)}
-                    aria-label={dayAriaLabel(date, { mark, result, hasMeeting })}
+                    aria-label={dayAriaLabel(date, {
+                      mark,
+                      result,
+                      hasMeeting: tone === "meeting",
+                      hasInternal: tone === "internal",
+                    })}
                     aria-pressed={isSelected}
-                    className={[
-                      "flex min-h-[44px] flex-col items-center justify-center rounded-lg text-sm leading-tight",
-                      "focus:outline-none focus:shadow-focus",
-                      thursday ? "bg-navy-light font-semibold text-navy" : "text-text-main hover:bg-background",
-                      past && !thursday ? "text-text-muted" : "",
-                      isSelected ? "ring-2 ring-primary" : "",
-                    ].join(" ")}
+                    className={dayCellClass(tone, thursday, past, isSelected)}
                   >
-                    <span className={hasMeeting ? "underline decoration-2 underline-offset-2" : ""}>
+                    <span className={dayNumberClass(tone)}>
                       {Number(date.slice(8))}
                     </span>
                     <span className="h-4 text-xs" aria-hidden="true">
@@ -266,6 +297,17 @@ export function AbsenceCalendar({
           }
         />
       </Card>
+
+      {canManageInternal && (
+        <InternalDayCard
+          key={selected}
+          date={selected}
+          now={now}
+          hasMeeting={meetings.has(selected)}
+          hasInternal={internals.has(selected)}
+          onChanged={onInternalChanged}
+        />
+      )}
 
       <Card>
         <h2 className="mb-3 text-base font-semibold text-text-main">{MEMBER_TEXTS.listTitle}</h2>

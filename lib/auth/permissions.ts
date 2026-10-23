@@ -57,6 +57,8 @@ export const PERMISSIONS = [
   "attendance.view_all",
   "attendance.audit_view",
   "attendance.edit_history",
+  // iter-040: zakládání a rušení interní schůzky v docházce.
+  "attendance.internal_manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -77,12 +79,13 @@ export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
   "ops.view",
   "mastermind.manage",
   "burza.manage",
+  "attendance.internal_manage",
 ];
 
 /**
  * iter-038 (arch 5.2, gate K1 A, Z4): práva, která dává příznak „Správce
  * docházky“ (`member.attendance_manager_since`) bez ohledu na způsob přihlášení,
- * tedy i přihlášení odkazem z mailu. Přesně tři. `attendance.edit_history`
+ * tedy i přihlášení odkazem z mailu. Přesně čtyři (iter-040 přidala `attendance.internal_manage`). `attendance.edit_history`
  * (zpětné opravy) příznak nedává nikdy, ani Prezidentovi s příznakem přihlášenému
  * odkazem. Jediné místo, kde se ta výjimka z iter-032 dělá, je `permissionsFor`.
  */
@@ -90,6 +93,7 @@ export const ATTENDANCE_MANAGER_PERMISSIONS: readonly Permission[] = [
   "attendance.record",
   "attendance.view_all",
   "attendance.audit_view",
+  "attendance.internal_manage",
 ];
 
 /**
@@ -220,7 +224,7 @@ export function permissionsFor(input: {
   attendanceManager: boolean;
 }): ReadonlySet<Permission> {
   const result = new Set<Permission>(basePermissions(input));
-  // K1 A (gate Z4): příznak dává tři práva docházky i při přihlášení odkazem.
+  // K1 A (gate Z4): příznak dává čtyři práva docházky i při přihlášení odkazem.
   // Nic jiného z toho nevznikne, `attendance.edit_history` ani `members.*`.
   if (input.attendanceManager) {
     for (const p of ATTENDANCE_MANAGER_PERMISSIONS) result.add(p);
