@@ -65,6 +65,10 @@ export type OpsEventKind =
   // iter-038 (T-003b, arch 13.3, 14): zpětná oprava docházky s auditem.
   // Jednorázová událost s vlastním runId. Bez hodnot a bez jmen náhradníků.
   | "attendance.history-edited"
+  // iter-040 (arch 10): založení a zrušení interní schůzky. Jednorázové události
+  // s vlastním runId. Bez jmen, bez `memberId` a bez počtu smazaných omluv.
+  | "attendance.internal-created"
+  | "attendance.internal-cancelled"
   // iter-038 (T-003c, arch 14): ranní odkaz, uzavření dne a report. Události
   // UVNITŘ běhu cronu (`cron.started` až `cron.finished`), proto NEjsou
   // v TERMINAL_KINDS, jinak by první z nich přebila pozdější `cron.finished`
@@ -117,6 +121,8 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "access.functions-changed",
   "access.attendance-manager-changed",
   "attendance.history-edited",
+  "attendance.internal-created",
+  "attendance.internal-cancelled",
   "mastermind.scheduled",
   "mastermind.unscheduled",
   "mastermind.presented",

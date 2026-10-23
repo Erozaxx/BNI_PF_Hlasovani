@@ -131,11 +131,14 @@ export async function runAttendanceCron(
 
   let linkTargets: Awaited<ReturnType<typeof listPendingLinkTargets>> = [];
   const days: { date: string; late: boolean; state: CloseState }[] = [];
+  /** iter-040: dnešek je interní schůzka bez běžné (ranní mail to řekne). */
+  let morningInternal = false;
 
   try {
     if (plan.phase === "morning") {
       const todayState = await getCloseState(plan.today);
-      if (todayState.hasMeeting) linkTargets = await listPendingLinkTargets(plan.today);
+      morningInternal = !todayState.hasMeeting && todayState.hasInternal;
+      if (todayState.hasMeeting || todayState.hasInternal) linkTargets = await listPendingLinkTargets(plan.today);
       const yState = await getCloseState(plan.yesterday);
       // Záchrana jen pro den, na kterém docházka opravdu běžela (ranní odkaz
       // nebo zápis správce). Bez toho by první ráno po nasazení uzavřelo
@@ -209,6 +212,7 @@ export async function runAttendanceCron(
           excused: counts.excused,
           withSubstitute: counts.withSubstitute,
           url: buildAttendanceLinkUrl(deps.appUrl, token),
+          internal: morningInternal,
         });
         const res = await safeSend(() => sendLink({ memberId: t.memberId, to: t.email as string, mail }));
         if (res.success) {
@@ -340,6 +344,7 @@ async function processDay(
   const data: ReportData = {
     date,
     hasMeeting: state.hasMeeting,
+    internal: !state.hasMeeting && state.hasInternal,
     mode: state.mode ?? "recorded",
     late: state.reportLate,
     members: rows.members,

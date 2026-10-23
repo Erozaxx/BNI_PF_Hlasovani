@@ -11,6 +11,7 @@ export default async function HelpPageRoute() {
       canManageAccess={can(session, "access.manage")}
       showAttendanceHelp={can(session, "attendance.view_all")}
       showAttendanceHistoryHelp={can(session, "attendance.edit_history")}
+      showInternalMeetingHelp={can(session, "attendance.internal_manage")}
     />
   );
 }

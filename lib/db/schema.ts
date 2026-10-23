@@ -203,6 +203,17 @@ export const memberSubstituteName = pgTable(
   })
 );
 
+/**
+ * iter-040: interní schůzka v docházce. Řádek = interní schůzka na ten den,
+ * zrušení = DELETE. Do `meeting` se nic nezapisuje. Tabulku zakládá migrace
+ * `scripts/migrate-iter-040-interni-schuzky.ts`.
+ */
+export const attendanceInternalDay = pgTable("attendance_internal_day", {
+  attendanceDate: date("attendance_date").primaryKey(),
+  createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Uzavření dne (cron 17:00, T-003c). */
 export const attendanceDay = pgTable(
   "attendance_day",

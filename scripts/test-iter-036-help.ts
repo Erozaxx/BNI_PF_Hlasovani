@@ -289,6 +289,22 @@ const tests: TestCase[] = [
       assert.ok(read("app/(app)/admin/members/AttendanceManagerToggle.tsx").includes("Správce docházky"));
     },
   },
+  {
+    name: "15. iter-040: nápověda k interní schůzce (člen, vedení jen s právem, věta o Master mind), konečné znění z gate",
+    run: () => {
+      assert.ok(MEMBER.includes("Zelený den v kalendáři je interní schůzka. Počítá se do docházky jako běžná schůzka a omlouváte se stejně."));
+      assert.ok(MEMBER.includes("Co se stane s mou omluvou, když se interní schůzka zruší?"));
+      assert.ok(MEMBER.includes("Omluva na ten den se smaže a den se do docházky nepočítá. Když na ten den později vznikne běžná schůzka, omluvte se znovu."));
+      assert.ok(titleIndex(MODERATOR, "Interní schůzka") >= 0);
+      assert.ok(MODERATOR.includes("{internalMeetings && ("));
+      assert.ok(MODERATOR.includes("V menu Docházka klepněte na den a zvolte Založit interní schůzku. Den se počítá do docházky: správci docházky dostanou ráno před 7:00 odkaz na zápis a v 17:00 report. Hosté ani hlasování se nezakládají."));
+      assert.ok(MODERATOR.includes("Zrušit ji můžete do 17:00 v den schůzky, dokud správce docházky nic nezapsal. Zrušením se smažou všechny omluvy členů na ten den. Členům o tom mail nepřijde."));
+      assert.ok(MODERATOR.includes("Když má být místo interní běžná schůzka, založte ji ve Schůzkách a interní nerušte. Platí běžná a omluvy zůstanou. Když běžnou schůzku potom smažete, platí zase interní."));
+      assert.ok(!MODERATOR.includes("Interní schůzky se v aplikaci nezakládají."), "stará věta musí zmizet");
+      assert.ok(MODERATOR.includes("Interní schůzku založíte v menu Docházka. Případ ze zásobníku zařadíte na čtvrtek"));
+      assert.ok(read("app/(app)/help/page.tsx").includes('can(session, "attendance.internal_manage")'));
+    },
+  },
 ];
 
 let failed = 0;

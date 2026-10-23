@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { AuditList } from "@/components/attendance/AuditList";
 import { validateSubstituteName } from "@/lib/attendance/rules";
+import { INTERNAL_TEXTS } from "@/lib/attendance/internal";
 import {
   SHEET_TEXTS,
   TARGET_ABSENT,
@@ -429,6 +430,9 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
         <p className="rounded-card border border-border bg-surface px-4 py-3 text-sm text-text-main">
           {SHEET_TEXTS.unrecordedBanner}
         </p>
+      )}
+      {payload.dayKind === "internal" && (
+        <p className="text-sm font-medium text-success">{INTERNAL_TEXTS.sheetInternal}</p>
       )}
       {locked && (
         <div className="space-y-2 rounded-card border border-warning bg-warning-light px-4 py-3">

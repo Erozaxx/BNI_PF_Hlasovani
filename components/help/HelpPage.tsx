@@ -14,6 +14,8 @@ interface HelpPageProps {
   showAttendanceHelp?: boolean;
   /** iter-038: právo `attendance.edit_history` (zpětné opravy). */
   showAttendanceHistoryHelp?: boolean;
+  /** iter-040: právo `attendance.internal_manage` (zakládání interních schůzek). */
+  showInternalMeetingHelp?: boolean;
 }
 
 export function HelpPage({
@@ -22,6 +24,7 @@ export function HelpPage({
   canManageAccess = false,
   showAttendanceHelp = false,
   showAttendanceHistoryHelp = false,
+  showInternalMeetingHelp = false,
 }: HelpPageProps) {
   const tabs = [
     {
@@ -29,7 +32,7 @@ export function HelpPage({
       label: "Pro člena",
       content: <MemberHelp />,
     },
-    ...(showLeadershipHelp || showAttendanceHelp
+    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp
       ? [
           {
             id: "moderator",
@@ -39,6 +42,7 @@ export function HelpPage({
                 showLeadership={showLeadershipHelp}
                 attendance={showAttendanceHelp}
                 attendanceHistory={showAttendanceHistoryHelp}
+                internalMeetings={showInternalMeetingHelp}
               />
             ),
           },

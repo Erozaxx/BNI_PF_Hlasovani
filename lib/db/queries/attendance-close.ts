@@ -37,11 +37,13 @@ function isoSql(col: SQL): SQL {
 export interface CloseState {
   /** Na den existuje schůzka v aplikaci. */
   hasMeeting: boolean;
+  /** iter-040: na den je interní schůzka (`attendance_internal_day`). */
+  hasInternal: boolean;
   /** Na den je řádek zapsaný správcem. */
   hasManagerRecord: boolean;
   /** Na den existuje řádek ranního odkazu (ranní cron už pro den běžel). */
   hasLinkRow: boolean;
-  /** Den docházky (3.1): schůzka NEBO zápis správce. */
+  /** Den docházky (3.1): schůzka NEBO interní schůzka NEBO zápis správce. */
   isAttendanceDay: boolean;
   finalized: boolean;
   /** Uzavřeno v posledních `REPORT_RESUME_HOURS` hodinách (dosílání reportu). */
@@ -57,6 +59,7 @@ export async function getCloseState(date: string): Promise<CloseState> {
     mode: string | null;
     late: boolean | null;
     has_meeting: boolean;
+    has_internal: boolean;
     has_manager: boolean;
     has_link: boolean;
   }>(sql`
@@ -65,6 +68,7 @@ export async function getCloseState(date: string): Promise<CloseState> {
               AND ad.finalized_at > now() - make_interval(hours => ${REPORT_RESUME_HOURS}::int)) AS recent,
            ad.mode, ad.report_late AS late,
            EXISTS (SELECT 1 FROM meeting mt WHERE mt.date = ${date}::date) AS has_meeting,
+           EXISTS (SELECT 1 FROM attendance_internal_day i WHERE i.attendance_date = ${date}::date) AS has_internal,
            EXISTS (
              SELECT 1 FROM attendance_record r
              WHERE r.attendance_date = ${date}::date AND r.source = 'manager'
@@ -75,12 +79,14 @@ export async function getCloseState(date: string): Promise<CloseState> {
   `);
   const r = result.rows[0];
   const hasMeeting = Boolean(r?.has_meeting);
+  const hasInternal = Boolean(r?.has_internal);
   const hasManagerRecord = Boolean(r?.has_manager);
   return {
     hasMeeting,
+    hasInternal,
     hasManagerRecord,
     hasLinkRow: Boolean(r?.has_link),
-    isAttendanceDay: hasMeeting || hasManagerRecord,
+    isAttendanceDay: hasMeeting || hasInternal || hasManagerRecord,
     finalized: Boolean(r?.finalized_at),
     finalizedRecently: Boolean(r?.recent),
     mode: r?.mode === "recorded" || r?.mode === "unrecorded" ? r.mode : null,

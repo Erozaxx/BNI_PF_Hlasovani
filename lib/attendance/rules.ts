@@ -47,7 +47,7 @@ export const MEMBER_TEXTS = {
   save: "Uložit",
   recentNames: "Dřív:",
   legend:
-    "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku. ● nepřijdu, ◐ pošlu náhradníka.",
+    "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku, zelený den interní schůzku. ● nepřijdu, ◐ pošlu náhradníka.",
   legendPast: "✓ přítomen, N náhradník, A absence",
   closedPanel: "Na tenhle den už změnu zapíše jen správce docházky.",
   listTitle: "Ohlášené nepřítomnosti",
@@ -381,7 +381,7 @@ export function pastResultGlyph(result: PastResult): string {
 /** `aria-label` dne: „čtvrtek 12. listopadu, nepřijdeš, bez náhradníka“. */
 export function dayAriaLabel(
   date: string,
-  opts: { mark: AbsenceMark; result: PastResult | null; hasMeeting: boolean }
+  opts: { mark: AbsenceMark; result: PastResult | null; hasMeeting: boolean; hasInternal?: boolean }
 ): string {
   const { m, d } = parseDate(date);
   const parts = [`${WEEKDAY_LONG[weekdayIndex(date)]} ${d}. ${MONTH_GENITIVE[m - 1]}`];
@@ -389,6 +389,7 @@ export function dayAriaLabel(
   else if (opts.mark === "absent") parts.push("nepřijdeš, bez náhradníka");
   else if (opts.mark === "substitute") parts.push("nepřijdeš, pošleš náhradníka");
   if (opts.hasMeeting) parts.push("schůzka v aplikaci");
+  else if (opts.hasInternal) parts.push("interní schůzka");
   return parts.join(", ");
 }
 

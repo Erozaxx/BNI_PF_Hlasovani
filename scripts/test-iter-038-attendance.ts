@@ -228,7 +228,7 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "A4. permissionsFor: příznak + odkaz = přesně tři práva docházky, nic jiného (K1 A, Z4)",
+    name: "A4. permissionsFor: příznak + odkaz = přesně čtyři práva docházky (iter-040: +internal_manage), nic jiného (K1 A, Z4)",
     run: () => {
       for (const method of ["magic_link", "email_link"] as const) {
         const got = perms(method, null, [], true);
@@ -239,12 +239,12 @@ const tests: TestCase[] = [
       }
       assert.deepEqual(
         [...ATTENDANCE_MANAGER_PERMISSIONS].sort(),
-        ["attendance.audit_view", "attendance.record", "attendance.view_all"]
+        ["attendance.audit_view", "attendance.internal_manage", "attendance.record", "attendance.view_all"]
       );
     },
   },
   {
-    name: "A5. Z4: Prezident + odkaz + příznak = tři práva bez edit_history (samostatný případ)",
+    name: "A5. Z4: Prezident + odkaz + příznak = čtyři práva bez edit_history (samostatný případ)",
     run: () => {
       const president = [fn("Prezident", [ADMIN_DELEGABLE_MARKER])];
       for (const method of ["magic_link", "email_link"] as const) {
@@ -269,31 +269,32 @@ const tests: TestCase[] = [
         const got = perms("password", null, [fn(name, [ADMIN_DELEGABLE_MARKER])], false);
         for (const p of ATT_PERMS) assert.ok(got.has(p), `${name}: ${p}`);
       }
-      // Člen výboru (NULL) a moderátor: žádné attendance.*
+      // Člen výboru (NULL) a moderátor: z docházky jen attendance.internal_manage (iter-040)
       const committee = perms("password", null, [fn("Člen výboru", null)], false);
       const moderator = perms("password", "moderator", [], false);
       for (const got of [committee, moderator]) {
         for (const p of ATT_PERMS) assert.ok(!got.has(p), p);
+        assert.ok(got.has("attendance.internal_manage"));
       }
-      // Člen výboru s příznakem: výchozí sada + tři, edit_history ne
+      // Člen výboru s příznakem: výchozí sada + práva správce, edit_history ne
       const committeeFlag = perms("password", null, [fn("Člen výboru", null)], true);
       assert.deepEqual(
         [...committeeFlag].sort(),
-        [...DEFAULT_FUNCTION_PERMISSIONS, ...ATTENDANCE_MANAGER_PERMISSIONS].sort()
+        [...new Set([...DEFAULT_FUNCTION_PERMISSIONS, ...ATTENDANCE_MANAGER_PERMISSIONS])].sort()
       );
       assert.ok(!committeeFlag.has("attendance.edit_history"));
-      // běžný člen s heslem? (bez role i funkce) + příznak: jen tři
-      assert.deepEqual([...perms("password", null, [], true)].sort(), [...ATT_PERMS.slice(0, 3)].sort());
+      // běžný člen s heslem? (bez role i funkce) + příznak: jen čtyři práva správce
+      assert.deepEqual([...perms("password", null, [], true)].sort(), [...ATTENDANCE_MANAGER_PERMISSIONS].sort());
       // moderátor bez příznaku: dnešní moderátor beze změny
       assert.deepEqual([...moderator].sort(), [...DEFAULT_FUNCTION_PERMISSIONS].sort());
     },
   },
   {
-    name: "A7. katalog: čtyři nová práva, DEFAULT_FUNCTION_PERMISSIONS beze změny",
+    name: "A7. katalog: čtyři práva docházky (edit_history a spol. mimo výchozí sadu), iter-040 přidala internal_manage",
     run: () => {
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
-      assert.equal(PERMISSIONS.length, 24);
+      assert.equal(PERMISSIONS.length, 25, "iter-040: +attendance.internal_manage");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));
@@ -455,7 +456,7 @@ const tests: TestCase[] = [
       assert.equal(MEMBER_TEXTS.recentNames, "Dřív:");
       assert.equal(
         MEMBER_TEXTS.legend,
-        "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku. ● nepřijdu, ◐ pošlu náhradníka."
+        "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku, zelený den interní schůzku. ● nepřijdu, ◐ pošlu náhradníka."
       );
       assert.equal(MEMBER_TEXTS.legendPast, "✓ přítomen, N náhradník, A absence");
       assert.equal(MEMBER_TEXTS.closedPanel, "Na tenhle den už změnu zapíše jen správce docházky.");
@@ -599,7 +600,7 @@ const tests: TestCase[] = [
       const cal = read("components/attendance/AbsenceCalendar.tsx");
       assert.ok(cal.includes("grid-cols-7"));
       assert.ok(cal.includes("aria-label={dayAriaLabel("));
-      assert.ok(cal.includes("underline"), "den se schůzkou podtržený");
+      assert.ok(cal.includes("dayNumberClass(tone)") && read("lib/attendance/internal.ts").includes("underline"), "den se schůzkou podtržený");
       assert.ok(cal.includes("isThursday(date)"));
       // legenda pod mřížkou
       assert.ok(cal.includes("MEMBER_TEXTS.legend") && cal.includes("MEMBER_TEXTS.legendPast"));
@@ -791,7 +792,7 @@ const tests: TestCase[] = [
   {
     name: "B3. Z2: pojistka jen dnes, režim normal, bez schůzky a bez zápisu správce",
     run: () => {
-      const base = { date: "2026-10-22", today: "2026-10-22", mode: "normal" as const, hasMeeting: false, hasManagerRecord: false };
+      const base = { date: "2026-10-22", today: "2026-10-22", mode: "normal" as const, hasMeeting: false, hasInternal: false, hasManagerRecord: false };
       assert.equal(isGuardedDay(base), true);
       assert.equal(isGuardedDay({ ...base, hasMeeting: true }), false, "schůzka je založená");
       assert.equal(isGuardedDay({ ...base, hasManagerRecord: true }), false, "den už má zápis");
@@ -995,7 +996,7 @@ const tests: TestCase[] = [
       // P přihlášený odkazem s příznakem: tři práva bez edit_history
       const boss = permissionsFor({ authMethod: "magic_link", managementRole: null, functions: [fn("Prezident", [ADMIN_DELEGABLE_MARKER])], attendanceManager: true });
       assert.ok(!boss.has("attendance.edit_history"));
-      assert.equal(boss.size, 3);
+      assert.equal(boss.size, 4, "iter-040: čtyři práva správce");
     },
   },
   {

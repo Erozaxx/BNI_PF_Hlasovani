@@ -55,6 +55,8 @@ export interface MorningMailInput {
   excused: number;
   withSubstitute: number;
   url: string;
+  /** iter-040: dnešek je interní schůzka (bez běžné), mail to řekne v první větě. */
+  internal?: boolean;
 }
 
 export interface BuiltMail {
@@ -81,7 +83,9 @@ export function buildMorningMail(input: MorningMailInput): BuiltMail {
   const until = formatPragueTime(input.expiresAt.toISOString());
   const lines = [
     `Ahoj ${input.name},`,
-    "dnes je schůzka. Docházku odškrtáš přes tenhle odkaz, bez přihlašování.",
+    input.internal
+      ? "dnes je interní schůzka. Docházku odškrtáš přes tenhle odkaz, bez přihlašování."
+      : "dnes je schůzka. Docházku odškrtáš přes tenhle odkaz, bez přihlašování.",
     `Odkaz platí do ${until} a jen pro dnešní docházku.`,
     morningExcusedLine(input.excused, input.withSubstitute),
   ];
@@ -115,6 +119,8 @@ export interface ReportData {
   date: string;
   /** Schůzka v aplikaci na ten den existuje. */
   hasMeeting: boolean;
+  /** iter-040: den je interní schůzka bez běžné (`!hasMeeting && hasInternal`). */
+  internal?: boolean;
   mode: "recorded" | "unrecorded";
   /** Záchrana další den ráno. */
   late: boolean;
@@ -251,6 +257,8 @@ export function excusedWord(n: number): string {
 function introLines(data: ReportData): string[] {
   const where = data.hasMeeting
     ? `docházka ze schůzky ${WEEKDAY_LOCATIVE[weekdayIndex(data.date)]} ${formatCzDate(data.date)}.`
+    : data.internal
+    ? `docházka z interní schůzky ${WEEKDAY_LOCATIVE[weekdayIndex(data.date)]} ${formatCzDate(data.date)}.`
     : `docházka ze dne ${WEEKDAY_NOMINATIVE[weekdayIndex(data.date)]} ${formatCzDate(data.date)}.`;
   if (data.mode === "unrecorded") {
     const when = data.late ? formatCzDate(data.date) : "dnes";
