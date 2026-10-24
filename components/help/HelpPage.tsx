@@ -16,6 +16,10 @@ interface HelpPageProps {
   showAttendanceHistoryHelp?: boolean;
   /** iter-040: právo `attendance.internal_manage` (zakládání interních schůzek). */
   showInternalMeetingHelp?: boolean;
+  /** iter-041: právo `semafor.view_all` (přehled semaforu se jmény). */
+  showSemaforHelp?: boolean;
+  /** iter-041: právo `semafor.import` (nahrávání souboru, první tři body nápovědy). */
+  showSemaforImportHelp?: boolean;
 }
 
 export function HelpPage({
@@ -25,6 +29,8 @@ export function HelpPage({
   showAttendanceHelp = false,
   showAttendanceHistoryHelp = false,
   showInternalMeetingHelp = false,
+  showSemaforHelp = false,
+  showSemaforImportHelp = false,
 }: HelpPageProps) {
   const tabs = [
     {
@@ -32,7 +38,7 @@ export function HelpPage({
       label: "Pro člena",
       content: <MemberHelp />,
     },
-    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp
+    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp || showSemaforHelp
       ? [
           {
             id: "moderator",
@@ -43,6 +49,8 @@ export function HelpPage({
                 attendance={showAttendanceHelp}
                 attendanceHistory={showAttendanceHistoryHelp}
                 internalMeetings={showInternalMeetingHelp}
+                semafor={showSemaforHelp}
+                semaforImport={showSemaforImportHelp}
               />
             ),
           },

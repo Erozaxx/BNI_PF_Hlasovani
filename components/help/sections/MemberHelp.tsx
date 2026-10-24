@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HelpSection } from "@/components/help/HelpParts";
+import { HELP_ATTENDANCE_MEMBER_UNEXCUSED, HELP_SEMAFOR_MEMBER } from "@/lib/semafor/texts";
 
 export function MemberHelp() {
   return (
@@ -300,8 +301,11 @@ export function MemberHelp() {
             q: "Jak smažu jméno náhradníka?",
             a: "Dole na stránce Docházka v Uložených jménech.",
           },
+          { q: "", a: HELP_ATTENDANCE_MEMBER_UNEXCUSED },
         ]}
       />
+
+      <HelpSection title="Semafor" faq={HELP_SEMAFOR_MEMBER.map((text) => ({ q: "", a: text }))} />
     </div>
   );
 }

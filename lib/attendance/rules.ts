@@ -18,6 +18,21 @@ import {
   pragueToday,
 } from "@/lib/members/activity";
 
+/**
+ * iter-041 (arch 7.3): stavy záznamu, které se počítají jako absence. Jediné
+ * místo pravdy pro TS (SQL protějšek je `absenceStatusSql` v
+ * lib/db/queries/attendance.ts). `unexcused` = „Chyběl(a) bez omluvy“.
+ */
+export const ABSENCE_STATUSES = ["absent", "unexcused"] as const;
+export type AbsenceStatus = (typeof ABSENCE_STATUSES)[number];
+
+export function isAbsenceStatus(status: string | null | undefined): status is AbsenceStatus {
+  return status === "absent" || status === "unexcused";
+}
+
+/** Zdroje záznamu docházky (`attendance_record.source`); `palms` = doplnění z PALMS (iter-041). */
+export const RECORD_SOURCES = ["manager", "auto", "palms"] as const;
+
 /** Začátek schůzky (pražský čas), stejný pro každý den (K4). Zdroj: `/pravidla/absence`. */
 export const ATTENDANCE_START = "07:30";
 
@@ -353,7 +368,7 @@ export function nextThursday(from: string): string {
 // ── Značky dne v kalendáři ───────────────────────────────────
 
 export type AbsenceMark = "none" | "absent" | "substitute";
-export type PastResult = "present" | "substitute" | "absent";
+export type PastResult = "present" | "substitute" | "absent" | "unexcused";
 
 export function absenceMark(substituteName: string | null | undefined, hasAbsence: boolean): AbsenceMark {
   if (!hasAbsence) return "none";
@@ -370,6 +385,8 @@ export function absenceLine(date: string, substituteName: string | null): string
 function pastResultText(result: PastResult): string {
   if (result === "present") return "přítomen";
   if (result === "substitute") return "náhradník";
+  // iter-041: „Chyběl(a) bez omluvy“ (gate sekce 5: aria „absence bez omluvy“).
+  if (result === "unexcused") return "absence bez omluvy";
   return "absence";
 }
 

@@ -36,6 +36,10 @@
     "test:iter-039": "npm run test:iter-039-omluvy && npm run test:iter-038",
     "test:iter-040-interni": "tsx scripts/test-iter-040-interni.ts",
     "test:iter-040": "npm run test:iter-040-interni && npm run test:iter-039",
+    "test:iter-041-semafor": "tsx scripts/test-iter-041-semafor.ts",
+    "test:iter-041-attendance": "tsx scripts/test-iter-041-attendance.ts",
+    "test:iter-041-palms": "REQUIRE_PGLITE=1 tsx scripts/test-iter-041-palms.ts",
+    "test:iter-041": "npm run test:iter-041-semafor && npm run test:iter-041-attendance && npm run test:iter-041-palms && npm run test:iter-040",
     "test:iter-035-burza": "tsx scripts/test-iter-035-burza.ts",
     "test:iter-035b-burza": "tsx scripts/test-iter-035b-burza.ts",
     "test:iter-035": "npm run test:iter-035b-burza && npm run test:iter-035-burza && npm run test:iter-033 && npm run test:iter-032-access",
@@ -65,6 +69,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.2.17",
     "@types/bcryptjs": "^2.4.0",
     "@types/node": "^20",
     "@types/react": "^18.3.0",

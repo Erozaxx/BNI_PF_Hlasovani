@@ -84,6 +84,11 @@ export const KIND_LABELS: Record<string, string> = {
   "burza.help-removed": "Burza: záznam pomoci smazán",
   "burza.contact-by-management": "Burza: kontakt zapsalo vedení",
   "burza.contact-use-removed": "Burza: využití kontaktu smazáno",
+  // iter-041 (arch 10): semafor
+  "semafor.imported": "Semafor: import uložen",
+  "semafor.month-deleted": "Semafor: měsíc smazán",
+  "semafor.row-deleted": "Semafor: řádek smazán",
+  "semafor.alias-removed": "Semafor: párování smazáno",
 };
 
 export function kindLabel(kind: string): string {

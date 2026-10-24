@@ -20,7 +20,8 @@ import {
   CLAIM_STALE_MINUTES,
   REPORT_RESUME_HOURS,
 } from "@/lib/attendance/cron-plan";
-import { absenceWindowStart } from "@/lib/attendance/rules";
+import { absenceWindowStart, isAbsenceStatus } from "@/lib/attendance/rules";
+import { absenceStatusSql } from "@/lib/db/queries/absence-status";
 import type { ReportMember } from "@/lib/attendance/report";
 
 function getDb() {
@@ -201,36 +202,51 @@ export async function countExcusedFor(date: string): Promise<{ excused: number; 
 
 // ── Uzavření dne (arch 10.2) ─────────────────────────────────
 
+/**
+ * Režim uzavřeného dne. `recorded` = správce ten den zapisoval (je aspoň jeden
+ * jeho řádek), `unrecorded` = nezapisoval nikdo. Pravidlo doplnění řádků je v
+ * obou režimech stejné (kdo ohlásil nepřítomnost, platí ohlášení, kdo nic
+ * neohlásil, je přítomen), liší se jen tím, zda se přítomným řádek zapíše:
+ * `recorded` ho zapíše (report a přehledy mají úplná data), `unrecorded` ne
+ * (report ukazuje jen výjimky a nad ním stojí věta „Ostatní se počítají jako
+ * přítomní“).
+ */
 export type DayMode = "recorded" | "unrecorded";
 
 /**
- * Krok 1: doplnění řádků, idempotentní (`ON CONFLICT DO NOTHING`), `source =
- * 'auto'`, `version = 1`, `updated_by NULL`.
+ * SQL kroku 1 (doplnění řádků). Jeden příkaz, idempotentní (`ON CONFLICT DO
+ * NOTHING`): existující řádek (`present`, `substitute`, explicitní `absent` po
+ * odškrtnutí „Přítomen“, `unexcused`) se nikdy nepřepíše. Nové řádky mají
+ * `source = 'auto'`, `version = 1`, `updated_by NULL`.
  *
- * - `recorded`: každý aktivní člen s `joined_at <= D` bez řádku dostane `absent`
- *   (ohlášený náhradník, který nepřišel, je tedy absence);
- * - `unrecorded`: jen členové s ohlášením na D, bez náhradníka `absent`, s
- *   náhradníkem `substitute` + jméno. Ostatní bez řádku jsou přítomni.
+ * Pro aktivního člena s `joined_at <= D` bez řádku:
+ * - ohlášení bez náhradníka = `absent` (omluvená absence),
+ * - ohlášení s náhradníkem = `substitute` se jménem z ohlášení,
+ * - bez ohlášení: `recorded` doplní `present`, `unrecorded` nic.
  *
- * Vrací počet nově vložených řádků.
+ * Samostatná funkce, aby šel stejný příkaz spustit v testu nad pglite.
  */
-export async function fillDayRows(date: string, mode: DayMode): Promise<number> {
+export function fillDayRowsSql(date: string, mode: DayMode): SQL {
   if (mode === "recorded") {
-    const result = await getDb().execute<{ n: number }>(sql`
+    return sql`
       WITH ins AS (
         INSERT INTO attendance_record
           (attendance_date, member_id, status, substitute_name, source, version, updated_by)
-        SELECT ${date}::date, m.id, 'absent', NULL, 'auto', 1, NULL
+        SELECT ${date}::date, m.id,
+               CASE WHEN a.member_id IS NULL THEN 'present'
+                    WHEN a.substitute_name IS NULL THEN 'absent'
+                    ELSE 'substitute' END,
+               a.substitute_name, 'auto', 1, NULL
         FROM member m
+        LEFT JOIN member_absence a ON a.member_id = m.id AND a.absence_date = ${date}::date
         WHERE ${memberActiveSql("m")} AND m.joined_at <= ${date}::date
         ON CONFLICT (attendance_date, member_id) DO NOTHING
         RETURNING 1
       )
       SELECT count(*)::int AS n FROM ins
-    `);
-    return Number(result.rows[0]?.n ?? 0);
+    `;
   }
-  const result = await getDb().execute<{ n: number }>(sql`
+  return sql`
     WITH ins AS (
       INSERT INTO attendance_record
         (attendance_date, member_id, status, substitute_name, source, version, updated_by)
@@ -245,7 +261,12 @@ export async function fillDayRows(date: string, mode: DayMode): Promise<number> 
       RETURNING 1
     )
     SELECT count(*)::int AS n FROM ins
-  `);
+  `;
+}
+
+/** Krok 1: doplnění řádků (viz `fillDayRowsSql`). Vrací počet nově vložených řádků. */
+export async function fillDayRows(date: string, mode: DayMode): Promise<number> {
+  const result = await getDb().execute<{ n: number }>(fillDayRowsSql(date, mode));
   return Number(result.rows[0]?.n ?? 0);
 }
 
@@ -374,12 +395,12 @@ export async function loadReportRows(date: string): Promise<ReportRows> {
            (ma.member_id IS NOT NULL) AS excused,
            (ma.substitute_name IS NOT NULL) AS ann_sub,
            r.source, ${isoSql(sql`r.updated_at`)} AS updated_at, ub.name AS updated_by_name,
-           CASE WHEN r.status = 'absent' THEN (
+           CASE WHEN ${absenceStatusSql("r")} THEN (
              SELECT count(*)::int
              FROM attendance_record x
              JOIN attendance_day xd
                ON xd.attendance_date = x.attendance_date AND xd.finalized_at IS NOT NULL
-             WHERE x.member_id = r.member_id AND x.status = 'absent'
+             WHERE x.member_id = r.member_id AND ${absenceStatusSql("x")}
                AND x.attendance_date > ${from}::date AND x.attendance_date <= ${date}::date
            ) END AS ordinal
     FROM attendance_record r
@@ -394,14 +415,15 @@ export async function loadReportRows(date: string): Promise<ReportRows> {
   const writers = new Set<string>();
   let lastChange: string | null = null;
   for (const r of result.rows) {
-    const status = r.status === "present" || r.status === "substitute" ? r.status : "absent";
+    const status =
+      r.status === "present" || r.status === "substitute" || r.status === "unexcused" ? r.status : "absent";
     members.push({
       name: r.name,
       status,
       substituteName: r.substitute_name,
       excused: Boolean(r.excused),
       announcedSubstitute: Boolean(r.ann_sub),
-      ordinal: status === "absent" && r.ordinal !== null ? Number(r.ordinal) : null,
+      ordinal: isAbsenceStatus(status) && r.ordinal !== null ? Number(r.ordinal) : null,
     });
     if (r.source === "manager") {
       if (r.updated_by_name) writers.add(r.updated_by_name);

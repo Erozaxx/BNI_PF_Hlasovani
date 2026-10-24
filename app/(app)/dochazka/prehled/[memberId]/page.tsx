@@ -12,6 +12,7 @@ import {
   absenceLine,
   absenceWindowStart,
   formatWeekdayFull,
+  isAbsenceStatus,
 } from "@/lib/attendance/rules";
 import { OVERVIEW_TEXTS } from "@/lib/attendance/sheet";
 import {
@@ -29,7 +30,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function resultText(status: string, substituteName: string | null, excused: boolean): string {
   if (status === "present") return "přítomen";
   if (status === "substitute") return `náhradník ${substituteName ?? ""}`.trim();
-  return excused ? "absence, omluven(a)" : "absence, bez omluvy";
+  return excused && status !== "unexcused" ? "absence, omluven(a)" : "absence, bez omluvy";
 }
 
 /**
@@ -59,7 +60,7 @@ export default async function AttendanceMemberDetailPage({
     can(session, "attendance.audit_view") ? listAuditForMember(memberId) : Promise.resolve(null),
   ]);
 
-  const absences = days.filter((d) => d.status === "absent").length;
+  const absences = days.filter((d) => isAbsenceStatus(d.status)).length;
   const warn = absences >= ABSENCE_LIMIT;
 
   return (

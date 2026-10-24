@@ -95,7 +95,14 @@ export type OpsEventKind =
   | "burza.offer-removed"
   | "burza.help-removed"
   | "burza.contact-by-management"
-  | "burza.contact-use-removed";
+  | "burza.contact-use-removed"
+  // iter-041 (arch 10, K15): semafor. Jednorázové události s vlastním runId,
+  // proto všechny v TERMINAL_KINDS. Počty řádků ano, nikdy jména, `memberId`,
+  // skóre ani hash souboru (`/status` vidí i moderátor).
+  | "semafor.imported"
+  | "semafor.month-deleted"
+  | "semafor.row-deleted"
+  | "semafor.alias-removed";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).
@@ -133,6 +140,10 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "burza.help-removed",
   "burza.contact-by-management",
   "burza.contact-use-removed",
+  "semafor.imported",
+  "semafor.month-deleted",
+  "semafor.row-deleted",
+  "semafor.alias-removed",
 ];
 
 /**

@@ -12,6 +12,8 @@ export default async function HelpPageRoute() {
       showAttendanceHelp={can(session, "attendance.view_all")}
       showAttendanceHistoryHelp={can(session, "attendance.edit_history")}
       showInternalMeetingHelp={can(session, "attendance.internal_manage")}
+      showSemaforHelp={can(session, "semafor.view_all")}
+      showSemaforImportHelp={can(session, "semafor.import")}
     />
   );
 }

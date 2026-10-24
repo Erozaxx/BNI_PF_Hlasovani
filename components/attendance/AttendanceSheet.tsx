@@ -15,9 +15,12 @@ import {
   newRowSync,
   nextRequest,
   rowChecked,
+  rowDecided,
   summarizeSheet,
   summaryText,
   targetOnCheck,
+  unexcusedAllowedAt,
+  TARGET_UNEXCUSED,
   type DayPayload,
   type PresenceTarget,
   type RowSync,
@@ -145,6 +148,12 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
   const [subOpen, setSubOpen] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "open">("all");
   const [unlocked, setUnlocked] = useState(false);
+  // iter-041 (Z1): „Chyběl(a) bez omluvy“ je od 7:30 v den schůzky, čas se průběžně obnovuje.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 20_000);
+    return () => clearInterval(t);
+  }, []);
 
   const syncRef = useRef<Record<string, RowSync>>({});
   const serverRows = useRef<Record<string, SheetRow>>({});
@@ -335,6 +344,11 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
     issueTarget(row, rowChecked(row) ? TARGET_ABSENT : targetOnCheck(row));
   }
 
+  function onToggleUnexcused(row: SheetRow) {
+    setSubOpen((s) => ({ ...s, [row.memberId]: false }));
+    issueTarget(row, row.status === "unexcused" ? TARGET_ABSENT : TARGET_UNEXCUSED);
+  }
+
   function onToggleSub(row: SheetRow, checked: boolean) {
     if (checked) {
       setSubOpen((s) => ({ ...s, [row.memberId]: true }));
@@ -389,10 +403,21 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
   const locked = payload.guardUnrecordedDay && !unlocked;
   const presenceDisabled = payload.mode === "denied" || locked;
   const excuseDisabled = payload.excuseMode === "denied" || locked;
-  const visible = filter === "open" ? rows.filter((r) => !rowChecked(r)) : rows;
+  const visible = filter === "open" ? rows.filter((r) => !rowDecided(r)) : rows;
+  const unexcusedOpen = unexcusedAllowedAt(now, payload.date);
 
   return (
     <div className="space-y-4">
+      <div
+        className="rounded-card border border-border bg-surface px-4 py-3 text-sm text-text-main"
+        data-testid="sheet-intro"
+      >
+        <p className="font-medium">{SHEET_TEXTS.introTitle}</p>
+        <p className="mt-1">{SHEET_TEXTS.introWays}</p>
+        <p className="mt-1">{SHEET_TEXTS.introSubstitute}</p>
+        <p className="mt-1">{SHEET_TEXTS.introOpen}</p>
+        <p className="mt-1">{SHEET_TEXTS.introExcuse}</p>
+      </div>
       <div className="sticky top-0 z-10 -mx-1 space-y-2 border-b border-border bg-background px-1 py-2">
         <p className="text-sm font-medium text-text-main" aria-live="polite">
           {summary}
@@ -501,13 +526,28 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
                       type="checkbox"
                       className="h-5 w-5 accent-primary"
                       checked={row.excused}
-                      disabled={excuseDisabled || state.saving}
+                      disabled={excuseDisabled || state.saving || row.status === "unexcused"}
                       onChange={(e) => void onToggleExcuse(row, e.target.checked)}
                     />
                     {SHEET_TEXTS.excused}
                   </label>
                 )}
+                {!checked && !row.excused && (
+                  <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-text-main">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-primary"
+                      checked={row.status === "unexcused"}
+                      disabled={presenceDisabled || (!unexcusedOpen && row.status !== "unexcused")}
+                      onChange={() => onToggleUnexcused(row)}
+                    />
+                    {SHEET_TEXTS.unexcused}
+                  </label>
+                )}
               </div>
+              {!checked && !row.excused && !unexcusedOpen && row.status !== "unexcused" && (
+                <p className="text-xs text-text-muted">{SHEET_TEXTS.unexcusedTooEarlyHint}</p>
+              )}
 
               {showSubInput && (
                 <SubstituteInput

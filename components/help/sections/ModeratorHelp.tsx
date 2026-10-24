@@ -1,4 +1,5 @@
 import { HelpSection } from "@/components/help/HelpParts";
+import { HELP_ATTENDANCE_MANAGER_UNEXCUSED, HELP_SEMAFOR_LEADERSHIP } from "@/lib/semafor/texts";
 
 interface ModeratorHelpProps {
   /** Funkce vedení (session s heslem). Správce docházky přihlášený odkazem je nemá. */
@@ -9,6 +10,10 @@ interface ModeratorHelpProps {
   attendanceHistory?: boolean;
   /** iter-040: právo `attendance.internal_manage`: sekce „Interní schůzka“. */
   internalMeetings?: boolean;
+  /** iter-041: právo `semafor.view_all`: sekce „Semafor pro vedení“. */
+  semafor?: boolean;
+  /** iter-041: právo `semafor.import`: první tři body sekce „Semafor pro vedení“. */
+  semaforImport?: boolean;
 }
 
 export function ModeratorHelp({
@@ -16,6 +21,8 @@ export function ModeratorHelp({
   attendance = false,
   attendanceHistory = false,
   internalMeetings = false,
+  semafor = false,
+  semaforImport = false,
 }: ModeratorHelpProps = {}) {
   return (
     <div className="space-y-8">
@@ -25,7 +32,8 @@ export function ModeratorHelp({
             title="Docházka pro správce"
             steps={[
               "V den schůzky vám ráno před 7:00 přijde mail s odkazem na zápis. Platí 12 hodin a nepotřebuje přihlášení. Docházku najdete i v aplikaci v menu Docházka, záložka Zápis.",
-              "Zaškrtněte Přítomen u každého, kdo přišel. Když za člena přišel náhradník, zaškrtněte i „s náhradníkem“ a napište jméno. Ohlášený náhradník se vyplní sám.",
+              "Zapisovat jde dvěma způsoby: průběžně zaškrtávejte Přítomen u příchozích, nebo označte jen ty, kdo chyběli (Chyběl(a) bez omluvy, případně odškrtněte Přítomen).",
+              "Náhradníka zapíšete tak, že u člena zaškrtnete Přítomen, tím se zpřístupní volba „s náhradníkem“ (u ohlášeného náhradníka se jméno vyplní samo). Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený. Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka.",
               "Kdo se omluvil až ráno, tomu zaškrtněte Omluven(a).",
               "Každé kliknutí se hned uloží. Když řádek mezitím změnil jiný správce, uvidíte jeho stav a hlášku. Klikněte znovu.",
               "V 17:00 se den uzavře a přijde vám report. Potom už zápis nejde.",
@@ -39,6 +47,7 @@ export function ModeratorHelp({
                 q: "Kdo se na schůzku omluvil?",
                 a: "V menu Docházka, záložka Omluvy. Číslo pod dnem je počet omluvených. Klepněte na den a pod kalendářem uvidíte, kdo se omluvil a jestli posílá náhradníka.",
               },
+              { q: "", a: HELP_ATTENDANCE_MANAGER_UNEXCUSED },
             ]}
           />
           {attendanceHistory && (
@@ -48,6 +57,16 @@ export function ModeratorHelp({
             />
           )}
         </>
+      )}
+
+      {semafor && (
+        <HelpSection
+          title="Semafor pro vedení"
+          faq={HELP_SEMAFOR_LEADERSHIP.filter((h) => semaforImport || !h.importOnly).map((h) => ({
+            q: "",
+            a: h.text,
+          }))}
+        />
       )}
 
       {internalMeetings && (

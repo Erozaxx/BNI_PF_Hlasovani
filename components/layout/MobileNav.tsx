@@ -97,6 +97,13 @@ export function MobileNav({ show, name }: MobileNavProps) {
           Burza pomoci
         </Link>
         <Link
+          href="/semafor"
+          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+          onClick={() => setOpen(false)}
+        >
+          Semafor
+        </Link>
+        <Link
           href="/dochazka"
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
           onClick={() => setOpen(false)}

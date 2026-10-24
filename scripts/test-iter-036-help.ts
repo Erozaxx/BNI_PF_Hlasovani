@@ -8,6 +8,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  HELP_ATTENDANCE_MANAGER_UNEXCUSED,
+  HELP_ATTENDANCE_MEMBER_UNEXCUSED,
+  HELP_SEMAFOR_LEADERSHIP,
+  HELP_SEMAFOR_MEMBER,
+} from "../lib/semafor/texts";
 
 const ROOT = join(__dirname, "..");
 
@@ -303,6 +309,38 @@ const tests: TestCase[] = [
       assert.ok(!MODERATOR.includes("Interní schůzky se v aplikaci nezakládají."), "stará věta musí zmizet");
       assert.ok(MODERATOR.includes("Interní schůzku založíte v menu Docházka. Případ ze zásobníku zařadíte na čtvrtek"));
       assert.ok(read("app/(app)/help/page.tsx").includes('can(session, "attendance.internal_manage")'));
+    },
+  },
+  {
+    name: "16. iter-041: nápověda semaforu a „Chyběl(a) bez omluvy“ doslova podle gate sekce 5, bez U+2014",
+    run: () => {
+      // Nápověda se skládá z konstant bonusu, proto se kontroluje výsledný text, ne zdroják.
+      const texts = [
+        read("lib/semafor/texts.ts"),
+        HELP_SEMAFOR_MEMBER.join("\n"),
+        HELP_SEMAFOR_LEADERSHIP.map((h) => h.text).join("\n"),
+        read("lib/attendance/texts.ts"),
+        HELP_ATTENDANCE_MEMBER_UNEXCUSED,
+        HELP_ATTENDANCE_MANAGER_UNEXCUSED,
+      ].join("\n");
+      const must = [
+        "Semafor ukazuje vaše skóre podle BNI za posledních 6 měsíců a k němu bonus za to, co děláte pro chapter. Vedení nahrává data BNI jednou měsíčně.",
+        "Bonus: 7 bodů za odprezentovaný Master mind, 5 bodů za každou pomoc nebo kontakt, které někdo v Burze pomoci označí jako využité. Za 6 měsíců nejvýš 20 bodů.",
+        "Barvu určuje skóre s bonusem: zelená od 70 bodů, žlutá od 50, červená od 30, šedá pod 30. Vedle vidíte i barvu podle BNI bez bonusu.",
+        "Své hodnoty vidíte jen vy, vedení a členský výbor. Ostatní členové vidí jen počty členů v každé barvě, bez jmen.",
+        "Když vám hodnoty nesedí, ozvěte se vedení.",
+        "Když nepřijdete, do 7:30 se neomluvíte a nepošlete náhradníka, zapíše vás správce docházky jako Chyběl(a) bez omluvy. Do absencí se to počítá stejně jako omluvená absence.",
+        "Chyběl(a) bez omluvy zaškrtněte u člena, který nepřišel, neomluvil se a neposlal náhradníka. Jde to od 7:30, do té doby se člen může omluvit. U omluveného člena volba není, nejdřív zrušte omluvu.",
+        "Vlastní případ v Master mindu nepotvrzujte, potvrdí ho jiný člen vedení. Odprezentovaný případ dává bonus 7 bodů do semaforu.",
+      ];
+      for (const m of must) assert.ok(texts.includes(m), m.slice(0, 40));
+      assert.ok(!texts.includes(String.fromCharCode(0x2014)));
+      assert.ok(MEMBER.includes("HELP_SEMAFOR_MEMBER") && MEMBER.includes('title="Semafor"'));
+      assert.ok(MEMBER.includes("HELP_ATTENDANCE_MEMBER_UNEXCUSED"));
+      assert.ok(MODERATOR.includes('title="Semafor pro vedení"') && MODERATOR.includes("HELP_SEMAFOR_LEADERSHIP") && MODERATOR.includes("semaforImport || !h.importOnly"));
+      assert.ok(MODERATOR.includes("HELP_ATTENDANCE_MANAGER_UNEXCUSED"));
+      const page = read("app/(app)/help/page.tsx");
+      assert.ok(page.includes('showSemaforHelp={can(session, "semafor.view_all")}'));
     },
   },
 ];

@@ -7,6 +7,7 @@ import { sortCases } from "@/lib/mastermind/sort";
 import {
   formatDM,
   formatWeekdayDM,
+  MESSAGES,
   thursdayOptions,
   type ThursdayOption,
 } from "@/lib/mastermind/rules";
@@ -98,7 +99,14 @@ export default async function MastermindPage() {
                     Interní {formatDM(r.internalDate ?? "")}: {r.title}, {r.presenterName}
                   </p>
                   <div className="mt-3">
-                    <ConfirmPresentedButtons caseId={r.id} mode="scheduled" canConfirm />
+                    <ConfirmPresentedButtons
+                      caseId={r.id}
+                      mode="scheduled"
+                      canConfirm={r.memberId !== session.memberId}
+                    />
+                    {r.memberId === session.memberId && (
+                      <p className="mt-2 text-sm text-text-muted">{MESSAGES.ownCase}</p>
+                    )}
                   </div>
                 </Card>
               </li>

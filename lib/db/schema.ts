@@ -8,6 +8,7 @@ import {
   smallint,
   bigint,
   date,
+  numeric,
   jsonb,
   primaryKey,
   unique,
@@ -173,8 +174,8 @@ export const attendanceRecord = pgTable(
   (table) => ({
     pk: primaryKey({ columns: [table.attendanceDate, table.memberId] }),
     memberIdx: index("idx_attendance_record_member").on(table.memberId, table.attendanceDate),
-    statusCheck: check("ar_status", sql`${table.status} IN ('absent', 'present', 'substitute')`),
-    sourceCheck: check("ar_source", sql`${table.source} IN ('manager', 'auto')`),
+    statusCheck: check("ar_status", sql`${table.status} IN ('absent', 'present', 'substitute', 'unexcused')`),
+    sourceCheck: check("ar_source", sql`${table.source} IN ('manager', 'auto', 'palms')`),
     subCheck: check(
       "ar_sub",
       sql`(${table.status} = 'substitute') = (${table.substituteName} IS NOT NULL)`
@@ -293,6 +294,118 @@ export const attendanceAudit = pgTable(
     dateIdx: index("idx_attendance_audit_date").on(table.attendanceDate),
     memberIdx: index("idx_attendance_audit_member").on(table.memberId, table.attendanceDate),
     fieldCheck: check("aa_field", sql`${table.field} IN ('presence', 'absence')`),
+  })
+);
+
+
+// ============================================================
+// SEMAFOR (iter-041, arch 4, gate Z8 až Z11)
+// ============================================================
+// Tabulky zakládá scripts/migrate-iter-041-semafor.ts (zdroj pravdy pro DDL).
+// Barva ani bonus se neukládají: barvu počítá `colorFromTotal`, bonus se počítá
+// živě z mastermind_case, burza_help a burza_contact_use (lib/semafor/bonus.ts).
+
+/** Historie nahrání souboru se skóre (kdo, kdy, za jaký měsíc, hash souboru). */
+export const semaforImport = pgTable(
+  "semafor_import",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    month: date("month").notNull(),
+    uploadedBy: uuid("uploaded_by").references(() => member.id, { onDelete: "set null" }),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    fileSha256: text("file_sha256").notNull(),
+    rowCount: integer("row_count").notNull(),
+    savedCount: integer("saved_count").notNull(),
+  },
+  (table) => ({
+    monthIdx: index("idx_semafor_import_month").on(table.month, sql`${table.uploadedAt} DESC`),
+    shaIdx: index("idx_semafor_import_sha").on(table.fileSha256),
+    monthFirst: check(
+      "semafor_import_month_first",
+      sql`${table.month} = date_trunc('month', ${table.month}::timestamp)::date`
+    ),
+    sha: check("semafor_import_sha", sql`${table.fileSha256} ~ '^[0-9a-f]{64}$'`),
+    counts: check("semafor_import_counts", sql`${table.rowCount} >= 0 AND ${table.savedCount} >= 0`),
+  })
+);
+
+/** Snímek skóre BNI za měsíc a člena. PK (month, member_id) je klíč deduplikace. */
+export const semaforScore = pgTable(
+  "semafor_score",
+  {
+    month: date("month").notNull(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    importId: uuid("import_id").references(() => semaforImport.id, { onDelete: "set null" }),
+    totalScore: numeric("total_score", { precision: 5, scale: 2 }).notNull(),
+    attendanceRate: numeric("attendance_rate", { precision: 6, scale: 4 }),
+    attendanceScore: numeric("attendance_score", { precision: 5, scale: 2 }),
+    ceuRate: numeric("ceu_rate", { precision: 8, scale: 3 }),
+    ceuScore: numeric("ceu_score", { precision: 5, scale: 2 }),
+    oneToOneRate: numeric("one_to_one_rate", { precision: 8, scale: 3 }),
+    oneToOneScore: numeric("one_to_one_score", { precision: 5, scale: 2 }),
+    referralsGivenRate: numeric("referrals_given_rate", { precision: 8, scale: 3 }),
+    referralsGivenScore: numeric("referrals_given_score", { precision: 5, scale: 2 }),
+    tyfcb: numeric("tyfcb", { precision: 14, scale: 2 }),
+    tyfcbScore: numeric("tyfcb_score", { precision: 5, scale: 2 }),
+    visitors: numeric("visitors", { precision: 10, scale: 3 }),
+    visitorScore: numeric("visitor_score", { precision: 5, scale: 2 }),
+    sponsors: numeric("sponsors", { precision: 10, scale: 3 }),
+    sponsorScore: numeric("sponsor_score", { precision: 5, scale: 2 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.month, table.memberId] }),
+    memberIdx: index("idx_semafor_score_member").on(table.memberId, sql`${table.month} DESC`),
+    monthFirst: check(
+      "semafor_score_month_first",
+      sql`${table.month} = date_trunc('month', ${table.month}::timestamp)::date`
+    ),
+    total: check("semafor_score_total", sql`${table.totalScore} BETWEEN 0 AND 100`),
+    attendanceRate: check(
+      "semafor_score_attendance_rate",
+      sql`${table.attendanceRate} IS NULL OR ${table.attendanceRate} BETWEEN 0 AND 1`
+    ),
+    scores: check(
+      "semafor_score_scores",
+      sql`(${table.attendanceScore} IS NULL OR ${table.attendanceScore} BETWEEN 0 AND 100)
+        AND (${table.ceuScore} IS NULL OR ${table.ceuScore} BETWEEN 0 AND 100)
+        AND (${table.oneToOneScore} IS NULL OR ${table.oneToOneScore} BETWEEN 0 AND 100)
+        AND (${table.referralsGivenScore} IS NULL OR ${table.referralsGivenScore} BETWEEN 0 AND 100)
+        AND (${table.tyfcbScore} IS NULL OR ${table.tyfcbScore} BETWEEN 0 AND 100)
+        AND (${table.visitorScore} IS NULL OR ${table.visitorScore} BETWEEN 0 AND 100)
+        AND (${table.sponsorScore} IS NULL OR ${table.sponsorScore} BETWEEN 0 AND 100)`
+    ),
+    rates: check(
+      "semafor_score_rates",
+      sql`(${table.ceuRate} IS NULL OR ${table.ceuRate} BETWEEN 0 AND 1000)
+        AND (${table.oneToOneRate} IS NULL OR ${table.oneToOneRate} BETWEEN 0 AND 1000)
+        AND (${table.referralsGivenRate} IS NULL OR ${table.referralsGivenRate} BETWEEN 0 AND 1000)`
+    ),
+    counts: check(
+      "semafor_score_counts",
+      sql`(${table.tyfcb} IS NULL OR ${table.tyfcb} >= 0)
+        AND (${table.visitors} IS NULL OR ${table.visitors} >= 0)
+        AND (${table.sponsors} IS NULL OR ${table.sponsors} >= 0)`
+    ),
+  })
+);
+
+/** Paměť ručně spárovaných jmen ze souboru (klíč = normalizované jméno). */
+export const semaforNameAlias = pgTable(
+  "semafor_name_alias",
+  {
+    nameKey: text("name_key").primaryKey(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    memberIdx: index("idx_semafor_alias_member").on(table.memberId),
+    keyLen: check("semafor_alias_key_len", sql`char_length(${table.nameKey}) BETWEEN 2 AND 120`),
   })
 );
 
@@ -1354,7 +1467,7 @@ export const burzaContactUse = pgTable(
 // CHAPTER FUNCTION + MEMBER FUNCTION (iter-037, arch 3.2)
 // ============================================================
 // Funkce chapteru (Prezident, Viceprezident, Člen výboru). `permissions` NULL = výchozí sada
-// (lib/auth/permissions.ts, DEFAULT_FUNCTION_PERMISSIONS). Prezident a
+// (lib/auth/permissions.ts, DEFAULT_FUNCTION_PERMISSIONS; role moderator má MODERATOR_ROLE_PERMISSIONS). Prezident a
 // Viceprezident mají v datech plnou sadu. Editor práv není součástí iter-037.
 export const chapterFunction = pgTable(
   "chapter_function",
@@ -1409,3 +1522,4 @@ export const memberFunction = pgTable(
     functionIdx: index("idx_member_function_function").on(table.functionId),
   })
 );
+

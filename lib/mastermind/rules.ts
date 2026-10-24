@@ -167,10 +167,16 @@ export function canUnschedule(actor: Actor, c: CaseLike): boolean {
   return actor.isManagement && c.status === "scheduled";
 }
 
-/** Potvrzení „Proběhlo“ až v den interní nebo po ní. */
+/**
+ * Potvrzení „Proběhlo“ až v den interní nebo po ní. iter-041 (gate Z10): vedení
+ * nepotvrdí VLASTNÍ případ, protože odprezentovaný případ dává bonus do
+ * semaforu (7 bodů) a vedoucí by si dobarvoval sám. SQL protějšek má stejnou
+ * podmínku (`confirmPresentedGuarded`), tohle je jen skrytí tlačítka a hláška.
+ */
 export function canConfirm(actor: Actor, c: CaseLike, todayPrague: string): boolean {
   return (
     actor.isManagement &&
+    c.memberId !== actor.memberId &&
     c.status === "scheduled" &&
     c.internalDate !== null &&
     c.internalDate <= todayPrague
@@ -425,6 +431,8 @@ export const MESSAGES = {
   notProposed: "Případ už není v zásobníku.",
   notScheduled: "Případ už není zařazený.",
   cannotConfirm: "Proběhlo jde potvrdit až v den interní.",
+  /** iter-041 (Z10): shodné s `SEMAFOR_TEXTS.mmOwnCase`, test to hlídá. */
+  ownCase: "Vlastní případ potvrdí jiný člen vedení.",
   notPresented: "Případ ještě neproběhl.",
   undoLimit: (name: string) =>
     `${name} má už 5 otevřených případů, potvrzení vrátit nejde. Nejdřív některý stáhněte nebo potvrďte, že proběhl.`,
