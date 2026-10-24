@@ -374,6 +374,10 @@ export async function confirmPresentedAction(caseId: string): Promise<ActionResu
     if (!row) {
       const current = await getCaseById(caseId);
       if (!current) return { success: false, error: MESSAGES.notFound };
+      // iter-041 (Z10): vlastní případ potvrdí jiný člen vedení.
+      if (current.status === "scheduled" && current.memberId === actor.memberId) {
+        return { success: false, error: MESSAGES.ownCase };
+      }
       return {
         success: false,
         error: current.status === "scheduled" ? MESSAGES.cannotConfirm : MESSAGES.notScheduled,

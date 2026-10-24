@@ -14,6 +14,7 @@ import {
   ADMIN_DELEGABLE_MARKER,
   ADMIN_ONLY_MESSAGE,
   DEFAULT_FUNCTION_PERMISSIONS,
+  MODERATOR_ROLE_PERMISSIONS,
   DELEGABLE_PERMISSIONS,
   NON_DELEGABLE,
   NO_PERMISSION_MESSAGE,
@@ -208,9 +209,10 @@ const pw = (managementRole: "admin" | "moderator" | null, functions = [] as { na
 
 const tests: TestCase[] = [
   {
-    name: "9a. DEFAULT_FUNCTION_PERMISSIONS je přesně dnešní moderátor podle arch 6.1",
+    name: "9a. MODERATOR_ROLE_PERMISSIONS je přesně dnešní moderátor podle arch 6.1, DEFAULT_FUNCTION_PERMISSIONS k tomu přidává jen semafor.view_all (iter-041 Z7)",
     run: () => {
-      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...TODAY_MODERATOR].sort());
+      assert.deepEqual([...MODERATOR_ROLE_PERMISSIONS].sort(), [...TODAY_MODERATOR].sort());
+      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...TODAY_MODERATOR, "semafor.view_all"].sort());
       // zpřísnění N5, N6 a nová práva jen pro admina (a funkce s plnou sadou)
       for (const p of [
         "categories.manage",
@@ -227,8 +229,8 @@ const tests: TestCase[] = [
       }
       assert.equal(new Set(PERMISSIONS).size, PERMISSIONS.length, "katalog bez duplicit");
       // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
-      // iter-040: +1 (attendance.internal_manage).
-      assert.equal(PERMISSIONS.length, 25);
+      // iter-040: +1 (attendance.internal_manage), iter-041: +2 (semafor.view_all, semafor.import).
+      assert.equal(PERMISSIONS.length, 27);
     },
   },
   {
@@ -289,8 +291,8 @@ const tests: TestCase[] = [
       assert.deepEqual([...pw("admin")].sort(), [...PERMISSIONS].sort());
       // moderátor bez funkce = dnešní moderátor
       assert.deepEqual([...pw("moderator")].sort(), [...TODAY_MODERATOR].sort());
-      // Člen výboru (NULL) = výchozí sada
-      assert.deepEqual([...pw("moderator", [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR].sort());
+      // Člen výboru (NULL) = výchozí sada funkce (iter-041 Z7: moderátor + přehled semaforu)
+      assert.deepEqual([...pw("moderator", [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all"].sort());
       // Prezident a Viceprezident (značka): všechna práva admina KROMĚ nedelegovatelných
       assert.deepEqual([...pw("moderator", [fn("Prezident", [ADMIN_DELEGABLE_MARKER])])].sort(), [...DELEGABLE].sort());
       // i kdyby měla funkce v datech celý katalog, nedelegovatelná práva nedostane
@@ -303,7 +305,7 @@ const tests: TestCase[] = [
       assert.ok(!([...pw("moderator", [fn("X", ["bogus"])])] as string[]).includes("bogus"));
       // T-003b: držitel funkce BEZ role má práva funkce (heslo mu stačí), bez role i funkce nic
       assert.deepEqual([...pw(null, [fn("Prezident", [ADMIN_DELEGABLE_MARKER])])].sort(), [...DELEGABLE].sort());
-      assert.deepEqual([...pw(null, [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR].sort());
+      assert.deepEqual([...pw(null, [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all"].sort());
       // funkce bez role NEdostane výchozí sadu navíc: jen to, co funkce dává
       assert.deepEqual([...pw(null, [fn("X", ["timers.manage"])])], ["timers.manage"]);
       assert.equal(pw(null).size, 0);

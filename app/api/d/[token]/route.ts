@@ -4,6 +4,7 @@ import { getClientIp } from "@/lib/auth/throttle";
 import { loadDayPayload } from "@/lib/attendance/day-view";
 import { linkProblemStatus, linkProblemText } from "@/lib/attendance/link-page";
 import { SHEET_TEXTS, decideAttendanceWriteMode, parseWriteBody, type SheetRow } from "@/lib/attendance/sheet";
+import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
 import {
   getDayMeta,
   listSheetRows,
@@ -102,6 +103,7 @@ export async function POST(
     let closed = false;
     let inactive = false;
     let conflict = false;
+    let blocked: string | null = null;
 
     if (body.op === "presence") {
       const res = await writePresenceGuarded({
@@ -115,6 +117,8 @@ export async function POST(
       });
       if (res.result === "day-closed") closed = true;
       else if (res.result === "inactive") inactive = true;
+      else if (res.result === "too-early") blocked = UNEXCUSED_TEXTS.tooEarly;
+      else if (res.result === "excused-conflict") blocked = UNEXCUSED_TEXTS.excusedConflict;
       else if (res.result === "conflict") conflict = true;
     } else {
       const res = await setExcuseGuarded({
@@ -126,6 +130,7 @@ export async function POST(
       });
       if (res.result === "day-closed") closed = true;
       else if (res.result === "inactive") inactive = true;
+      else if (res.result === "unexcused-conflict") blocked = UNEXCUSED_TEXTS.unexcusedConflict;
     }
 
     const row: SheetRow | null = (await listSheetRows(date, body.memberId))[0] ?? null;
@@ -134,6 +139,7 @@ export async function POST(
       return json({ result: "finalized", mode: "denied", message: SHEET_TEXTS.errClosed, row }, 409);
     }
     if (inactive) return json({ result: "inactive", message: SHEET_TEXTS.errInactive, row }, 409);
+    if (blocked) return json({ result: "blocked", message: blocked, row }, 409);
     if (conflict) return json({ result: "conflict", row }, 409);
     return json({ result: "ok", row });
   } catch (err) {

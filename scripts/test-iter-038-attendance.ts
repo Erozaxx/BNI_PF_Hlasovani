@@ -21,6 +21,7 @@ import {
   ATTENDANCE_MANAGER_PERMISSIONS,
   ADMIN_DELEGABLE_MARKER,
   DEFAULT_FUNCTION_PERMISSIONS,
+  MODERATOR_ROLE_PERMISSIONS,
   PERMISSIONS,
   permissionsFor,
   type Permission,
@@ -285,8 +286,8 @@ const tests: TestCase[] = [
       assert.ok(!committeeFlag.has("attendance.edit_history"));
       // běžný člen s heslem? (bez role i funkce) + příznak: jen čtyři práva správce
       assert.deepEqual([...perms("password", null, [], true)].sort(), [...ATTENDANCE_MANAGER_PERMISSIONS].sort());
-      // moderátor bez příznaku: dnešní moderátor beze změny
-      assert.deepEqual([...moderator].sort(), [...DEFAULT_FUNCTION_PERMISSIONS].sort());
+      // moderátor bez příznaku: dnešní moderátor beze změny (iter-041 Z7: sada role, ne funkce)
+      assert.deepEqual([...moderator].sort(), [...MODERATOR_ROLE_PERMISSIONS].sort());
     },
   },
   {
@@ -294,7 +295,7 @@ const tests: TestCase[] = [
     run: () => {
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
-      assert.equal(PERMISSIONS.length, 25, "iter-040: +attendance.internal_manage");
+      assert.equal(PERMISSIONS.length, 27, "iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));
@@ -817,8 +818,9 @@ const tests: TestCase[] = [
         { status: null, excused: false },
       ];
       const s = summarizeSheet(rows);
-      assert.deepEqual(s, { total: 5, present: 2, substitutes: 1, missing: 3, excused: 2 });
-      assert.equal(summaryText(s), "Přítomno 2 z 5 · náhradníci 1 · chybí 3 (omluveno 2)");
+      // T-005b: řádek bez zápisu a bez omluvy je přítomen (jako při uzávěrce)
+      assert.deepEqual(s, { total: 5, present: 3, substitutes: 1, missing: 2, excused: 2 });
+      assert.equal(summaryText(s), "Přítomno 3 z 5 · náhradníci 1 · chybí 2 (omluveno 2)");
       assert.equal(sheetTitle("2026-10-22"), "Docházka · čtvrtek 22. 10. 2026");
       assert.equal(announcedText({ excused: false, announcedName: null }), null);
       assert.equal(announcedText({ excused: true, announcedName: null }), "Ohlásil(a): bez náhradníka");
@@ -1069,7 +1071,9 @@ const tests: TestCase[] = [
       for (const s of [
         'title="Docházka pro správce"',
         "V den schůzky vám ráno před 7:00 přijde mail s odkazem na zápis. Platí 12 hodin a nepotřebuje přihlášení. Docházku najdete i v aplikaci v menu Docházka, záložka Zápis.",
-        "Zaškrtněte Přítomen u každého, kdo přišel. Když za člena přišel náhradník, zaškrtněte i „s náhradníkem“ a napište jméno. Ohlášený náhradník se vyplní sám.",
+        // T-005b: původní věta o zaškrtávání příchozích nahrazena dvěma kroky podle rozhodnutí Toma 23. 10.
+        "Zapisovat jde dvěma způsoby: průběžně zaškrtávejte Přítomen u příchozích, nebo označte jen ty, kdo chyběli (Chyběl(a) bez omluvy, případně odškrtněte Přítomen).",
+        "Náhradníka zapíšete tak, že u člena zaškrtnete Přítomen, tím se zpřístupní volba „s náhradníkem“ (u ohlášeného náhradníka se jméno vyplní samo). Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený. Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka.",
         "Kdo se omluvil až ráno, tomu zaškrtněte Omluven(a).",
         "Každé kliknutí se hned uloží. Když řádek mezitím změnil jiný správce, uvidíte jeho stav a hlášku. Klikněte znovu.",
         "V 17:00 se den uzavře a přijde vám report. Potom už zápis nejde.",

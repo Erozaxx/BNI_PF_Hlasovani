@@ -277,3 +277,74 @@ CREATE TABLE IF NOT EXISTS attendance_internal_day (
     created_by      UUID        REFERENCES member(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- SEMAFOR (iter-041) - zdroj pravdy pro DDL je scripts/migrate-iter-041-semafor.ts
+CREATE TABLE IF NOT EXISTS semafor_import (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    month       DATE        NOT NULL,
+    uploaded_by UUID        REFERENCES member(id) ON DELETE SET NULL,
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    file_sha256 TEXT        NOT NULL,
+    row_count   INTEGER     NOT NULL,
+    saved_count INTEGER     NOT NULL,
+    CONSTRAINT semafor_import_month_first CHECK (month = date_trunc('month', month::timestamp)::date),
+    CONSTRAINT semafor_import_sha CHECK (file_sha256 ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT semafor_import_counts CHECK (row_count >= 0 AND saved_count >= 0)
+);
+CREATE INDEX IF NOT EXISTS idx_semafor_import_month ON semafor_import (month, uploaded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_semafor_import_sha ON semafor_import (file_sha256);
+
+CREATE TABLE IF NOT EXISTS semafor_score (
+    month                 DATE         NOT NULL,
+    member_id             UUID         NOT NULL REFERENCES member(id) ON DELETE CASCADE,
+    import_id             UUID         REFERENCES semafor_import(id) ON DELETE SET NULL,
+    total_score           NUMERIC(5,2) NOT NULL,
+    attendance_rate       NUMERIC(6,4),
+    attendance_score      NUMERIC(5,2),
+    ceu_rate              NUMERIC(8,3),
+    ceu_score             NUMERIC(5,2),
+    one_to_one_rate       NUMERIC(8,3),
+    one_to_one_score      NUMERIC(5,2),
+    referrals_given_rate  NUMERIC(8,3),
+    referrals_given_score NUMERIC(5,2),
+    tyfcb                 NUMERIC(14,2),
+    tyfcb_score           NUMERIC(5,2),
+    visitors              NUMERIC(10,3),
+    visitor_score         NUMERIC(5,2),
+    sponsors              NUMERIC(10,3),
+    sponsor_score         NUMERIC(5,2),
+    updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (month, member_id),
+    CONSTRAINT semafor_score_month_first CHECK (month = date_trunc('month', month::timestamp)::date),
+    CONSTRAINT semafor_score_total CHECK (total_score BETWEEN 0 AND 100),
+    CONSTRAINT semafor_score_attendance_rate CHECK (attendance_rate IS NULL OR attendance_rate BETWEEN 0 AND 1),
+    CONSTRAINT semafor_score_scores CHECK (
+      (attendance_score IS NULL OR attendance_score BETWEEN 0 AND 100)
+      AND (ceu_score IS NULL OR ceu_score BETWEEN 0 AND 100)
+      AND (one_to_one_score IS NULL OR one_to_one_score BETWEEN 0 AND 100)
+      AND (referrals_given_score IS NULL OR referrals_given_score BETWEEN 0 AND 100)
+      AND (tyfcb_score IS NULL OR tyfcb_score BETWEEN 0 AND 100)
+      AND (visitor_score IS NULL OR visitor_score BETWEEN 0 AND 100)
+      AND (sponsor_score IS NULL OR sponsor_score BETWEEN 0 AND 100)
+    ),
+    CONSTRAINT semafor_score_rates CHECK (
+      (ceu_rate IS NULL OR ceu_rate BETWEEN 0 AND 1000)
+      AND (one_to_one_rate IS NULL OR one_to_one_rate BETWEEN 0 AND 1000)
+      AND (referrals_given_rate IS NULL OR referrals_given_rate BETWEEN 0 AND 1000)
+    ),
+    CONSTRAINT semafor_score_counts CHECK (
+      (tyfcb IS NULL OR tyfcb >= 0)
+      AND (visitors IS NULL OR visitors >= 0)
+      AND (sponsors IS NULL OR sponsors >= 0)
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_semafor_score_member ON semafor_score (member_id, month DESC);
+
+CREATE TABLE IF NOT EXISTS semafor_name_alias (
+    name_key   TEXT        PRIMARY KEY,
+    member_id  UUID        NOT NULL REFERENCES member(id) ON DELETE CASCADE,
+    created_by UUID        REFERENCES member(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT semafor_alias_key_len CHECK (char_length(name_key) BETWEEN 2 AND 120)
+);
+CREATE INDEX IF NOT EXISTS idx_semafor_alias_member ON semafor_name_alias (member_id);

@@ -101,7 +101,7 @@ export function buildMorningMail(input: MorningMailInput): BuiltMail {
 
 // ── Report v 17:00 ───────────────────────────────────────────
 
-export type ReportStatus = "present" | "substitute" | "absent";
+export type ReportStatus = "present" | "substitute" | "absent" | "unexcused";
 
 export interface ReportMember {
   name: string;
@@ -223,7 +223,8 @@ function sectionsOf(members: readonly ReportMember[]): ReportSection[] {
   const present = sorted.filter((m) => m.status === "present");
   const subs = sorted.filter((m) => m.status === "substitute");
   const excusedAbsent = sorted.filter((m) => m.status === "absent" && m.excused);
-  const unexcused = sorted.filter((m) => m.status === "absent" && !m.excused);
+  // iter-041: „Chyběl(a) bez omluvy“ je v sekci „Bez omluvy“ stejně jako neomluvená absence.
+  const unexcused = sorted.filter((m) => m.status === "unexcused" || (m.status === "absent" && !m.excused));
   const all: ReportSection[] = [
     { title: "Přítomní", lines: present.map((m) => plainLine(m.name)) },
     {

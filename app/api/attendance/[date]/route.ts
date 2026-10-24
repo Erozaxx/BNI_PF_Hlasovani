@@ -5,6 +5,7 @@ import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { NO_PERMISSION_MESSAGE, canAny } from "@/lib/auth/permissions";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { MAX_ADVANCE_DAYS } from "@/lib/attendance/rules";
+import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
 import {
   SHEET_TEXTS,
   decideAttendanceWriteMode,
@@ -130,6 +131,8 @@ export async function POST(
     let closed = false;
     let inactive = false;
     let conflict = false;
+    // iter-041: odmítnutí kvůli času (7:30) nebo souběhu omluvy a „Chyběl(a) bez omluvy“.
+    let blocked: string | null = null;
 
     if (body.op === "presence") {
       const res = await writePresenceGuarded({
@@ -144,6 +147,8 @@ export async function POST(
       if (res.result === "ok") audited = res.audited;
       else if (res.result === "day-closed") closed = true;
       else if (res.result === "inactive") inactive = true;
+      else if (res.result === "too-early") blocked = UNEXCUSED_TEXTS.tooEarly;
+      else if (res.result === "excused-conflict") blocked = UNEXCUSED_TEXTS.excusedConflict;
       else conflict = true;
     } else {
       const res = await setExcuseGuarded({
@@ -155,6 +160,7 @@ export async function POST(
       });
       if (res.result === "ok") audited = res.audited;
       else if (res.result === "day-closed") closed = true;
+      else if (res.result === "unexcused-conflict") blocked = UNEXCUSED_TEXTS.unexcusedConflict;
       else inactive = true;
     }
 
@@ -176,6 +182,7 @@ export async function POST(
       );
     }
     if (inactive) return json({ result: "inactive", message: SHEET_TEXTS.errInactive, row }, 409);
+    if (blocked) return json({ result: "blocked", message: blocked, row }, 409);
     if (conflict) return json({ result: "conflict", row }, 409);
 
     if (mode === "history" && audited && row) {

@@ -13,8 +13,10 @@ import {
   MAX_ADVANCE_DAYS,
   MEMBER_TEXTS,
   formatWeekdayLong,
+  memberDeadline,
   validateSubstituteName,
 } from "@/lib/attendance/rules";
+import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
 
 // ── Texty správce (gate sekce 5, doslova) ────────────────────
 
@@ -24,6 +26,21 @@ export const SHEET_TEXTS = {
   present: "Přítomen",
   withSubstitute: "s náhradníkem",
   excused: "Omluven(a)",
+  /** iter-041 (T-005b): úvod Zápisu nahoře na stránce: dva způsoby zápisu, náhradník, nezaškrtnutí, odškrtnutí omluvy. */
+  introTitle: "Jak zapisovat",
+  introWays:
+    "Zapisovat jde dvěma způsoby: průběžně zaškrtáváš Přítomen u příchozích, nebo označíš jen ty, kdo chyběli (Chyběl(a) bez omluvy, případně odškrtneš Přítomen).",
+  introSubstitute:
+    "Náhradníka zapíšeš tak, že u člena zaškrtneš Přítomen. Tím se zpřístupní volba „s náhradníkem“, u ohlášeného náhradníka se jméno vyplní samo.",
+  introOpen:
+    "Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený.",
+  introExcuse: "Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka.",
+  /** iter-041 (gate sekce 5): volba „Chyběl(a) bez omluvy“ a její texty. */
+  unexcused: UNEXCUSED_TEXTS.option,
+  unexcusedTooEarlyHint: UNEXCUSED_TEXTS.tooEarlyHint,
+  unexcusedTooEarly: UNEXCUSED_TEXTS.tooEarly,
+  errExcusedConflict: UNEXCUSED_TEXTS.excusedConflict,
+  errUnexcusedConflict: UNEXCUSED_TEXTS.unexcusedConflict,
   saving: "ukládá se",
   nameLabel: "Jméno náhradníka",
   errSave: "Neuložilo se. Zkus to znovu.",
@@ -84,7 +101,7 @@ export function sheetTitle(date: string): string {
 
 // ── Režim zápisu (arch 6.1) ──────────────────────────────────
 
-export type PresenceStatus = "present" | "substitute" | "absent";
+export type PresenceStatus = "present" | "substitute" | "absent" | "unexcused";
 export type WriteMode = "normal" | "history" | "denied";
 export type WriteOp = "presence" | "excuse";
 
@@ -197,6 +214,27 @@ export function targetOnCheck(row: SheetRow): PresenceTarget {
 /** Odškrtnutí „Přítomen“ = explicitní řádek `absent`. */
 export const TARGET_ABSENT: PresenceTarget = { status: "absent", substituteName: null };
 
+/** iter-041 (K6): zaškrtnutí „Chyběl(a) bez omluvy“ = řádek `unexcused`, bez jména. */
+export const TARGET_UNEXCUSED: PresenceTarget = { status: "unexcused", substituteName: null };
+
+/**
+ * iter-041 (gate Z1): řádek je rozhodnutý, když správce potvrdil přítomnost,
+ * náhradníka nebo „Chyběl(a) bez omluvy“. Filtr „Nezaškrtnutí“ rozhodnuté skryje.
+ */
+export function rowDecided(row: Pick<SheetRow, "status">): boolean {
+  return row.status === "present" || row.status === "substitute" || row.status === "unexcused";
+}
+
+/**
+ * iter-041 (gate Z1): „Chyběl(a) bez omluvy“ jde zapsat od 7:30 v den schůzky
+ * (do té doby se člen smí omluvit). U dnů před dneškem podmínka vždy splněna.
+ * Bez DB, jen čas. SQL pojistka `unexcusedTimeSql` (lib/db/queries/attendance.ts)
+ * je pravda, tohle je jen skrytí volby a srozumitelná hláška.
+ */
+export function unexcusedAllowedAt(now: Date, date: string): boolean {
+  return now.getTime() >= memberDeadline(date).getTime();
+}
+
 export function targetsEqual(a: PresenceTarget | null, b: PresenceTarget | null): boolean {
   if (!a || !b) return a === b;
   return a.status === b.status && (a.substituteName ?? null) === (b.substituteName ?? null);
@@ -219,20 +257,24 @@ export interface SheetSummary {
 }
 
 /**
- * Souhrn dne. Přítomno = přišel sám nebo náhradník (obsazené místo), chybí =
- * ostatní, omluveno = z chybějících ti, kdo mají ohlášenou nepřítomnost.
+ * Souhrn dne. Počítá se tak, jak se den uzavře (T-005b): řádek bez zápisu je
+ * přítomen, s ohlášeným náhradníkem je náhradník, s omluvou bez náhradníka
+ * chybí (omluven). Přítomno = přišel sám nebo náhradník (obsazené místo),
+ * chybí = ostatní, omluveno = z chybějících ti, kdo mají ohlášenou nepřítomnost.
  */
 export function summarizeSheet(
-  rows: readonly Pick<SheetRow, "status" | "excused">[]
+  rows: readonly (Pick<SheetRow, "status" | "excused"> & { announcedName?: string | null })[]
 ): SheetSummary {
   let present = 0;
   let substitutes = 0;
   let excused = 0;
   for (const r of rows) {
-    if (r.status === "present" || r.status === "substitute") {
+    const status: PresenceStatus =
+      r.status ?? (r.excused ? (r.announcedName ? "substitute" : "absent") : "present");
+    if (status === "present" || status === "substitute") {
       present++;
-      if (r.status === "substitute") substitutes++;
-    } else if (r.excused) {
+      if (status === "substitute") substitutes++;
+    } else if (r.excused && status !== "unexcused") {
       excused++;
     }
   }
@@ -264,7 +306,7 @@ const INVALID_INPUT = "Neplatný vstup.";
 
 /**
  * Tělo POST: `date` se ověřuje zvlášť (je v cestě). `substitute` vyžaduje
- * jméno 2 až 80 znaků, `present` a `absent` jméno zahodí.
+ * jméno 2 až 80 znaků, `present`, `absent` a `unexcused` jméno zahodí.
  */
 export function parseWriteBody(raw: unknown): WriteBodyResult {
   if (typeof raw !== "object" || raw === null) return { ok: false, error: INVALID_INPUT };
@@ -277,7 +319,12 @@ export function parseWriteBody(raw: unknown): WriteBodyResult {
     return { ok: true, value: { op: "excuse", memberId: b.memberId, excused: b.excused } };
   }
   if (b.op !== "presence") return { ok: false, error: INVALID_INPUT };
-  if (b.status !== "present" && b.status !== "substitute" && b.status !== "absent") {
+  if (
+    b.status !== "present" &&
+    b.status !== "substitute" &&
+    b.status !== "absent" &&
+    b.status !== "unexcused"
+  ) {
     return { ok: false, error: INVALID_INPUT };
   }
   const v = b.expectedVersion;
@@ -420,6 +467,7 @@ export function auditValueText(value: string | null): string {
   if (value === null) return SHEET_TEXTS.auditNoRecord;
   if (value === "present") return "Přítomen";
   if (value === "absent") return "Nepřítomen";
+  if (value === "unexcused") return UNEXCUSED_TEXTS.audit;
   if (value === "none") return "Bez omluvy";
   if (value === "absence") return "Omluven(a), bez náhradníka";
   if (value.startsWith("substitute:")) return `Náhradník ${value.slice("substitute:".length)}`;

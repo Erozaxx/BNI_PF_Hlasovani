@@ -494,7 +494,12 @@ export async function unscheduleCaseGuarded(caseId: string): Promise<TransitionR
   return toTransition(result.rows[0]);
 }
 
-/** Potvrzení „Odprezentováno“: až v den interní nebo po ní. */
+/**
+ * Potvrzení „Odprezentováno“: až v den interní nebo po ní. iter-041 (gate Z10):
+ * vedoucí nepotvrdí vlastní případ (`member_id <> actor`), pravda je tady v SQL,
+ * `canConfirm` a hláška v akci jsou jen UI. Odprezentovaný případ dává bonus
+ * do semaforu.
+ */
 export async function confirmPresentedGuarded(opts: {
   caseId: string;
   actorId: string;
@@ -507,6 +512,7 @@ export async function confirmPresentedGuarded(opts: {
           presented_confirmed_by = ${opts.actorId}::uuid, updated_at = now()
       WHERE id = ${opts.caseId}::uuid AND status = 'scheduled'
         AND internal_date <= ${opts.todayPrague}::date
+        AND member_id <> ${opts.actorId}::uuid
       RETURNING id, member_id, internal_date::text AS internal_date
     )
     SELECT u.id, u.member_id, m.name, u.internal_date

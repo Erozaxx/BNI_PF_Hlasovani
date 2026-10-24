@@ -39,6 +39,7 @@ const RESULT_TEXT: Record<PastResult, string> = {
   present: "Výsledek: přítomen",
   substitute: "Výsledek: náhradník",
   absent: "Výsledek: absence",
+  unexcused: "Výsledek: absence bez omluvy",
 };
 
 export function DayPanel({

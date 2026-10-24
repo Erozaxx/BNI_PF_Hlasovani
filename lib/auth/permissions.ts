@@ -14,7 +14,7 @@
  *    docházky (`ATTENDANCE_MANAGER_PERMISSIONS`) bez ohledu na způsob přihlášení,
  * 2. admin = všechna práva,
  * 3. jinak je to SJEDNOCENÍ práv role a práv funkce. Role `moderator` dává
- *    `DEFAULT_FUNCTION_PERMISSIONS` (dnešní moderátor). Funkce (nejvýš jedna:
+ *    `MODERATOR_ROLE_PERMISSIONS` (dnešní moderátor, iter-041 Z7). Funkce (nejvýš jedna:
  *    Prezident, Viceprezident, Člen výboru) dává `chapter_function.permissions`,
  *    `NULL` = `DEFAULT_FUNCTION_PERMISSIONS`. V datech mají Prezident a
  *    Viceprezident značku `ADMIN_DELEGABLE_MARKER` (= všechna práva admina
@@ -59,15 +59,23 @@ export const PERMISSIONS = [
   "attendance.edit_history",
   // iter-040: zakládání a rušení interní schůzky v docházce.
   "attendance.internal_manage",
+  // iter-041 (gate Z7): semafor. `view_all` = přehled se jmény (výchozí sada
+  // FUNKCE, ne role moderátor), `import` = nahrávání souboru a mazání (jen
+  // admin a značka `admin-delegable`, tedy Prezident a Viceprezident).
+  "semafor.view_all",
+  "semafor.import",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
 /**
- * Výchozí sada (role `moderator` a funkce s `permissions = NULL`) = dnešní moderátor
- * (arch 6.1, sloupec „Výchozí sada“). Test 9a ji hlídá proti tabulce.
+ * Práva ROLE `moderator` (bez funkce) = dnešní moderátor (arch 6.1, sloupec
+ * „Výchozí sada“). iter-041 (gate Z7): oddělená konstanta, aby přidání
+ * `semafor.view_all` do výchozí sady funkce nedalo jména i moderátorovi bez
+ * funkce. Tom: „právo jen funkci, moderátor může být i někdo, kdo není člen
+ * výboru a nemá vidět detaily semaforu“. Test 9a ji hlídá proti tabulce.
  */
-export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
+export const MODERATOR_ROLE_PERMISSIONS: readonly Permission[] = [
   "guests.manage",
   "guests.promote",
   "categories.create",
@@ -80,6 +88,17 @@ export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
   "mastermind.manage",
   "burza.manage",
   "attendance.internal_manage",
+];
+
+/**
+ * Výchozí sada FUNKCE (`chapter_function.permissions = NULL`, tedy Člen výboru):
+ * práva moderátora plus přehled semaforu se jmény. NULL zůstává „výchozí sada“
+ * a dál dostává budoucí změny. Funkce s ručně upraveným seznamem nové právo
+ * nedostane, admin ho tam přidá ve správě funkcí.
+ */
+export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
+  ...MODERATOR_ROLE_PERMISSIONS,
+  "semafor.view_all",
 ];
 
 /**
@@ -244,7 +263,7 @@ function basePermissions(input: {
   // Role moderator dává výchozí sadu, držitel funkce bez role začíná prázdný a
   // dostane jen práva funkce. Bez role i bez funkce zůstane množina prázdná.
   const result = new Set<Permission>(
-    input.managementRole === "moderator" ? DEFAULT_FUNCTION_PERMISSIONS : []
+    input.managementRole === "moderator" ? MODERATOR_ROLE_PERMISSIONS : []
   );
   for (const fn of input.functions) {
     // Značka i výchozí sada se rozbalí z aktuálního katalogu, NON_DELEGABLE vypadne.
