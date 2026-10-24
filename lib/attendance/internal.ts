@@ -217,16 +217,22 @@ export function internalCardView(input: {
 const CELL_BASE =
   "flex min-h-[44px] flex-col items-center justify-center rounded-lg text-sm leading-tight focus:outline-none focus:shadow-focus";
 
-/** Třídy buňky dne, společné pro kalendář člena i Omluvy (7.2). */
+/**
+ * Třídy buňky dne, společné pro kalendář člena i Omluvy (7.2). Modrý podklad má
+ * každý den s běžnou schůzkou, zelený každý den s interní (běžná ji přebíjí už
+ * v `dayTone`). Čtvrtek bez schůzky podklad nemá, jen tučné číslo. Text na modré
+ * je `text-text-main`: `text-navy` na `bg-navy-light` dává jen 4,44:1 (pod AA).
+ */
 export function dayCellClass(tone: DayTone, thursday: boolean, past: boolean, selected: boolean): string {
   const parts = [CELL_BASE];
   if (tone === "internal") {
     parts.push("bg-success-light font-semibold text-success");
-  } else if (thursday) {
-    parts.push("bg-navy-light font-semibold text-navy");
+  } else if (tone === "meeting") {
+    parts.push("bg-navy-light font-semibold text-text-main");
   } else {
-    parts.push("text-text-main hover:bg-background");
-    if (past) parts.push("text-text-muted");
+    parts.push("hover:bg-background");
+    parts.push(past ? "text-text-muted" : "text-text-main");
+    if (thursday) parts.push("font-semibold");
   }
   if (selected) parts.push("ring-2 ring-primary");
   return parts.join(" ");

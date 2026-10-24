@@ -71,8 +71,8 @@ const SEP_WEEKS = ["zář 10", "zář 17", "zář 24", "říj 01", "říj 08", "
 const SEP_DATES = ["2026-09-10", "2026-09-17", "2026-09-24", "2026-10-01", "2026-10-08", "2026-10-15"];
 
 function row(name: string, codes: string[]): SyntheticRow {
-  const [first, last] = name.split(" ");
-  return { first, last, codes };
+  const [first, ...rest] = name.split(" ");
+  return { first, last: rest.join(" "), codes };
 }
 
 function baseSpec(overrides: Partial<SyntheticSpec> = {}): SyntheticSpec {
@@ -363,6 +363,56 @@ function partA() {
       "dva řádky na stejného člena"
     );
     throwsPalms(() => matchRows(mk(["Jan Testovací"]), m2.slice(0, 1), new Map(), new Map([[99, m2[0].id]])), "alias na neexistující řádek");
+    // e-mail a částečná shoda jména (fiktivní data)
+    const mm = [
+      { id: "77777777-7777-7777-7777-777777777777", name: "Karla Nová", active: true, email: "karla@example.test" },
+      { id: "88888888-8888-8888-8888-888888888888", name: "Jan Novák", active: true, email: null },
+      { id: "99999999-9999-9999-9999-999999999999", name: "Jana Nováková", active: true, email: null },
+      { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", name: "Hana Mailová", active: true, email: "hana@example.test" },
+    ];
+    const mkMail = (rows: { nm: string; email?: string }[]) =>
+      parsePalmsXml(
+        buildSyntheticExport({
+          from: "2026-09-10T00:00:00.000",
+          to: "2026-09-17T00:00:00.000",
+          weeks: ["zář 10"],
+          emailColumn: true,
+          rows: rows.map((r) => ({ ...row(r.nm, ["P"]), email: r.email })),
+        })
+      );
+    const sheetMail = mkMail([
+      { nm: "Karla Nová Svobodová" },
+      { nm: "Jan Novák" },
+      { nm: "Jana Nováková" },
+      { nm: "Cizí Osoba", email: " HANA@example.test " },
+    ]);
+    assert.equal(sheetMail.rows[3].email, "HANA@example.test", "sloupec Email se načte");
+    assert.equal(sheetMail.rows[0].email, null);
+    assert.equal(sheetMail.weeks.length, 1, "sloupec Email není týden");
+    const mp = matchRows(sheetMail, mm, new Map(), new Map());
+    assert.equal(mp.byKind.partial, 1, "Karla Nová vs Karla Nová Svobodová");
+    assert.equal(mp.byKind.exact, 2, "Jan Novák a Jana Nováková jsou exact, ne partial");
+    assert.equal(mp.byKind.email, 1, "e-mail spáruje i jinak nepodobné jméno");
+    assert.deepEqual(mp.partialRowNos.length, 1);
+    assert.equal(mp.memberIds[3], mm[3].id);
+    // dva řádky na jednoho člena (partial i e-mail) je chyba, ne tiché přepsání
+    throwsPalms(() => matchRows(mkMail([{ nm: "Karla Nová Svobodová" }, { nm: "Cizí", email: "karla@example.test" }]), mm, new Map()), "řádky na stejného člena");
+    // jiný e-mail nespáruje; dva kandidáti na partial = ambiguous = nespárováno
+    const none = matchRows(mkMail([{ nm: "Zcela Jiná", email: "jina@example.test" }]), mm, new Map());
+    assert.equal(none.unmatchedRowNos.length, 1);
+    const two = matchRows(
+      mk(["Eva Dlouhá"]),
+      [{ id: m2[1].id, name: "Eva Dlouhá Krátká", active: true }, { id: m2[2].id, name: "Eva Dlouhá Úzká", active: true }],
+      new Map()
+    );
+    assert.equal(two.unmatchedRowNos.length, 1, "dva kandidáti = ambiguous");
+    const one = matchRows(mk(["Karla"]), [{ id: mm[0].id, name: "Karla Nová", active: true }], new Map());
+    assert.equal(one.unmatchedRowNos.length, 1, "jednoslovné jméno partial nedává");
+    // výpis: čísla řádků, žádná jména ani e-maily
+    const rep = formatReport(buildPlan(sheetMail, mp).stats, parseCounts({ app_start: "2026-10-22", total_rows: 0, eligible: 0, skip_no_member: 0, skip_after_start: 0, skip_deactivated: 0, new_records: 0, same_records: 0, conflicts: 0, conflict_rows: [], new_absences: 0, days_to_close: 0, before_joined: 0, limit_now: 0, limit_after: 0, gaining: 0 }), false).join("\n");
+    assert.match(rep, /částečná shoda jména 1/);
+    assert.match(rep, /Spárováno částečnou shodou jména: řádky 6\./);
+    assert.equal(/Svobodov|example\.test|Cizí/.test(rep), false, "výpis bez jmen a e-mailů");
     const viaFile = matchRows(mk(["Cizí Jméno"]), m2.slice(0, 1), new Map(), new Map([[6, m2[0].id]]));
     assert.equal(viaFile.byKind.file, 1);
     const unknownFile = matchRows(mk(["Cizí Jméno"]), m2.slice(0, 1), new Map(), new Map([[6, "99999999-9999-9999-9999-999999999999"]]));
@@ -524,7 +574,7 @@ function loadPglite(): (new () => PgLite) | null {
 
 const DDL = `
 CREATE TABLE member (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, email text,
   joined_at date NOT NULL DEFAULT CURRENT_DATE,
   deactivated_at timestamptz, inactive_until date,
   CONSTRAINT member_inactive_until_needs_deactivation CHECK (inactive_until IS NULL OR deactivated_at IS NOT NULL)
@@ -823,6 +873,59 @@ async function partB(PGlite: new () => PgLite) {
   assert.equal(await count("semafor_name_alias"), 0, "skript paměť jmen nezapisuje");
   await assert.rejects(() => run(baseSpec(), false, { aliasFileText: JSON.stringify({ "řádek 99": ids["Jan Testovací"] }) }), PalmsError);
   ok("B9. párování: paměť jmen i soubor aliasů, paměť se nezapisuje, alias na neexistující řádek je chyba");
+
+  // hranice aplikace po ruční opravě doplněného dne (iter-041 T-010): oprava `manager` na dni s `palms` hranici neposune
+  await reset();
+  const first = await run(baseSpec(), true);
+  assert.equal(first.counts.appStart, "2026-10-22");
+  assert.equal(first.counts.inserted?.records, 19);
+  await q("UPDATE attendance_record SET status = 'present', source = 'manager', version = 2 WHERE attendance_date = '2026-09-17' AND member_id = $1", [ids["Eva Vzorová"]]);
+  assert.equal(await count("attendance_record", "source = 'manager'"), 1);
+  await q("INSERT INTO semafor_name_alias (name_key, member_id) VALUES ('nikdo neznámý', $1)", [ids["Karel Nepřítomný"]]);
+  const afterFix = await run(baseSpec(), false);
+  assert.equal(afterFix.counts.appStart, "2026-10-22", "ruční oprava na dni s palms záznamem hranici neposune");
+  assert.equal(afterFix.counts.newRecords, 6, "nový člen (alias) dostane i dny po opraveném dni");
+  assert.equal(afterFix.counts.conflicts, 1, "opravený řádek se jen ohlásí jako konflikt");
+  assert.equal(afterFix.counts.skipAfterStart, 0);
+  const fixedApply = await run(baseSpec(), true);
+  assert.equal(fixedApply.counts.inserted?.records, 6);
+  const fixedRow = await q("SELECT status, source, version FROM attendance_record WHERE attendance_date = '2026-09-17' AND member_id = $1", [ids["Eva Vzorová"]]);
+  assert.deepEqual([fixedRow[0].status, fixedRow[0].source, Number(fixedRow[0].version)], ["present", "manager", 2], "opravený řádek zůstal");
+  assert.equal(await count("attendance_record", `member_id = '${ids["Karel Nepřítomný"]}' AND attendance_date >= '2026-10-01'`), 3);
+  // den čistě z aplikace (bez palms řádku) hranici dál určuje
+  await q("INSERT INTO attendance_record (attendance_date, member_id, status, source) VALUES ('2026-10-22', $1, 'present', 'manager')", [ids["Jan Testovací"]]);
+  assert.equal((await run(baseSpec(), false)).counts.appStart, "2026-10-22");
+  await q("INSERT INTO attendance_record (attendance_date, member_id, status, source) VALUES ('2026-10-08', $1, 'present', 'auto') ON CONFLICT DO NOTHING", [ids["Karel Nepřítomný"]]);
+  assert.equal((await run(baseSpec(), false)).counts.appStart, "2026-10-22", "auto zápis na dni s palms řádkem se také nepočítá");
+  await q("INSERT INTO attendance_record (attendance_date, member_id, status, source) VALUES ('2026-09-30', $1, 'present', 'manager')", [ids["Jan Testovací"]]);
+  assert.equal((await run(baseSpec(), false)).counts.appStart, "2026-09-30", "den čistě z aplikace dál určuje hranici");
+  assert.match(HELP_TEXT, /Začátek docházky v aplikaci/);
+  assert.equal(HELP_TEXT.includes("dřív, než se ručně opraví"), false, "stará věta v nápovědě už není");
+  ok("B13. hranice po ruční opravě doplněného dne: app_start se nezmění, oprava zůstane, nový člen dostane i dny po ní, den čistě z aplikace hranici dál určuje");
+
+  // e-mail v exportu spáruje člena, částečná shoda jména se doplní do výpisu (jen čísla řádků)
+  await reset();
+  await q("UPDATE member SET email = 'Eva.Vzorova@example.test' WHERE id = $1", [ids["Eva Vzorová"]]);
+  await q("UPDATE member SET name = 'Karla Nová' WHERE id = $1", [ids["Karel Nepřítomný"]]);
+  const mailSpec = baseSpec({
+    emailColumn: true,
+    rows: [
+      { ...row("Zcela Jiné", ["P", "P", "P", "P", "P", "P"]), email: "EVA.VZOROVA@example.test" },
+      row("Karla Nová Svobodová", ["P", "P", "P", "P", "P", "P"]),
+      row("Jan Testovací", ["P", "P", "P", "P", "P", "P"]),
+    ],
+  });
+  const mailRun = await run(mailSpec, false, { showNames: true });
+  assert.equal(mailRun.stats.byKind.email, 1);
+  assert.equal(mailRun.stats.byKind.partial, 1);
+  assert.equal(mailRun.stats.unmatchedRowNos.length, 0);
+  assert.equal(mailRun.counts.newRecords, 18);
+  const mailText = mailRun.lines.join("\n");
+  assert.match(mailText, /Nepřesné párování, řádek 7 \(částečná shoda jména\): Karla Nová Svobodová -> Karla Nová\./);
+  assert.equal(mailText.includes("example.test"), false, "e-mail ve výpisu není");
+  const mailQuiet = (await run(mailSpec, false)).lines.join("\n");
+  assert.equal(/Svobodov|Zcela|example/.test(mailQuiet), false, "bez --show-names žádná jména ani e-maily");
+  ok("B14. e-mail z exportu spáruje člena, částečná shoda jména vypíše číslo řádku, jména jen s --show-names, e-mail nikdy");
 
   // soubor s chybou se do DB nedostane
   await reset();

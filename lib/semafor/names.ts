@@ -4,12 +4,16 @@
  * Čistý modul. Sdílí ho import semaforu i skript PALMS.
  *
  * Pořadí pro každé jméno (kandidáti = všichni členové, i neaktivní):
+ *   0. e-mail řádku, má-li ho soubor, odpovídá právě jednomu členovi -> `email`
+ *      (má přednost před jménem i aliasem; e-mail se nikam neukládá),
  *   1. alias (`semafor_name_alias`) -> člen,
  *   2. právě jeden člen se shodným `nameKey` -> `exact`,
  *   3. právě jeden se shodným `looseKey` (bez diakritiky) -> `loose`,
  *   4. právě jeden se shodným `swapKey` (jiné pořadí slov) -> `swapped`,
  *   5. víc kandidátů v krocích 2 až 4 -> `ambiguous` (nic se nepředvyplní),
- *   6. nic -> `none`.
+ *   6. slova jednoho jména jsou podmnožinou slov druhého (min. 2 slova na
+ *      kratší straně), právě jeden člen -> `partial`, víc členů -> `ambiguous`,
+ *   7. nic -> `none`.
  * Dva řádky souboru se stejným `nameKey` jsou oba `duplicate`.
  */
 
@@ -46,24 +50,60 @@ export function isUsableNameKey(key: string): boolean {
   return len >= NAME_KEY_MIN && len <= NAME_KEY_MAX;
 }
 
+/**
+ * Hlavičky volitelného sloupce s e-mailem v souborech (malá písmena).
+ * E-mail slouží jen k párování, nikam se neukládá a nevypisuje.
+ */
+export const EMAIL_HEADERS: readonly string[] = ["email", "e-mail", "email address", "e-mail address", "mail"];
+
+/** E-mail pro porovnání: trim a malá písmena, prázdný je `null`. */
+export function emailKey(s: string | null | undefined): string | null {
+  if (typeof s !== "string") return null;
+  const k = s.normalize("NFC").replace(STRIP_RE, "").trim().toLocaleLowerCase("en");
+  return k.length > 0 ? k : null;
+}
+
+/** Slova jména po normalizaci `looseKey`, bez duplicit. */
+export function nameWords(s: string): string[] {
+  return [...new Set(looseKey(s).split(" ").filter(Boolean))];
+}
+
+/**
+ * Částečná shoda: slova jednoho jména jsou podmnožinou slov druhého a na
+ * kratší straně jsou aspoň 2 slova ("Karla Nová" vs "Karla Nová Svobodová").
+ */
+export function isPartialNameMatch(a: readonly string[], b: readonly string[]): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length < 2) return false;
+  const set = new Set(longer);
+  return shorter.every((w) => set.has(w));
+}
+
 export interface MatchMember {
   id: string;
   name: string;
   active: boolean;
+  /**
+   * E-mail člena jen pro párování na serveru. Nesmí se dostat do props
+   * klienta ani do logu (security iter-041 bod 3).
+   */
+  email?: string | null;
 }
 
 export type MatchKind =
+  | "email"
   | "alias"
   | "exact"
   | "loose"
   | "swapped"
+  | "partial"
   | "ambiguous"
   | "none"
   | "duplicate";
 
 export interface NameMatch {
   kind: MatchKind;
-  /** Předvyplněný člen (jen alias, exact, loose, swapped). */
+  /** Předvyplněný člen (jen email, alias, exact, loose, swapped, partial). */
   memberId: string | null;
   /** Kandidáti u `ambiguous`. */
   candidates: string[];
@@ -83,13 +123,31 @@ function groupBy(members: readonly MatchMember[], keyFn: (s: string) => string):
 /**
  * Spáruje jména ze souboru. `aliases` mapuje `nameKey` na id člena (jen
  * existující členové se berou, alias na neznámé id se přeskočí).
+ * `fileEmails` (volitelné, stejné pořadí jako `fileNames`) jsou e-maily
+ * řádků; e-mail, který odpovídá právě jednomu členovi a v souboru je jen
+ * jednou, určí shodu `email` dřív než jméno.
  */
 export function matchNames(
   fileNames: readonly string[],
   members: readonly MatchMember[],
-  aliases: ReadonlyMap<string, string>
+  aliases: ReadonlyMap<string, string>,
+  fileEmails?: readonly (string | null | undefined)[]
 ): NameMatch[] {
   const known = new Set(members.map((m) => m.id));
+  const byEmail = new Map<string, string[]>();
+  for (const m of members) {
+    const k = emailKey(m.email);
+    if (k === null) continue;
+    const list = byEmail.get(k);
+    if (list) list.push(m.id);
+    else byEmail.set(k, [m.id]);
+  }
+  const emailCounts = new Map<string, number>();
+  for (const e of fileEmails ?? []) {
+    const k = emailKey(e);
+    if (k !== null) emailCounts.set(k, (emailCounts.get(k) ?? 0) + 1);
+  }
+  const memberWords = members.map((m) => ({ id: m.id, words: nameWords(m.name) }));
   const exact = groupBy(members, nameKey);
   const loose = groupBy(members, looseKey);
   const swapped = groupBy(members, swapKey);
@@ -100,8 +158,13 @@ export function matchNames(
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
 
-  return fileNames.map((raw): NameMatch => {
+  return fileNames.map((raw, i): NameMatch => {
     const key = nameKey(raw);
+    const mail = emailKey(fileEmails?.[i]);
+    if (mail !== null && emailCounts.get(mail) === 1) {
+      const owners = byEmail.get(mail);
+      if (owners && owners.length === 1) return { kind: "email", memberId: owners[0], candidates: [] };
+    }
     if (key.length === 0) return { kind: "none", memberId: null, candidates: [] };
     if ((counts.get(key) ?? 0) > 1) return { kind: "duplicate", memberId: null, candidates: [] };
 
@@ -120,6 +183,10 @@ export function matchNames(
       if (list.length === 1) return { kind, memberId: list[0], candidates: [] };
       return { kind: "ambiguous", memberId: null, candidates: [...list] };
     }
+    const fileWords = nameWords(raw);
+    const partial = memberWords.filter((m) => isPartialNameMatch(fileWords, m.words)).map((m) => m.id);
+    if (partial.length === 1) return { kind: "partial", memberId: partial[0], candidates: [] };
+    if (partial.length > 1) return { kind: "ambiguous", memberId: null, candidates: partial };
     return { kind: "none", memberId: null, candidates: [] };
   });
 }
@@ -143,7 +210,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /**
  * Validuje rozhodnutí klienta proti tomu, co spočítal server. Klientovi se
  * nevěří nic kromě volby člena: řádek bez rozhodnutí dostane návrh (alias,
- * exact, loose, swapped), řádek `ambiguous`, `none` nebo `duplicate` bez
+ * email, exact, loose, swapped, partial), řádek `ambiguous`, `none` nebo `duplicate` bez
  * rozhodnutí je chyba, řádek s chybou se přeskakuje. Vybraný člen musí
  * existovat a nesmí být přiřazený dvěma řádkům.
  */
@@ -188,7 +255,7 @@ export interface AliasToWrite {
 
 /**
  * Aliasy k zapsání: ruční výběr nebo potvrzená nepřesná shoda (`loose`,
- * `swapped`) se zapamatuje, `exact` a nezměněný `alias` ne. Nepoužitelný
+ * `swapped`, `partial`) se zapamatuje, `exact`, `email` a nezměněný `alias` ne. Nepoužitelný
  * klíč (příliš krátký nebo dlouhý) se nezapisuje.
  */
 export function aliasesToWrite(
@@ -204,7 +271,7 @@ export function aliasesToWrite(
     // Dvakrát stejné jméno v souboru: alias by vázal jedno jméno na dva členy.
     if (kind === "duplicate") continue;
     const unchanged = suggested === memberId;
-    if (unchanged && (kind === "exact" || kind === "alias")) continue;
+    if (unchanged && (kind === "exact" || kind === "alias" || kind === "email")) continue;
     const key = nameKey(fileNames[row.index] ?? "");
     if (!isUsableNameKey(key)) continue;
     out.push({ nameKey: key, memberId });

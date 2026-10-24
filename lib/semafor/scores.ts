@@ -11,6 +11,7 @@
  * tabulky.
  */
 import { SemaforFileError } from "@/lib/semafor/errors";
+import { EMAIL_HEADERS } from "@/lib/semafor/names";
 import type { SheetRow } from "@/lib/semafor/xlsx";
 
 /** Veřejný údaj: název chapteru v souboru (kontrola, že soubor není cizí). */
@@ -108,10 +109,13 @@ export function normalizeHeader(s: string): string {
   return s.replace(/[\s  ]+/g, " ").trim().toLowerCase();
 }
 
-const ALIAS_TO_KEY: ReadonlyMap<string, ValueKey | "name" | "chapter"> = (() => {
-  const map = new Map<string, ValueKey | "name" | "chapter">();
+type HeaderKey = ValueKey | "name" | "chapter" | "email";
+
+const ALIAS_TO_KEY: ReadonlyMap<string, HeaderKey> = (() => {
+  const map = new Map<string, HeaderKey>();
   map.set("name", "name");
   map.set("chapter", "chapter");
+  for (const h of EMAIL_HEADERS) map.set(h, "email");
   for (const key of VALUE_KEYS) {
     for (const alias of COLUMN_SPECS[key].aliases) map.set(alias, key);
   }
@@ -141,6 +145,8 @@ export interface ParsedScoreRow {
   r: number;
   /** Jméno ze souboru po ořezu (může být prázdné u `noName`). */
   name: string;
+  /** E-mail řádku, jen pro párování na serveru. Nesmí do DTO, logu ani události. */
+  email: string | null;
   values: ScoreValues | null;
   error: RowError | null;
 }
@@ -209,7 +215,7 @@ export function parseScoresSheet(sheet: readonly SheetRow[]): ParsedScores {
   if (sheet.length === 0) throw new SemaforFileError("columns", { list: REQUIRED_KEYS.map(keyLabel) });
   const header = sheet[0];
 
-  const colOf = new Map<ValueKey | "name" | "chapter", number>();
+  const colOf = new Map<HeaderKey, number>();
   const unknown: string[] = [];
   const seen = new Set<string>();
   for (let i = 0; i < header.cells.length; i++) {
@@ -235,6 +241,7 @@ export function parseScoresSheet(sheet: readonly SheetRow[]): ParsedScores {
   }
 
   const chapterCol = colOf.get("chapter");
+  const emailCol = colOf.get("email");
   const nameCol = colOf.get("name")!;
   const expectedChapter = normalizeHeader(CHAPTER_NAME);
   const rows: ParsedScoreRow[] = [];
@@ -244,16 +251,18 @@ export function parseScoresSheet(sheet: readonly SheetRow[]): ParsedScores {
   for (let ri = 1; ri < sheet.length; ri++) {
     const row = sheet[ri];
     const name = (row.cells[nameCol] ?? "").replace(/[\s  ]+/g, " ").trim();
+    const rawMail = emailCol === undefined ? "" : (row.cells[emailCol] ?? "").trim();
+    const email = rawMail.length > 0 && rawMail.length <= 254 ? rawMail : null;
     const anyValue = VALUE_KEYS.some((k) => (row.cells[colOf.get(k)!] ?? "").trim().length > 0);
     if (name.length === 0 && !anyValue) continue;
 
     if (name.length === 0) {
-      rows.push({ r: row.r, name: "", values: null, error: { code: "noName" } });
+      rows.push({ r: row.r, name: "", email: null, values: null, error: { code: "noName" } });
       continue;
     }
     // Vzorec nebo jiný text začínající operátorem není jméno.
     if (/^[=+\-@]/.test(name)) {
-      rows.push({ r: row.r, name: "", values: null, error: { code: "noName" } });
+      rows.push({ r: row.r, name: "", email: null, values: null, error: { code: "noName" } });
       continue;
     }
 
@@ -263,7 +272,7 @@ export function parseScoresSheet(sheet: readonly SheetRow[]): ParsedScores {
         withChapter++;
         if (ch !== expectedChapter) {
           otherChapter++;
-          rows.push({ r: row.r, name, values: null, error: { code: "otherChapter" } });
+          rows.push({ r: row.r, name, email: null, values: null, error: { code: "otherChapter" } });
           continue;
         }
       }
@@ -284,7 +293,7 @@ export function parseScoresSheet(sheet: readonly SheetRow[]): ParsedScores {
       }
       values[key] = parsed.value;
     }
-    rows.push({ r: row.r, name, values: error ? null : values, error });
+    rows.push({ r: row.r, name, email, values: error ? null : values, error });
   }
 
   if (withChapter > 0 && otherChapter === withChapter) {

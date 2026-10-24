@@ -290,13 +290,16 @@ export async function listOverviewRows(month: string): Promise<OverviewRow[]> {
 
 // ── Import: členové a aliasy ──────────────────────────────────
 
-/** Všichni členové (i neaktivní) pro párování jmen ze souboru. */
+/**
+ * Všichni členové (i neaktivní) pro párování jmen ze souboru. `email` je jen
+ * pro párování na serveru: výsledek nikdy nejde do props klienta ani do logu.
+ */
 export async function listMembersForMatch(): Promise<MatchMember[]> {
-  const r = await getDb().execute<{ id: string; name: string; active: boolean }>(sql`
-    SELECT m.id::text AS id, m.name, (${memberActiveSql("m")}) AS active
+  const r = await getDb().execute<{ id: string; name: string; active: boolean; email: string | null }>(sql`
+    SELECT m.id::text AS id, m.name, (${memberActiveSql("m")}) AS active, m.email
     FROM member m ORDER BY m.name
   `);
-  return r.rows.map((x) => ({ id: x.id, name: x.name, active: x.active }));
+  return r.rows.map((x) => ({ id: x.id, name: x.name, active: x.active, email: x.email }));
 }
 
 export interface AliasRow {

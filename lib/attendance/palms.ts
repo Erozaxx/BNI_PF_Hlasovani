@@ -17,7 +17,7 @@
  */
 import path from "node:path";
 import { ABSENCE_LIMIT, ABSENCE_STATUSES } from "./rules";
-import { matchNames, type MatchKind, type MatchMember } from "../semafor/names";
+import { EMAIL_HEADERS, matchNames, type MatchKind, type MatchMember } from "../semafor/names";
 import { UNEXCUSED_TEXTS } from "./texts";
 import { XmlError, attrLocal, childrenLocal, firstChildLocal, parseXml, type XmlNode } from "../semafor/xml";
 
@@ -237,6 +237,8 @@ export interface PalmsRow {
   rowNo: number;
   /** `Jméno Příjmení` pro párování. Do výpisu jen s `--show-names`. */
   name: string;
+  /** Volitelný e-mail řádku (sloupec `Email`), jen pro párování. Do výpisu nikdy. */
+  email: string | null;
   /** Kód v každém týdnu (stejné pořadí jako `weeks`), velká písmena, `""` = prázdná buňka. */
   codes: string[];
 }
@@ -292,18 +294,22 @@ export function parsePalmsXml(xml: string): PalmsSheet {
   let headerRow = -1;
   let firstCol = -1;
   let lastCol = -1;
+  let emailCol = -1;
   for (const r of rowNos) {
     let fc = -1;
     let lc = -1;
+    let ec = -1;
     for (const [c, v] of grid.get(r)!) {
       const t = v.normalize("NFC").trim().toLocaleLowerCase("cs");
       if (t === "first name" && fc < 0) fc = c;
       else if (t === "last name" && lc < 0) lc = c;
+      else if (EMAIL_HEADERS.includes(t) && ec < 0) ec = c;
     }
     if (fc >= 0 && lc >= 0) {
       headerRow = r;
       firstCol = fc;
       lastCol = lc;
+      emailCol = ec;
       break;
     }
   }
@@ -327,7 +333,7 @@ export function parsePalmsXml(xml: string): PalmsSheet {
   const labels: WeekLabel[] = [];
   const headerCols = [...grid.get(headerRow)!.entries()].sort((a, b) => a[0] - b[0]);
   for (const [c, v] of headerCols) {
-    if (c === firstCol || c === lastCol) continue;
+    if (c === firstCol || c === lastCol || c === emailCol) continue;
     const w = parseWeekLabel(v);
     if (w) labels.push({ col: c, month: w.month, day: w.day });
   }
@@ -348,7 +354,8 @@ export function parsePalmsXml(xml: string): PalmsSheet {
       if (codes.some((c) => c !== "")) rowsWithoutName++;
       continue;
     }
-    rows.push({ rowNo: r, name, codes });
+    const mail = emailCol >= 0 ? (cols.get(emailCol) ?? "").trim() : "";
+    rows.push({ rowNo: r, name, email: mail.length > 0 && mail.length <= 254 ? mail : null, codes });
   }
 
   return {
@@ -402,19 +409,21 @@ export function safeCodeLabel(code: string): string {
 
 // ── Párování řádků na členy ──────────────────────────────────
 
-const ACCEPTED_KINDS: readonly MatchKind[] = ["alias", "exact", "loose", "swapped"];
+const ACCEPTED_KINDS: readonly MatchKind[] = ["email", "alias", "exact", "loose", "swapped", "partial"];
 
 export interface RowMatching {
   /** Id člena pro každý řádek souboru (stejné pořadí jako `sheet.rows`), `null` = nespárováno. */
   memberIds: (string | null)[];
   /** Počet párování podle druhu (jen přijaté druhy). */
-  byKind: Record<"alias" | "exact" | "loose" | "swapped" | "file", number>;
+  byKind: Record<"email" | "alias" | "exact" | "loose" | "swapped" | "partial" | "file", number>;
   /** Čísla nespárovaných řádků (bez jmen). */
   unmatchedRowNos: number[];
   /** Čísla řádků spárovaných bez diakritiky (bez jmen). */
   looseRowNos: number[];
   /** Čísla řádků spárovaných s prohozeným pořadím jména (bez jmen). */
   swappedRowNos: number[];
+  /** Čísla řádků spárovaných částečnou shodou jména (bez jmen). */
+  partialRowNos: number[];
 }
 
 /** Obsah `--alias-file`: `{ "řádek 14": "<uuid>" }`. Chybný tvar je `PalmsError`. */
@@ -454,13 +463,15 @@ export function matchRows(
   const matches = matchNames(
     sheet.rows.map((r) => r.name),
     members,
-    aliases
+    aliases,
+    sheet.rows.map((r) => r.email)
   );
-  const byKind = { alias: 0, exact: 0, loose: 0, swapped: 0, file: 0 };
+  const byKind = { email: 0, alias: 0, exact: 0, loose: 0, swapped: 0, partial: 0, file: 0 };
   const memberIds: (string | null)[] = [];
   const unmatchedRowNos: number[] = [];
   const looseRowNos: number[] = [];
   const swappedRowNos: number[] = [];
+  const partialRowNos: number[] = [];
   sheet.rows.forEach((row, i) => {
     const fromFile = fileAliases.get(row.rowNo);
     let id: string | null = null;
@@ -473,9 +484,10 @@ export function matchRows(
       const m = matches[i];
       if (ACCEPTED_KINDS.includes(m.kind) && m.memberId !== null) {
         id = m.memberId;
-        byKind[m.kind as "alias" | "exact" | "loose" | "swapped"]++;
+        byKind[m.kind as "email" | "alias" | "exact" | "loose" | "swapped" | "partial"]++;
         if (m.kind === "loose") looseRowNos.push(row.rowNo);
         if (m.kind === "swapped") swappedRowNos.push(row.rowNo);
+        if (m.kind === "partial") partialRowNos.push(row.rowNo);
       }
     }
     memberIds.push(id);
@@ -487,7 +499,7 @@ export function matchRows(
     if (seen.has(id)) throw new PalmsError("Dva řádky souboru se spárovaly na stejného člena.");
     seen.add(id);
   }
-  return { memberIds, byKind, unmatchedRowNos, looseRowNos, swappedRowNos };
+  return { memberIds, byKind, unmatchedRowNos, looseRowNos, swappedRowNos, partialRowNos };
 }
 
 // ── Plán zápisu ──────────────────────────────────────────────
@@ -509,6 +521,7 @@ export interface PlanStats {
   unmatchedRowNos: number[];
   looseRowNos: number[];
   swappedRowNos: number[];
+  partialRowNos: number[];
   byKind: RowMatching["byKind"];
   /** Počty buněk spárovaných řádků podle kódu (L se počítá zvlášť, zapisuje se jako P). */
   codeCounts: { P: number; L: number; S: number; A: number };
@@ -571,6 +584,7 @@ export function buildPlan(sheet: PalmsSheet, matching: RowMatching): PalmsPlan {
       unmatchedRowNos: matching.unmatchedRowNos,
       looseRowNos: matching.looseRowNos,
       swappedRowNos: matching.swappedRowNos,
+      partialRowNos: matching.partialRowNos,
       byKind: matching.byKind,
       codeCounts,
       medicalSkipped,
@@ -611,7 +625,10 @@ export const SQL_PREFIX = `WITH input AS (
 bounds AS (
   SELECT least(
     (SELECT min(attendance_date) FROM attendance_link),
-    (SELECT min(attendance_date) FROM attendance_record WHERE source IN ('manager', 'auto')),
+    (SELECT min(r.attendance_date) FROM attendance_record r
+      WHERE r.source IN ('manager', 'auto')
+        AND NOT EXISTS (SELECT 1 FROM attendance_record p
+                        WHERE p.attendance_date = r.attendance_date AND p.source = 'palms')),
     (SELECT min(ad.attendance_date) FROM attendance_day ad
       WHERE NOT EXISTS (SELECT 1 FROM attendance_record r
                         WHERE r.attendance_date = ad.attendance_date AND r.source = 'palms')),
@@ -795,10 +812,11 @@ export function formatReport(stats: PlanStats, counts: BackfillCounts, apply: bo
   lines.push(`Soubor: týdnů ${stats.weeks}, řádků členů ${stats.fileRows}.`);
   const k = stats.byKind;
   lines.push(
-    `Spárováno ${stats.matchedRows} (přesně ${k.exact}, paměť jmen ${k.alias}, soubor aliasů ${k.file}, bez diakritiky ${k.loose}, prohozeně ${k.swapped}).`
+    `Spárováno ${stats.matchedRows} (přesně ${k.exact}, paměť jmen ${k.alias}, soubor aliasů ${k.file}, e-mail ${k.email}, bez diakritiky ${k.loose}, prohozeně ${k.swapped}, částečná shoda jména ${k.partial}).`
   );
   if (stats.looseRowNos.length > 0) lines.push(`Spárováno bez diakritiky: řádky ${rowList(stats.looseRowNos)}.`);
   if (stats.swappedRowNos.length > 0) lines.push(`Spárováno prohozeně: řádky ${rowList(stats.swappedRowNos)}.`);
+  if (stats.partialRowNos.length > 0) lines.push(`Spárováno částečnou shodou jména: řádky ${rowList(stats.partialRowNos)}.`);
   lines.push(
     `Nespárováno ${stats.unmatchedRowNos.length}` +
       (stats.unmatchedRowNos.length > 0 ? ` (řádky ${rowList(stats.unmatchedRowNos)})` : "") +
@@ -974,7 +992,9 @@ Použití:
 
 DATABASE_URL se načítá z .env.local. Skript neposílá žádné maily, nepíše do provozního logu a nezakládá členy.
 Zapisuje jen dny před první docházkou v aplikaci, nic nepřepisuje.
-Pouštěj ho nad všemi exporty dřív, než se ručně opraví doplněné dny (oprava nastaví zdroj manager a posunula by začátek docházky v aplikaci).
+Začátek docházky v aplikaci určují dny zapsané v aplikaci. Den, který má aspoň jeden záznam z PALMS, se do něj nepočítá,
+ani když se jeho záznam ručně opravil (oprava nastaví zdroj manager). Skript jde tedy pustit i po ručních opravách doplněných dnů;
+existující záznamy, i ručně opravené, nikdy nepřepíše.
 
 Úklid, kdyby se doplnění nepovedlo (jen ručně, s Tomovým souhlasem, v tomto pořadí):
 
