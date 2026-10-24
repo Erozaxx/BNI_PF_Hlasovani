@@ -14,10 +14,10 @@ interface RecipientOption {
 
 interface SendInterviewReportFormProps {
   interviewId: string;
-  /** Sending is guarded server-side to status='submitted' (arch 8g) — render
+  /** Sending is guarded server-side to status='submitted' (arch 8g) - render
    *  an explanation instead of a form the guard would just reject. */
   canSend: boolean;
-  /** Only members with an email — a recipient without one can never receive
+  /** Only members with an email - a recipient without one can never receive
    *  the report (guard re-checks this server-side too). */
   recipients: RecipientOption[];
 }
@@ -36,7 +36,7 @@ export function SendInterviewReportForm({
   if (!canSend) {
     return (
       <p className="text-sm text-text-muted">
-        Report lze odeslat jen u odeslaneho (submitted) pohovoru.
+        Report jde odeslat až po odeslání pohovoru.
       </p>
     );
   }
@@ -44,7 +44,7 @@ export function SendInterviewReportForm({
   if (recipients.length === 0) {
     return (
       <p className="text-sm text-text-muted">
-        Zadny clen nema vyplneny email — report nema komu poslat.
+        Žádný člen nemá vyplněný e-mail, report nemá komu přijít.
       </p>
     );
   }
@@ -54,7 +54,7 @@ export function SendInterviewReportForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!recipientId) {
-      setError("Vyberte prijemce.");
+      setError("Vyber příjemce.");
       return;
     }
 
@@ -67,12 +67,12 @@ export function SendInterviewReportForm({
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Report byl odeslan.");
+        showToast("success", "Report je odeslaný.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se odeslat report.");
-      showToast("error", "Nepodarilo se odeslat report.");
+      setError("Report se nepodařilo odeslat.");
+      showToast("error", "Report se nepodařilo odeslat.");
     } finally {
       setLoading(false);
     }
@@ -89,11 +89,11 @@ export function SendInterviewReportForm({
           value={recipientId}
           onChange={(e) => setRecipientId(e.target.value)}
           options={options}
-          placeholder="Vyberte prijemce..."
+          placeholder="Vyber příjemce…"
           error={error}
         />
       </div>
-      <Button type="submit" variant="secondary" size="sm" loading={loading}>
+      <Button type="submit" variant="secondary" size="sm" className="min-h-[44px]" loading={loading}>
         Odeslat report
       </Button>
     </form>

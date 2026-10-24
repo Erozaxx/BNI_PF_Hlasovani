@@ -2,11 +2,11 @@
  * Testy pro lib/meetings/morning-dispatch.ts (iter-028, T-005, arch 8.1 a
  * 8.2, případy M1 až M10).
  *
- * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-voting-window.ts.
+ * Bez DATABASE_URL, bez sítě, bez CI - vzor je scripts/test-voting-window.ts.
  * Spuštění: npm run test:morning-dispatch
  *
  * `planMorningDispatch` rozhoduje, kterou schůzku má ranní cron dnes
- * zpracovat (thursday-autostart / deferred-send / nic) — M1 až M8 pokrývají
+ * zpracovat (regular-day-autostart / deferred-send / nic) - M1 až M8 pokrývají
  * rozhodovací tabulku z arch 3.4 vč. dvou hraničních případů (M2: schůzka
  * splňuje obě podmínky zároveň -> jen jeden cíl; M6: uzávěrka běžícího
  * hlasování už prošla, protože fáze 1 ten den selhala -> žádný cíl, ne
@@ -80,19 +80,19 @@ type TestCase = {
 
 const cases: TestCase[] = [
   {
-    name: "M1. ct 2026-09-24T05:30Z, schuzka 24.9 draft -> 1 cil thursday-autostart",
+    name: "M1. ct 2026-09-24T05:30Z, schuzka 24.9 draft -> 1 cil regular-day-autostart",
     run: () => {
       const plan = planMorningDispatch({
         now: new Date("2026-09-24T05:30:00Z"),
         meetings: [mtg({ status: "draft" })],
       });
       assert.equal(plan.targets.length, 1);
-      assert.equal(plan.targets[0].reason, "thursday-autostart");
+      assert.equal(plan.targets[0].reason, "regular-day-autostart");
       assert.equal(plan.targets[0].meetingId, "meeting-1");
     },
   },
   {
-    name: "M2. totez, schuzka voting -> prave 1 cil, thursday-autostart (ne dvoji dispatch)",
+    name: "M2. totez, schuzka voting -> prave 1 cil, regular-day-autostart (ne dvoji dispatch)",
     run: () => {
       const plan = planMorningDispatch({
         now: new Date("2026-09-24T05:30:00Z"),
@@ -104,7 +104,7 @@ const cases: TestCase[] = [
         ],
       });
       assert.equal(plan.targets.length, 1);
-      assert.equal(plan.targets[0].reason, "thursday-autostart");
+      assert.equal(plan.targets[0].reason, "regular-day-autostart");
     },
   },
   {
@@ -160,14 +160,14 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "M8. ct, schuzka dnes closed -> thursday-autostart (ztratu varovani meeting-closed)",
+    name: "M8. ct, schuzka dnes closed -> regular-day-autostart (ztratu varovani meeting-closed)",
     run: () => {
       const plan = planMorningDispatch({
         now: new Date("2026-09-24T05:30:00Z"),
         meetings: [mtg({ status: "closed" })],
       });
       assert.equal(plan.targets.length, 1);
-      assert.equal(plan.targets[0].reason, "thursday-autostart");
+      assert.equal(plan.targets[0].reason, "regular-day-autostart");
     },
   },
   {
@@ -214,9 +214,52 @@ const cases: TestCase[] = [
       const guardFailed: VotingDispatchResult = {
         ok: false,
         code: "not-due",
-        error: "Odkazy nelze poslat hned, den schuzky jeste nenastal.",
+        error: "Odkazy nelze poslat hned, den schůzky ještě nenastal.",
       };
       assert.equal(isFirstDispatch(guardFailed), true);
+    },
+  },
+  {
+    name: "M11. iter-042: pravidelny den utery (2) -> autostart v utery, ne ve ctvrtek",
+    run: () => {
+      // ut 2026-09-22 05:30Z, schuzka 22.9. draft
+      const tue = planMorningDispatch({
+        now: new Date("2026-09-22T05:30:00Z"),
+        meetings: [mtg({ date: "2026-09-22", status: "draft" })],
+        regularWeekday: 2,
+      });
+      assert.equal(tue.targets.length, 1);
+      assert.equal(tue.targets[0].reason, "regular-day-autostart");
+      // ct 2026-09-24 se schuzkou dnes, ale pravidelny den je utery -> zadny cil
+      const thu = planMorningDispatch({
+        now: new Date("2026-09-24T05:30:00Z"),
+        meetings: [mtg({ status: "draft" })],
+        regularWeekday: 2,
+      });
+      assert.equal(thu.targets.length, 0);
+    },
+  },
+  {
+    name: "M12. iter-042: bez regularWeekday platí vychozi ctvrtek (shodne s M1)",
+    run: () => {
+      const plan = planMorningDispatch({
+        now: new Date("2026-09-24T05:30:00Z"),
+        meetings: [mtg({ status: "draft" })],
+      });
+      assert.equal(plan.targets.length, 1);
+      assert.equal(plan.targets[0].reason, "regular-day-autostart");
+    },
+  },
+  {
+    name: "M13. iter-042: deferred-send funguje v jakykoli den bez ohledu na pravidelny den",
+    run: () => {
+      const plan = planMorningDispatch({
+        now: new Date("2026-09-25T05:30:00Z"),
+        meetings: [mtg({ votingClosesAt: new Date("2026-09-30T21:59:59Z") })],
+        regularWeekday: 2,
+      });
+      assert.equal(plan.targets.length, 1);
+      assert.equal(plan.targets[0].reason, "deferred-send");
     },
   },
 ];

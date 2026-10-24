@@ -75,7 +75,7 @@ export async function GET(
 
   const meetingData = await getMeetingById(id);
   if (!meetingData) {
-    return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+    return NextResponse.json({ error: "Schůzka nebyla nalezena." }, { status: 404 });
   }
 
   // iter-037 (T-003b, arch 5.3): výstup schůzky jen s aktivními členy.
@@ -104,14 +104,14 @@ export async function GET(
   try {
     templateBuffer = fs.readFileSync(templatePath);
   } catch {
-    return NextResponse.json({ error: "Template not found" }, { status: 500 });
+    return NextResponse.json({ error: "Šablona exportu nebyla nalezena." }, { status: 500 });
   }
 
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(templateBuffer);
   } catch {
-    return NextResponse.json({ error: "Failed to load template" }, { status: 500 });
+    return NextResponse.json({ error: "Šablonu exportu se nepodařilo načíst." }, { status: 500 });
   }
 
   // Scale font sizes in styles.xml by ~12%
@@ -128,7 +128,7 @@ export async function GET(
   // Read sheet1.xml
   const sheet1File = zip.file("xl/worksheets/sheet1.xml");
   if (!sheet1File) {
-    return NextResponse.json({ error: "Template sheet not found" }, { status: 500 });
+    return NextResponse.json({ error: "V šabloně exportu chybí list." }, { status: 500 });
   }
   const originalXml = await sheet1File.async("text");
 
@@ -152,7 +152,7 @@ export async function GET(
 
   const sheetDataEndIdx = originalXml.indexOf("</sheetData>");
   if (sheetDataEndIdx === -1) {
-    return NextResponse.json({ error: "Invalid template XML" }, { status: 500 });
+    return NextResponse.json({ error: "Šablona exportu je poškozená." }, { status: 500 });
   }
 
   let beforeData: string;

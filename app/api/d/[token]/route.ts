@@ -4,7 +4,8 @@ import { getClientIp } from "@/lib/auth/throttle";
 import { loadDayPayload } from "@/lib/attendance/day-view";
 import { linkProblemStatus, linkProblemText } from "@/lib/attendance/link-page";
 import { SHEET_TEXTS, decideAttendanceWriteMode, parseWriteBody, type SheetRow } from "@/lib/attendance/sheet";
-import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
+import { UNEXCUSED_TEXTS, unexcusedTooEarlyText } from "@/lib/attendance/texts";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import {
   getDayMeta,
   listSheetRows,
@@ -104,6 +105,7 @@ export async function POST(
     let inactive = false;
     let conflict = false;
     let blocked: string | null = null;
+    const { meetingTime } = await getChapterSettings();
 
     if (body.op === "presence") {
       const res = await writePresenceGuarded({
@@ -114,10 +116,11 @@ export async function POST(
         expectedVersion: body.expectedVersion,
         actorId: v.memberId,
         mode: "normal",
+        meetingTime,
       });
       if (res.result === "day-closed") closed = true;
       else if (res.result === "inactive") inactive = true;
-      else if (res.result === "too-early") blocked = UNEXCUSED_TEXTS.tooEarly;
+      else if (res.result === "too-early") blocked = unexcusedTooEarlyText(meetingTime);
       else if (res.result === "excused-conflict") blocked = UNEXCUSED_TEXTS.excusedConflict;
       else if (res.result === "conflict") conflict = true;
     } else {

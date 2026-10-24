@@ -78,8 +78,8 @@ export default async function GuestsPage({
       ) : (
         <Card>
           <EmptyState
-            title="Zadni hoste nenalezeni"
-            description="Zkuste zmenit filtr kategorie nebo pridejte noveho hosta."
+            title="Žádní hosté nenalezeni"
+            description="Zkus změnit filtr kategorie, nebo přidej nového hosta."
           />
         </Card>
       )}

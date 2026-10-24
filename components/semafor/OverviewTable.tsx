@@ -38,10 +38,13 @@ export function OverviewTable({
   month,
   items,
   canDelete,
+  showBonus = true,
 }: {
   month: string;
   items: OverviewItem[];
   canDelete: boolean;
+  /** iter-042 (BK2): bez zdroje bonusu zmizí sloupce BNI a Bonus, skóre je skóre z BNI. */
+  showBonus?: boolean;
 }) {
   const [cMember, cColor, cScore, cBni, cBonus] = SEMAFOR_TEXTS.overviewColumns;
   return (
@@ -53,8 +56,8 @@ export function OverviewTable({
               <th className="py-2 pr-3 font-medium">{cMember}</th>
               <th className="py-2 pr-3 font-medium">{cColor}</th>
               <th className="py-2 pr-3 font-medium">{cScore}</th>
-              <th className="py-2 pr-3 font-medium">{cBni}</th>
-              <th className="py-2 pr-3 font-medium">{cBonus}</th>
+              {showBonus && <th className="py-2 pr-3 font-medium">{cBni}</th>}
+              {showBonus && <th className="py-2 pr-3 font-medium">{cBonus}</th>}
               <th className="py-2 font-medium">{SEMAFOR_TEXTS.areas}</th>
             </tr>
           </thead>
@@ -68,10 +71,14 @@ export function OverviewTable({
                   <ColorCell item={item} />
                 </td>
                 <td className="py-2 pr-3">{item.internal === null ? DASH : fmtNum(item.internal)}</td>
-                <td className="py-2 pr-3">
-                  <BniCell item={item} />
-                </td>
-                <td className="py-2 pr-3">{item.bonus === null ? DASH : `+${fmtNum(item.bonus.bonus)}`}</td>
+                {showBonus && (
+                  <td className="py-2 pr-3">
+                    <BniCell item={item} />
+                  </td>
+                )}
+                {showBonus && (
+                  <td className="py-2 pr-3">{item.bonus === null ? DASH : `+${fmtNum(item.bonus.bonus)}`}</td>
+                )}
                 <td className="py-2">
                   {item.areas ? (
                     <details>
@@ -104,17 +111,19 @@ export function OverviewTable({
               <NameCell item={item} />
               <ColorCell item={item} />
             </div>
-            <p className="mt-2 text-sm text-text-muted">
-              {item.hasData && item.bonus && item.total !== null && item.bniColor ? (
-                <>
-                  <span>{`${SEMAFOR_TEXTS.overviewColumns[3]}: ${SEMAFOR_TEXTS.colors[item.bniColor]} · ${fmtNum(item.total)}`}</span>
-                  {" · "}
-                  <span>{myBonusText(item.bonus.bonus)}</span>
-                </>
-              ) : (
-                <span>{DASH}</span>
-              )}
-            </p>
+            {showBonus && (
+              <p className="mt-2 text-sm text-text-muted">
+                {item.hasData && item.bonus && item.total !== null && item.bniColor ? (
+                  <>
+                    <span>{`${SEMAFOR_TEXTS.overviewColumns[3]}: ${SEMAFOR_TEXTS.colors[item.bniColor]} · ${fmtNum(item.total)}`}</span>
+                    {" · "}
+                    <span>{myBonusText(item.bonus.bonus)}</span>
+                  </>
+                ) : (
+                  <span>{DASH}</span>
+                )}
+              </p>
+            )}
             {item.areas && (
               <details className="mt-1">
                 <summary className="flex min-h-[44px] cursor-pointer select-none items-center rounded text-sm font-medium text-navy focus:outline-none focus:shadow-focus">

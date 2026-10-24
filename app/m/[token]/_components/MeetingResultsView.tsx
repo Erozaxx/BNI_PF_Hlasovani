@@ -48,10 +48,10 @@ export function MeetingResultsView({
         Výsledky hlasování: {guestName}
       </h4>
       {total === 0 ? (
-        <p className="text-sm text-text-muted">Zadne hlasy nebyly odevzdany.</p>
+        <p className="text-sm text-text-muted">Zatím nikdo nehlasoval.</p>
       ) : (
         <>
-          {/* Aggregate counts — always visible */}
+          {/* Aggregate counts - always visible */}
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-1.5">
               <Badge variant="success">{summary.up}</Badge>
@@ -59,7 +59,7 @@ export function MeetingResultsView({
             </div>
             <div className="flex items-center gap-1.5">
               <Badge variant="neutral">{summary.neutral}</Badge>
-              <span className="text-text-muted">nevim</span>
+              <span className="text-text-muted">nevím</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Badge variant="danger">{summary.down}</Badge>
@@ -68,17 +68,17 @@ export function MeetingResultsView({
             <span className="text-text-muted">celkem {total}</span>
           </div>
 
-          {/* Expand/collapse trigger — only if there are votes */}
+          {/* Expand/collapse trigger - only if there are votes */}
           {hasVotes && (
             <button
               type="button"
               onClick={() => setExpanded(!expanded)}
               aria-expanded={expanded}
-              className="mt-2 text-sm text-navy hover:underline focus:outline-none"
+              className="mt-2 min-h-[44px] text-sm text-navy hover:underline focus:outline-none"
             >
               {expanded
-                ? "Skryt kdo jak hlasoval \u25b2"
-                : `Zobrazit kdo jak hlasoval (${voteDetail.length}) \u25bc`}
+                ? "Skrýt, kdo jak hlasoval \u25b2"
+                : `Zobrazit, kdo jak hlasoval (${voteDetail.length}) \u25bc`}
             </button>
           )}
 
@@ -90,7 +90,7 @@ export function MeetingResultsView({
                   <span className="shrink-0">{voteEmoji[v.value] ?? "?"}</span>
                   <span className="font-medium text-text-main">{v.memberName}</span>
                   {v.value === "down" && v.reason && (
-                    <span className="text-text-muted">— {v.reason}</span>
+                    <span className="text-text-muted">: {v.reason}</span>
                   )}
                 </div>
               ))}

@@ -10,6 +10,7 @@
 
 import { addDaysToDateString, formatCzDate, isValidDateString } from "@/lib/members/activity";
 import {
+  ATTENDANCE_START,
   MAX_ADVANCE_DAYS,
   MEMBER_TEXTS,
   formatWeekdayLong,
@@ -22,19 +23,21 @@ import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
 
 export const SHEET_TEXTS = {
   filterAll: "Všichni",
-  filterOpen: "Nezaškrtnutí",
+  filterOpen: "Bez zápisu",
   present: "Přítomen",
   withSubstitute: "s náhradníkem",
   excused: "Omluven(a)",
-  /** iter-041 (T-005b): úvod Zápisu nahoře na stránce: dva způsoby zápisu, náhradník, nezaškrtnutí, odškrtnutí omluvy. */
+  /** iter-041 (T-005b), iter-042 (#13): úvod Zápisu nahoře na stránce: dva způsoby zápisu, náhradník, bez zápisu, odškrtnutí omluvy. */
   introTitle: "Jak zapisovat",
   introWays:
-    "Zapisovat jde dvěma způsoby: průběžně zaškrtáváš Přítomen u příchozích, nebo označíš jen ty, kdo chyběli (Chyběl(a) bez omluvy, případně odškrtneš Přítomen).",
+    "Zaškrtávej Přítomen u příchozích, nebo označ jen ty, kdo chyběli (Chyběl(a) bez omluvy).",
   introSubstitute:
-    "Náhradníka zapíšeš tak, že u člena zaškrtneš Přítomen. Tím se zpřístupní volba „s náhradníkem“, u ohlášeného náhradníka se jméno vyplní samo.",
+    "Náhradníka zapíšeš zaškrtnutím Přítomen a volbou s náhradníkem. Ohlášené jméno se vyplní samo.",
   introOpen:
-    "Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený.",
-  introExcuse: "Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka.",
+    "Kdo zůstane bez zápisu, počítá se při uzávěrce jako přítomný, s omluvou jako omluvený a s ohlášeným náhradníkem jako náhradník.",
+  introExcuse: "Odškrtnutím Omluven(a) smažeš omluvu i se jménem náhradníka.",
+  /** iter-042 (#2): potvrzení odškrtnutí Omluven(a) bez náhradníka (s náhradníkem `confirmExcuseOffSubstituteText`). */
+  confirmExcuseOff: "Smazat omluvu člena? Vrátit to nepůjde.",
   /** iter-041 (gate sekce 5): volba „Chyběl(a) bez omluvy“ a její texty. */
   unexcused: UNEXCUSED_TEXTS.option,
   unexcusedTooEarlyHint: UNEXCUSED_TEXTS.tooEarlyHint,
@@ -46,14 +49,14 @@ export const SHEET_TEXTS = {
   errSave: "Neuložilo se. Zkus to znovu.",
   errClosed: "Den je uzavřený. Opravy dělá admin, Prezident nebo Viceprezident.",
   errFutureDay: "Přítomnost se zapisuje v den schůzky.",
-  errInactive: "Člen je neaktivní.",
+  errInactive: "Člen ten den nebyl aktivní (neaktivní nebo vstoupil později). Docházka se mu nezapisuje.",
   /** Mimo gate sekci 5: zápis bez práva `attendance.record` a bez `edit_history`. */
   errNoRecord: "Docházku zapisovat nemůžeš.",
-  noMeeting: "Na dnešek není v aplikaci založená schůzka.",
+  noMeeting: "Na dnešek není v aplikaci žádná schůzka. Zapisuj, jen když se opravdu konala.",
   writeAnyway: "Zapisovat i tak",
   closedBanner: "Den je uzavřený.",
   unrecordedBanner:
-    "Docházka se ten den nezapisovala. Počítají se jen ohlášené nepřítomnosti bez náhradníka.",
+    "Docházka se ten den nezapisovala. Počítají se jen omluvy bez náhradníka.",
   auditTitle: "Historie oprav",
   /** Mimo gate sekci 5: prázdná historie, stejný zápis jako u prázdných seznamů. */
   auditEmpty: "–",
@@ -65,6 +68,11 @@ export const SHEET_TEXTS = {
   showDay: "Zobrazit",
   dateLabel: "Datum",
 } as const;
+
+/** iter-042 (#2): potvrzení odškrtnutí Omluven(a), když omluva nese jméno náhradníka. */
+export function confirmExcuseOffSubstituteText(name: string): string {
+  return `Smazat omluvu i s náhradníkem ${name}? Vrátit to nepůjde. Když náhradník přišel, dej Zrušit a zaškrtni Přítomen.`;
+}
 
 /**
  * Hláška při konfliktu verze (gate sekce 5). Řádek doplněný uzávěrkou cronu nemá
@@ -89,7 +97,7 @@ export const OVERVIEW_TEXTS = {
   daysEmpty: "Zatím žádný uzavřený den.",
   detailDays: "Dny za posledních 6 měsíců",
   detailDaysEmpty: "–",
-  detailUpcoming: "Ohlášené budoucí nepřítomnosti",
+  detailUpcoming: "Omluvy dopředu",
   detailHistory: "Historie oprav",
   back: "Zpět na přehled",
 } as const;
@@ -120,7 +128,7 @@ export interface WriteModeDecision {
  * Režim zápisu rozhoduje server, ne klient (arch 6.1). `normal` má přednost,
  * `history` jen když `normal` nejde a volající má `attendance.edit_history`.
  *
- * - budoucí den: přítomnost nikdy; cizí nepřítomnost („Omluven(a)“) jen jako
+ * - budoucí den: přítomnost nikdy; cizí omluva („Omluven(a)“) jen jako
  *   oprava (`history`), do dnes + 365
  * - dnes, den neuzavřený, právo `record`: `normal`
  * - jinak (uzavřený nebo minulý den, nebo dnes bez `record`): `history` s právem
@@ -190,7 +198,7 @@ export interface SheetRow {
   updatedByName: string | null;
   /** ISO čas poslední změny, `null` bez řádku. */
   updatedAt: string | null;
-  /** Člen má na den ohlášenou nepřítomnost (řádek v `member_absence`). */
+  /** Člen má na den omluvu (řádek v `member_absence`). */
   excused: boolean;
   /** Jméno ohlášeného náhradníka, `null` = bez náhradníka. */
   announcedName: string | null;
@@ -226,13 +234,14 @@ export function rowDecided(row: Pick<SheetRow, "status">): boolean {
 }
 
 /**
- * iter-041 (gate Z1): „Chyběl(a) bez omluvy“ jde zapsat od 7:30 v den schůzky
- * (do té doby se člen smí omluvit). U dnů před dneškem podmínka vždy splněna.
- * Bez DB, jen čas. SQL pojistka `unexcusedTimeSql` (lib/db/queries/attendance.ts)
- * je pravda, tohle je jen skrytí volby a srozumitelná hláška.
+ * iter-041 (gate Z1): „Chyběl(a) bez omluvy“ jde zapsat od začátku schůzky v den
+ * schůzky (do té doby se člen smí omluvit). U dnů před dneškem podmínka vždy
+ * splněna. Začátek (`time`) je z nastavení chapteru (iter-042 B4). Bez DB, jen
+ * čas. SQL pojistka `unexcusedTimeSql` (lib/db/queries/attendance.ts) je pravda,
+ * tohle je jen skrytí volby a srozumitelná hláška.
  */
-export function unexcusedAllowedAt(now: Date, date: string): boolean {
-  return now.getTime() >= memberDeadline(date).getTime();
+export function unexcusedAllowedAt(now: Date, date: string, time: string = ATTENDANCE_START): boolean {
+  return now.getTime() >= memberDeadline(date, time).getTime();
 }
 
 export function targetsEqual(a: PresenceTarget | null, b: PresenceTarget | null): boolean {
@@ -240,12 +249,23 @@ export function targetsEqual(a: PresenceTarget | null, b: PresenceTarget | null)
   return a.status === b.status && (a.substituteName ?? null) === (b.substituteName ?? null);
 }
 
-/** „Ohlásil(a): bez náhradníka“ / „Ohlásil(a): náhradník {jméno}“, `null` bez ohlášení. */
-export function announcedText(row: Pick<SheetRow, "excused" | "announcedName">): string | null {
-  if (!row.excused) return null;
-  return row.announcedName
-    ? `Ohlásil(a): náhradník ${row.announcedName}`
-    : "Ohlásil(a): bez náhradníka";
+/**
+ * iter-042 (#1): šedý řádek pod jménem říká, jak se řádek spočítá při uzávěrce.
+ * Bez zápisu a bez omluvy: „Bez zápisu: počítá se jako přítomen(a).“ S omluvou:
+ * „Omluva bez náhradníka: počítá se jako omluven(a).“ nebo „Omluva, náhradník
+ * {jméno}: počítá se jako náhradník.“ Když je řádek už rozhodnutý (zápis
+ * existuje), následek se nepíše tam, kde by už neplatil (zaškrtnutý Přítomen),
+ * a řádek bez omluvy s rozhodnutým zápisem nemá řádek žádný (`null`).
+ */
+export function announcedText(
+  row: Pick<SheetRow, "excused" | "announcedName"> & { status?: PresenceStatus | null }
+): string | null {
+  const status = row.status ?? null;
+  if (!row.excused) return status === null ? "Bez zápisu: počítá se jako přítomen(a)." : null;
+  const head = row.announcedName ? `Omluva, náhradník ${row.announcedName}` : "Omluva bez náhradníka";
+  const effective: PresenceStatus = status ?? (row.announcedName ? "substitute" : "absent");
+  if (effective === "present") return `${head}.`;
+  return `${head}: počítá se jako ${effective === "substitute" ? "náhradník" : "omluven(a)"}.`;
 }
 
 export interface SheetSummary {
@@ -260,7 +280,7 @@ export interface SheetSummary {
  * Souhrn dne. Počítá se tak, jak se den uzavře (T-005b): řádek bez zápisu je
  * přítomen, s ohlášeným náhradníkem je náhradník, s omluvou bez náhradníka
  * chybí (omluven). Přítomno = přišel sám nebo náhradník (obsazené místo),
- * chybí = ostatní, omluveno = z chybějících ti, kdo mají ohlášenou nepřítomnost.
+ * chybí = ostatní, omluveno = z chybějících ti, kdo mají omluvu.
  */
 export function summarizeSheet(
   rows: readonly (Pick<SheetRow, "status" | "excused"> & { announcedName?: string | null })[]
@@ -538,6 +558,8 @@ export interface DayPayload {
   date: string;
   /** Dnešek v Praze, `YYYY-MM-DD`. */
   today: string;
+  /** iter-042 (B4): začátek schůzky z nastavení chapteru, `HH:MM`. */
+  meetingTime: string;
   /** Prohlížející (pro „změnil(a) {jméno}“ jen u cizí změny). */
   viewerId: string;
   /** Režim zápisu přítomnosti. */

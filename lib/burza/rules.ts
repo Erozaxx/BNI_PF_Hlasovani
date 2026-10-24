@@ -53,6 +53,18 @@ export const TEXTS = {
   tabContacts: "Kontakty",
   usedToggle: "Využil(a) jsem",
   usedThisMonth: "tento měsíc",
+  /**
+   * iter-042 (#6, gate Z3): věta pod „Využil(a) jsem“. Druhá věta o bonusu jen
+   * když Burza dává bonus (semafor i Burza zapnuté), bez počtu bodů.
+   */
+  usedHelpHint: (bonusOn: boolean) =>
+    bonusOn
+      ? "Zaškrtni, když ti tenhle člen pomohl. Připíše mu to bonus do interního semaforu. Odškrtnout můžeš kdykoli."
+      : "Zaškrtni, když ti tenhle člen pomohl. Odškrtnout můžeš kdykoli.",
+  usedContactHint: (bonusOn: boolean) =>
+    bonusOn
+      ? "Zaškrtni, když ti kontakt pomohl. Členovi, který ho nabízí, se připíše bonus do interního semaforu."
+      : "Zaškrtni, když ti kontakt pomohl.",
   contactsIntro: "Kontakt tu přímo není. Když ho chceš, řekni si tomu, kdo ho nabízí.",
   myContactsTitle: "Tvoje kontakty",
   noContacts: "Ještě tu nemáš žádný kontakt.",

@@ -60,14 +60,14 @@ export function ControlPanel({
         });
 
         if (res.status === 409) {
-          showToast("Operace selhala — timer je již v tomto stavu.");
+          showToast("Operace selhala, časovač už je v tomto stavu.");
         } else if (res.status === 404) {
           showToast("Časovač nebyl nalezen.");
         } else if (!res.ok) {
-          showToast("Neočekávaná chyba. Zkuste to znovu.");
+          showToast("Neočekávaná chyba. Zkus to znovu.");
         }
       } catch {
-        showToast("Chyba připojení. Zkuste to znovu.");
+        showToast("Chyba připojení. Zkus to znovu.");
       } finally {
         router.refresh();
         setLoading(false);
@@ -79,7 +79,7 @@ export function ControlPanel({
   const handleSetDuration = () => {
     const val = parseInt(durationInput, 10);
     if (!Number.isInteger(val) || val <= 0 || val > 86400) {
-      showToast("Zadejte platný čas v sekundách (1–86400).");
+      showToast("Zadej platný čas v sekundách (1–86400).");
       return;
     }
     handleAction("set_duration", val);

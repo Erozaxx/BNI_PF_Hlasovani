@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { InternalDayCard } from "@/components/attendance/InternalDayCard";
 import {
   GRID_WEEKDAYS,
-  isThursday,
+  gridColumnOfWeekday,
   monthGrid,
   monthOf,
   monthTitle,
@@ -25,6 +25,7 @@ import {
   type PlanEntry,
 } from "@/lib/attendance/plan";
 import { dayCellClass, dayNumberClass, dayTone } from "@/lib/attendance/internal";
+import { isRegularDay } from "@/lib/chapter/settings";
 
 /**
  * iter-039 (T-003, arch 6, 7, 8): kalendář plánovaných omluv pro správce.
@@ -53,6 +54,8 @@ export interface AbsencePlanCalendarProps {
   rows: PlanEntry[];
   /** Vybraný den při otevření. */
   initialSelected: string;
+  /** iter-042 (B3): den pravidelné schůzky z nastavení, 0 = neděle ... 6 = sobota (čtvrtek = 4). */
+  regularWeekday: number;
 }
 
 export function AbsencePlanCalendar({
@@ -65,6 +68,7 @@ export function AbsencePlanCalendar({
   canManageInternal,
   rows,
   initialSelected,
+  regularWeekday,
 }: AbsencePlanCalendarProps) {
   const [now, setNow] = useState(() => new Date(serverNow));
   const [internals, setInternals] = useState<Set<string>>(() => new Set(internalDates));
@@ -153,8 +157,8 @@ export function AbsencePlanCalendar({
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-text-muted">
-          {GRID_WEEKDAYS.map((w) => (
-            <div key={w} className={w === "Čt" ? "text-navy" : ""}>
+          {GRID_WEEKDAYS.map((w, i) => (
+            <div key={w} className={i === gridColumnOfWeekday(regularWeekday) ? "text-navy" : ""}>
               {w}
             </div>
           ))}
@@ -167,17 +171,20 @@ export function AbsencePlanCalendar({
                 if (!date) return <div key={di} className="min-h-[44px]" />;
                 const count = byDate[date]?.length ?? 0;
                 const past = date < today;
-                const thursday = isThursday(date);
-                const tone = dayTone({ hasMeeting: meetings.has(date), hasInternal: internals.has(date) });
+                const tone = dayTone({
+                  hasMeeting: meetings.has(date),
+                  hasInternal: internals.has(date),
+                  isRegularDay: isRegularDay(date, { meetingWeekday: regularWeekday }),
+                });
                 const isSelected = date === selected;
                 return (
                   <button
                     key={date}
                     type="button"
                     onClick={() => selectDay(date)}
-                    aria-label={planDayAria(date, count, tone === "meeting", tone === "internal")}
+                    aria-label={planDayAria(date, count, tone === "meeting", tone === "internal", tone === "regular")}
                     aria-pressed={isSelected}
-                    className={dayCellClass(tone, thursday, past, isSelected)}
+                    className={dayCellClass(tone, past, isSelected)}
                   >
                     <span className={dayNumberClass(tone)}>
                       {Number(date.slice(8))}

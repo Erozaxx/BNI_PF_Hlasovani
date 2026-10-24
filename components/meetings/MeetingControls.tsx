@@ -18,7 +18,7 @@ export function MeetingControls({ meetingId, status }: MeetingControlsProps) {
   const [error, setError] = useState("");
 
   async function handleCloseVoting() {
-    if (!confirm("Opravdu chcete uzavřít hlasování? Tuto akci nelze vrátit.")) {
+    if (!confirm("Uzavřít hlasování? Vrátit to nepůjde.")) {
       return;
     }
     setLoading(true);
@@ -29,12 +29,12 @@ export function MeetingControls({ meetingId, status }: MeetingControlsProps) {
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Hlasovani bylo uzavreno.");
+        showToast("success", "Hlasování je uzavřené.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se uzavrit hlasovani.");
-      showToast("error", "Nepodarilo se uzavrit hlasovani.");
+      setError("Hlasování se nepodařilo uzavřít.");
+      showToast("error", "Hlasování se nepodařilo uzavřít.");
     } finally {
       setLoading(false);
     }
@@ -51,6 +51,7 @@ export function MeetingControls({ meetingId, status }: MeetingControlsProps) {
         size="sm"
         onClick={handleCloseVoting}
         loading={loading}
+        className="min-h-[44px]"
       >
         Uzavřít hlasování
       </Button>

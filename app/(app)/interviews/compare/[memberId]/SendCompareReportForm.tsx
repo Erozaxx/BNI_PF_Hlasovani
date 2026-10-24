@@ -14,7 +14,7 @@ interface RecipientOption {
 
 interface SendCompareReportFormProps {
   memberId: string;
-  /** Sending is guarded server-side to "both interviews submitted" (T-003) —
+  /** Sending is guarded server-side to "both interviews submitted" (T-003) -
    *  render an explanation instead of a form the guard would just reject. */
   canSend: boolean;
   recipients: RecipientOption[];
@@ -34,8 +34,7 @@ export function SendCompareReportForm({
   if (!canSend) {
     return (
       <p className="text-sm text-text-muted">
-        Porovnavaci report lze odeslat, jen kdyz jsou oba pohovory odeslane
-        (submitted).
+        Srovnávací report jde odeslat, až budou oba pohovory odeslané.
       </p>
     );
   }
@@ -43,7 +42,7 @@ export function SendCompareReportForm({
   if (recipients.length === 0) {
     return (
       <p className="text-sm text-text-muted">
-        Zadny clen nema vyplneny email — report nema komu poslat.
+        Žádný člen nemá vyplněný e-mail, report nemá komu přijít.
       </p>
     );
   }
@@ -53,7 +52,7 @@ export function SendCompareReportForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!recipientId) {
-      setError("Vyberte prijemce.");
+      setError("Vyber příjemce.");
       return;
     }
 
@@ -66,12 +65,12 @@ export function SendCompareReportForm({
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Porovnavaci report byl odeslan.");
+        showToast("success", "Srovnávací report je odeslaný.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se odeslat porovnavaci report.");
-      showToast("error", "Nepodarilo se odeslat porovnavaci report.");
+      setError("Srovnávací report se nepodařilo odeslat.");
+      showToast("error", "Srovnávací report se nepodařilo odeslat.");
     } finally {
       setLoading(false);
     }
@@ -88,12 +87,12 @@ export function SendCompareReportForm({
           value={recipientId}
           onChange={(e) => setRecipientId(e.target.value)}
           options={options}
-          placeholder="Vyberte prijemce..."
+          placeholder="Vyber příjemce…"
           error={error}
         />
       </div>
-      <Button type="submit" variant="secondary" size="sm" loading={loading}>
-        Odeslat porovnavaci report
+      <Button type="submit" variant="secondary" size="sm" className="min-h-[44px]" loading={loading}>
+        Odeslat srovnávací report
       </Button>
     </form>
   );

@@ -94,12 +94,13 @@ export function MeetingVoteButtons({
         // podle duvodu (invalid/revoked/expired); jiny stav se chova jako
         // dnes (holy text z API, pokud existuje).
         const tokenError = tokenErrorText(res.status, data.error);
+        // iter-042 (nález 3): holý anglický text z API se uživateli neukazuje.
         setError(
           tokenError
             ? meetingTokenActionError(tokenError.reason, "vote")
-            : typeof data.error === "string"
-              ? data.error
-              : "Nepodarilo se odeslat hlas."
+            : res.status === 403
+              ? "Hlas se neuložil, hlasování už neběží."
+              : "Hlas se neuložil. Zkus to znovu."
         );
         return;
       }
@@ -112,7 +113,7 @@ export function MeetingVoteButtons({
       setViewState("submitted");
       onVoteCast(newVote);
     } catch {
-      setError("Nepodarilo se odeslat hlas. Zkuste to znovu.");
+      setError("Hlas se neuložil. Zkus to znovu.");
     } finally {
       setLoading(false);
     }
@@ -131,7 +132,7 @@ export function MeetingVoteButtons({
   const handleDownFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      setError("Pro hlas 'Proti' je duvod povinny.");
+      setError("U hlasu Proti napiš důvod.");
       return;
     }
     await submitVote("down", reason.trim());
@@ -147,7 +148,7 @@ export function MeetingVoteButtons({
   if (viewState === "submitted" && submittedVote) {
     return (
       <div className="flex flex-col items-start gap-2">
-        <span className="text-xs text-text-muted">Vas hlas</span>
+        <span className="text-xs text-text-muted">Tvůj hlas</span>
         <Badge variant={voteBadgeVariant[submittedVote.value] ?? "neutral"}>
           {voteLabel[submittedVote.value] ?? submittedVote.value}
         </Badge>
@@ -160,6 +161,7 @@ export function MeetingVoteButtons({
           type="button"
           size="sm"
           variant="secondary"
+          className="min-h-[44px]"
           onClick={handleChange}
         >
           Změnit
@@ -173,14 +175,14 @@ export function MeetingVoteButtons({
     return (
       <form onSubmit={handleDownFormSubmit} className="space-y-3">
         <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-          Duvod pro hlas Proti
+          Důvod hlasu Proti
         </p>
         <Textarea
           name="vote-reason"
-          label="Duvod (povinny)"
+          label="Důvod (povinný)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Uved duvod pro hlas Proti..."
+          placeholder="Napiš, proč jsi proti..."
           disabled={loading}
           rows={2}
           error={error ?? undefined}
@@ -189,6 +191,7 @@ export function MeetingVoteButtons({
           <Button
             type="submit"
             size="sm"
+            className="min-h-[44px]"
             loading={loading}
             disabled={!reason.trim()}
           >
@@ -198,6 +201,7 @@ export function MeetingVoteButtons({
             type="button"
             size="sm"
             variant="secondary"
+            className="min-h-[44px]"
             disabled={loading}
             onClick={() => {
               setViewState("selecting");
@@ -205,7 +209,7 @@ export function MeetingVoteButtons({
               setError(null);
             }}
           >
-            Zpet
+            Zpět
           </Button>
         </div>
       </form>
@@ -216,7 +220,7 @@ export function MeetingVoteButtons({
   return (
     <div className="space-y-3">
       <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">
-        Vas hlas
+        Tvůj hlas
       </p>
       {error && (
         <p className="text-sm text-danger" role="alert">
@@ -231,7 +235,7 @@ export function MeetingVoteButtons({
             onClick={() => handlePushVote(opt.value)}
             disabled={loading}
             className={[
-              "flex flex-col items-center gap-1 px-4 py-3 rounded-lg border-2 transition-colors",
+              "flex flex-col items-center gap-1 min-h-[44px] px-4 py-3 rounded-lg border-2 transition-colors",
               "focus:outline-none focus:shadow-focus text-sm font-medium",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "border-border bg-white hover:border-primary/50",

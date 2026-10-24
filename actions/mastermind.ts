@@ -3,6 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAuth, requirePermission } from "@/lib/auth/guards";
+import { requireFeature } from "@/lib/chapter/feature-guard";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { can } from "@/lib/auth/permissions";
 import { getMemberById } from "@/lib/db/queries/members";
 import { isMemberActive } from "@/lib/members/activity";
@@ -106,6 +108,8 @@ export async function createCaseAction(
 ): Promise<ActionResult<{ id: string }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   const parsed = validateCaseInput(input);
@@ -157,6 +161,8 @@ export async function updateCaseAction(
 ): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };
@@ -180,10 +186,12 @@ export async function updateCaseAction(
   }
 }
 
-/** Autor stáhne jen navržený případ, vedení navržený i zařazený. */
+/** Autor smaže jen navržený případ, vedení navržený i zařazený. */
 export async function removeCaseAction(caseId: string): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };
@@ -203,7 +211,7 @@ export async function removeCaseAction(caseId: string): Promise<ActionResult> {
     return { success: true };
   } catch (err) {
     console.error(`[removeCaseAction] failed: ${errClass(err)}`);
-    return { success: false, error: "Případ se nepodařilo stáhnout." };
+    return { success: false, error: "Případ se nepodařilo smazat." };
   }
 }
 
@@ -220,6 +228,8 @@ export async function setInterestAction(
 ): Promise<ActionResult<{ interested: boolean; count: number }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId) || typeof interested !== "boolean") {
@@ -270,7 +280,7 @@ export type ScheduleResult = {
 };
 
 /**
- * Zařazení na čtvrtek. Žádné maily (rozhodnutí 15. 10. 2026, free tarif
+ * Zařazení na pravidelný den schůzky (z nastavení chapteru). Žádné maily (rozhodnutí 15. 10. 2026, free tarif
  * Resendu): informaci o zařazení nese jen aplikace.
  */
 export async function scheduleCaseAction(
@@ -279,11 +289,14 @@ export async function scheduleCaseAction(
 ): Promise<ActionResult<ScheduleResult>> {
   const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };
   const today = todayInPrague();
-  if (typeof date !== "string" || !isSchedulableDate(date, today)) {
+  const { meetingWeekday } = await getChapterSettings();
+  if (typeof date !== "string" || !isSchedulableDate(date, today, undefined, meetingWeekday)) {
     return { success: false, error: MESSAGES.badDate };
   }
 
@@ -338,6 +351,8 @@ export async function scheduleCaseAction(
 export async function unscheduleCaseAction(caseId: string): Promise<ActionResult> {
   const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };
@@ -361,6 +376,8 @@ export async function unscheduleCaseAction(caseId: string): Promise<ActionResult
 export async function confirmPresentedAction(caseId: string): Promise<ActionResult> {
   const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };
@@ -396,6 +413,8 @@ export async function confirmPresentedAction(caseId: string): Promise<ActionResu
 export async function undoPresentedAction(caseId: string): Promise<ActionResult> {
   const auth = await requirePermission("mastermind.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("mastermind");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(caseId)) return { success: false, error: MESSAGES.invalidInput };

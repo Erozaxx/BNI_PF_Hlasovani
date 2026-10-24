@@ -29,7 +29,7 @@ export async function addOptionByParticipantAction(
   label: string
 ): Promise<ActionResult<{ id: string }>> {
   if (!eventId || !participantId || !label?.trim()) {
-    return { success: false, error: "Neplatne parametry." };
+    return { success: false, error: "Neplatné parametry." };
   }
 
   const db = getDb();
@@ -52,7 +52,7 @@ export async function addOptionByParticipantAction(
 
     const participant = participants[0];
     if (!participant) {
-      return { success: false, error: "Ucastnik nebyl nalezen." };
+      return { success: false, error: "Účastník nebyl nalezen." };
     }
 
     // iter-037 (T-003b): deaktivovaný člen možnosti nepřidává.
@@ -77,11 +77,11 @@ export async function addOptionByParticipantAction(
     }
 
     if (eventData.status !== "active") {
-      return { success: false, error: "Moznosti lze pridavat pouze u aktivnich akci." };
+      return { success: false, error: "Možnosti jde přidávat jen u aktivních akcí." };
     }
 
     if (!eventData.customOptionsAllowed) {
-      return { success: false, error: "Pridavani vlastnich moznosti neni povoleno." };
+      return { success: false, error: "Přidávání vlastních možností není povolené." };
     }
 
     if (
@@ -90,7 +90,7 @@ export async function addOptionByParticipantAction(
     ) {
       return {
         success: false,
-        error: "Pridavat moznosti mohou pouze clenovê skupiny.",
+        error: "Možnosti mohou přidávat jen členové skupiny.",
       };
     }
 
@@ -108,9 +108,9 @@ export async function addOptionByParticipantAction(
   } catch (error: unknown) {
     const dbError = error as { code?: string };
     if (dbError?.code === "23505") {
-      return { success: false, error: "Moznost s timto nazvem jiz existuje." };
+      return { success: false, error: "Možnost s tímhle názvem už existuje." };
     }
     console.error("addOptionByParticipantAction error:", error);
-    return { success: false, error: "Nepodarilo se pridat moznost." };
+    return { success: false, error: "Možnost se nepodařilo přidat." };
   }
 }

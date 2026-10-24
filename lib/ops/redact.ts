@@ -1,13 +1,13 @@
 /**
- * iter-027 (T-005) — vrstva 2 proti úniku tokenů do logu (arch iter-027
+ * iter-027 (T-005) - vrstva 2 proti úniku tokenů do logu (arch iter-027
  * T-001, sekce 9.2). Vrstva 1 (uzavřený `OpsEventInput`, žádné pole pro
- * token) nestačí sama — skutečná úniková cesta jsou volné texty výjimek
+ * token) nestačí sama - skutečná úniková cesta jsou volné texty výjimek
  * (`e.message`), které mohou obsahovat celou URL i s tokenem.
  *
  * Čistý modul: žádný import krom stdlib. Bezpečné pro
  * scripts/test-ops-events.ts (tsx bez DATABASE_URL).
  *
- * Volající (event-shape.ts) MUSÍ redigovat PŘED zkrácením, nikdy naopak —
+ * Volající (event-shape.ts) MUSÍ redigovat PŘED zkrácením, nikdy naopak -
  * zkrácení první by mohlo useknout token uprostřed a nechat fragment kratší
  * než 8 znaků, na který se vzory níže už nechytí.
  *

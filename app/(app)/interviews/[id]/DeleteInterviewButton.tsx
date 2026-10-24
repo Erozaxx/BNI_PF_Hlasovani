@@ -28,10 +28,10 @@ export function DeleteInterviewButton({
 
   async function handleDelete() {
     const warning = isSubmitted
-      ? `Pohovor obsahuje ${answeredCount} vyplnenych odpovedi — budou nevratne smazany.`
-      : "Tato akce je nevratna.";
+      ? `Pohovor obsahuje vyplněné odpovědi (${answeredCount}). Smažou se a vrátit to nepůjde.`
+      : "Vrátit to nepůjde.";
     const confirmed = window.confirm(
-      `Opravdu smazat pohovor (${memberName}, ${typeLabel})? ${warning}`
+      `Smazat pohovor (${memberName}, ${typeLabel})? ${warning}`
     );
     if (!confirmed) return;
 
@@ -41,11 +41,11 @@ export function DeleteInterviewButton({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", "Pohovor byl smazan.");
+        showToast("success", "Pohovor je smazaný.");
         router.push("/interviews");
       }
     } catch {
-      showToast("error", "Nepodarilo se smazat pohovor.");
+      showToast("error", "Pohovor se nepodařilo smazat.");
     } finally {
       setLoading(false);
     }
@@ -56,6 +56,7 @@ export function DeleteInterviewButton({
       type="button"
       variant="danger"
       size="sm"
+      className="min-h-[44px]"
       loading={loading}
       onClick={handleDelete}
     >

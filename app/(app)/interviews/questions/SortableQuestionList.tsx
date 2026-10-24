@@ -82,16 +82,16 @@ function SortableQuestionRow({ q }: { q: QuestionRow }) {
           <p className="text-sm text-text-main whitespace-pre-wrap break-words">
             {q.text}
           </p>
-          {/* Scope badge only for restricted questions — a question valid for
+          {/* Scope badge only for restricted questions - a question valid for
               both types (the default, and the majority of the set) gets no
               badge so the label actually carries information (arch T-001 7.3). */}
           {q.appliesMonth5 && !q.appliesMonth10 && (
-            <Badge variant="info">Jen 5 mesicu</Badge>
+            <Badge variant="info">Jen po 5 měsících</Badge>
           )}
           {!q.appliesMonth5 && q.appliesMonth10 && (
-            <Badge variant="info">Jen 10 mesicu</Badge>
+            <Badge variant="info">Jen po 10 měsících</Badge>
           )}
-          {!q.active && <Badge variant="neutral">Archivovano</Badge>}
+          {!q.active && <Badge variant="neutral">Archivováno</Badge>}
         </div>
         <EditQuestionForm
           questionId={q.id}
@@ -111,7 +111,7 @@ export function SortableQuestionList({ questions }: SortableQuestionListProps) {
   const [items, setItems] = useState<QuestionRow[]>(questions);
 
   // Sync local optimistic state with server props after router.refresh()
-  // (add/edit/archive changes the list) — same pattern as SortableMemberList.
+  // (add/edit/archive changes the list) - same pattern as SortableMemberList.
   useEffect(() => {
     setItems(questions);
   }, [questions]);
@@ -138,11 +138,11 @@ export function SortableQuestionList({ questions }: SortableQuestionListProps) {
       if (!result.success) {
         throw new Error(result.error);
       }
-      showToast("success", "Poradi otazek ulozeno.");
+      showToast("success", "Pořadí otázek je uložené.");
       router.refresh();
     } catch {
       setItems(previous); // rollback
-      showToast("error", "Nepodarilo se ulozit poradi otazek.");
+      showToast("error", "Pořadí otázek se nepodařilo uložit.");
     }
   }
 

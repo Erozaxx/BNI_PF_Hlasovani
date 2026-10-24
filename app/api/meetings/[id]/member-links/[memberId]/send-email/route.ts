@@ -21,11 +21,11 @@ function err(status: number, message: string) {
  *
  * Sends a magic link email to a specific member for a specific meeting.
  *
- * Iter-026 (arch 4.4): the client never holds the raw token — this endpoint
+ * Iter-026 (arch 4.4): the client never holds the raw token - this endpoint
  * regenerates it itself (UPDATE, preserves the UNIQUE constraint), builds
  * the URL server-side, sends the email, and marks morningEmailSentAt
  * ("odkaz odeslán", not the old morning-email semantics). Request body is
- * ignored entirely; the endpoint always works, reload or not — the whole
+ * ignored entirely; the endpoint always works, reload or not - the whole
  * point is that the client no longer needs a rawToken from an earlier
  * response to use this button.
  *
@@ -45,17 +45,17 @@ export async function POST(
   // 2. Load meeting
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
-    return err(404, "Meeting not found");
+    return err(404, "Schůzka nebyla nalezena.");
   }
 
   // 3. Load member to get email and name
   const memberData = await getMemberById(memberId);
   if (!memberData) {
-    return err(404, "Member not found");
+    return err(404, "Člen nebyl nalezen.");
   }
 
   if (!memberData.email) {
-    return err(422, "Member has no email address");
+    return err(422, "Člen nemá vyplněný e-mail.");
   }
 
   // iter-037 (T-003b, gate sekce 5): neaktivnímu členovi odkaz neposíláme.
@@ -63,15 +63,15 @@ export async function POST(
     return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
   }
 
-  // iter-027 (T-005, arch 6.5): ruční "Poslat odkaz" — jeden běh, source
+  // iter-027 (T-005, arch 6.5): ruční "Poslat odkaz" - jeden běh, source
   // "manual", actor = session.memberId.
   const runId = randomUUID();
 
-  // 4. Regenerate the token server-side — returns null only if no link row
+  // 4. Regenerate the token server-side - returns null only if no link row
   // exists for this member/meeting yet (regenerate is UPDATE-only).
   const rawToken = await regenerateMeetingToken(meetingId, memberId);
   if (!rawToken) {
-    return err(404, "No link found for this member in this meeting");
+    return err(404, "Tenhle člen nemá u téhle schůzky žádný odkaz.");
   }
 
   // 5. Send email
@@ -99,7 +99,7 @@ export async function POST(
       memberId,
       memberName: memberData.name,
       email: memberData.email,
-      message: `Odeslani selhalo: ${memberData.name} - ${result.error}`,
+      message: `Odeslání selhalo: ${memberData.name} - ${result.error}`,
     });
     return NextResponse.json(
       { success: false, error: result.error },
@@ -107,7 +107,7 @@ export async function POST(
     );
   }
 
-  // 6. Mark sent — after the email actually went out (LL-003 idempotency vzor).
+  // 6. Mark sent - after the email actually went out (LL-003 idempotency vzor).
   await markLinkEmailSent(meetingId, memberId, new Date());
 
   await logOpsEvent({
@@ -122,7 +122,7 @@ export async function POST(
     memberId,
     memberName: memberData.name,
     email: memberData.email,
-    message: `Hlasovaci odkaz odeslan: ${memberData.name}.`,
+    message: `Hlasovací odkaz odeslán: ${memberData.name}.`,
     resendEmailId: result.resendId,
   });
 

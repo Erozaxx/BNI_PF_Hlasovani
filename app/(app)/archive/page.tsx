@@ -68,7 +68,7 @@ export default async function ArchivePage({
 
       {/* Filters */}
       <Card>
-        <Suspense fallback={<div className="text-text-muted">Nacitani...</div>}>
+        <Suspense fallback={<div className="text-text-muted">Načítání...</div>}>
           <ArchiveFilters
             meetings={archivedMeetings}
             categories={categories}
@@ -85,8 +85,8 @@ export default async function ArchivePage({
               {guests.length === 1
                 ? "host"
                 : guests.length < 5
-                  ? "hoste"
-                  : "hostu"}
+                  ? "hosté"
+                  : "hostů"}
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {guests.map((g) => (
@@ -97,16 +97,15 @@ export default async function ArchivePage({
         ) : (
           <Card>
             <EmptyState
-              title="Zadni hoste nenalezeni"
-              description="Zadni hoste neodpovidaji zvolenym filtrum."
+              title="Žádní hosté nenalezeni"
+              description="Filtru neodpovídají žádní hosté."
             />
           </Card>
         )
       ) : (
         <Card>
           <p className="text-text-muted">
-            Zvolte casove obdobi nebo vyberte konkretni schuzky pro zobrazeni
-            archivu hostu.
+            Zvol časové období nebo konkrétní schůzky.
           </p>
         </Card>
       )}

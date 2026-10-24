@@ -8,10 +8,10 @@ import { castVote as dbCastVote } from "@/lib/db/queries/votes";
 import type { ActionResult } from "@/lib/types";
 
 const castVoteSchema = z.object({
-  guestId: z.string().uuid("Neplatne ID hosta."),
-  meetingId: z.string().uuid("Neplatne ID schuzky."),
+  guestId: z.string().uuid("Neplatné ID hosta."),
+  meetingId: z.string().uuid("Neplatné ID schůzky."),
   value: z.enum(["up", "neutral", "down"], {
-    errorMap: () => ({ message: "Neplatna hodnota hlasu." }),
+    errorMap: () => ({ message: "Neplatná hodnota hlasu." }),
   }),
   reason: z.string().optional(),
 });
@@ -22,7 +22,7 @@ const castVoteSchema = z.object({
  * Rules:
  * - User must be authenticated
  * - Meeting must be in 'voting' status
- * - UPSERT — re-voting allowed (DB handles uniqueness via onConflictDoUpdate)
+ * - UPSERT - re-voting allowed (DB handles uniqueness via onConflictDoUpdate)
  * - 'down' requires a non-empty reason
  */
 export async function castVoteAction(
@@ -37,7 +37,7 @@ export async function castVoteAction(
   // Validate input
   const parsed = castVoteSchema.safeParse({ guestId, meetingId, value, reason });
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0]?.message ?? "Neplatny vstup.";
+    const firstError = parsed.error.errors[0]?.message ?? "Neplatný vstup.";
     return { success: false, error: firstError };
   }
 
@@ -48,7 +48,7 @@ export async function castVoteAction(
     if (!voteReason || voteReason.trim().length === 0) {
       return {
         success: false,
-        error: "Hlasovani proti vyzaduje uvedeni duvodu.",
+        error: "U hlasu Proti napiš důvod.",
       };
     }
   }
@@ -57,16 +57,16 @@ export async function castVoteAction(
     // Check meeting exists and is in voting status
     const mtg = await getMeetingById(meetingId);
     if (!mtg) {
-      return { success: false, error: "Schuzka nebyla nalezena." };
+      return { success: false, error: "Schůzka nebyla nalezena." };
     }
     if (mtg.status !== "voting") {
       return {
         success: false,
-        error: "Hlasovani neni aktivni pro tuto schuzku.",
+        error: "U téhle schůzky hlasování neběží.",
       };
     }
 
-    // Cast vote (UPSERT — DB handles re-voting via unique constraint)
+    // Cast vote (UPSERT - DB handles re-voting via unique constraint)
     await dbCastVote({
       memberId: auth.session.memberId,
       guestId,
@@ -81,6 +81,6 @@ export async function castVoteAction(
     return { success: true };
   } catch (error) {
     console.error("castVoteAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat hlas." };
+    return { success: false, error: "Hlas se nepodařilo odeslat." };
   }
 }

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { can } from "@/lib/auth/permissions";
 import { getCaseById } from "@/lib/db/queries/mastermind";
 import { canEdit, caseDescription, isUuid } from "@/lib/mastermind/rules";
@@ -13,6 +15,7 @@ export default async function EditMastermindCasePage({
   params: Promise<{ id: string }>;
 }) {
   const session = await requirePageSession();
+  if (await featureOff("mastermind")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const { id } = await params;
 
   // Neplatné UUID by Postgres odmítl chybou 22P02 a stránka by spadla na 500.

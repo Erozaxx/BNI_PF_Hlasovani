@@ -79,3 +79,38 @@ export function bonusWindow(month: string): BonusWindow {
 export function inBonusWindow(window: BonusWindow, d: string): boolean {
   return d > window.after && d <= window.to;
 }
+
+// ── iter-042 (BK2, gate Z3): bonus jen ze zapnutých částí ─────
+
+/** Které části dávají bonus. Bonus existuje jen při zapnutém semaforu a zapnuté části. */
+export interface BonusSources {
+  mastermind: boolean;
+  burza: boolean;
+}
+
+/** Nastavení, ze kterého se zdroje bonusu skládají (`ChapterSettings` je splňuje). */
+export interface BonusSettings {
+  semaforEnabled: boolean;
+  mastermindEnabled: boolean;
+  burzaEnabled: boolean;
+}
+
+export function bonusSources(settings: BonusSettings): BonusSources {
+  return {
+    mastermind: settings.semaforEnabled && settings.mastermindEnabled,
+    burza: settings.semaforEnabled && settings.burzaEnabled,
+  };
+}
+
+/** Aspoň jedna část dává bonus. Jinak se bonus v UI vůbec neukazuje a skóre = BNI. */
+export function hasBonusSource(sources: BonusSources): boolean {
+  return sources.mastermind || sources.burza;
+}
+
+/** Události jen ze zapnutých částí. Data zůstávají v DB, po zapnutí se bonus vrátí. */
+export function filterBonusEvents<T extends { category: BonusCategory }>(
+  events: readonly T[],
+  sources: BonusSources
+): T[] {
+  return events.filter((e) => sources[e.category]);
+}

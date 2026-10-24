@@ -230,7 +230,8 @@ const tests: TestCase[] = [
       assert.equal(new Set(PERMISSIONS).size, PERMISSIONS.length, "katalog bez duplicit");
       // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
       // iter-040: +1 (attendance.internal_manage), iter-041: +2 (semafor.view_all, semafor.import).
-      assert.equal(PERMISSIONS.length, 27);
+      // iter-042: +1 (chapter.settings).
+      assert.equal(PERMISSIONS.length, 28);
     },
   },
   {
@@ -1258,8 +1259,10 @@ const tests: TestCase[] = [
     name: "U7. UI správy členů má diakritiku (bez ASCII podob z dřívějška)",
     run: () => {
       const bad = [
-        "Nepodarilo", "Jmeno", "clena", "Clen ", "Poradi", "Zatim", "Pridejte", "Sprava", "smazan", "pridan",
-        "aktualizovan", "Ulozit", "Zrusit", "Odeslan", "vygenerovan", "Zkopirovano", "Pouzit", "Aktivni<",
+        "Nepodarilo", "Jmeno", "clena", "Clen ", "Poradi", "Zatim", "Pridejte", "Sprava", "smazan.", "smazan ", "pridan",
+        "aktualizovany", "aktualizovan.", "aktualizovan\"", "Ulozit", "Zrusit", "Odeslan", "vygenerovan", "Zkopirovano", "Pouzit", "Aktivni<",
+        // iter-042 (C6): import členů, kategorie, heslo
+        "Nahrat", "preskoc", "Zpracovavam", "novych", "Vytvoreno", "dokoncen", "Zadne", "Nazev", "Nove heslo", "Sprava",
       ];
       for (const f of [
         "app/(app)/admin/members/page.tsx",
@@ -1273,6 +1276,18 @@ const tests: TestCase[] = [
         "app/(app)/admin/members/EditMemberCompanyForm.tsx",
         "app/(app)/admin/members/EditMemberEmailForm.tsx",
         "app/(app)/admin/members/EditMemberJoinedAtForm.tsx",
+        "app/(app)/admin/members/ImportMembersForm.tsx",
+        "app/(app)/admin/categories/page.tsx",
+        "app/(app)/admin/categories/CreateCategoryForm.tsx",
+        "app/(app)/admin/categories/RenameCategoryForm.tsx",
+        "app/(app)/admin/categories/DeleteCategoryButton.tsx",
+        "app/(app)/settings/page.tsx",
+        "app/(app)/settings/ChangePasswordForm.tsx",
+        "actions/members.ts",
+        "actions/import-members.ts",
+        "actions/categories.ts",
+        "actions/auth.ts",
+        "lib/import/parse-xlsx.ts",
       ]) {
         const src = read(f);
         for (const b of bad) assert.ok(!src.includes(b), `${f}: ASCII text „${b}“`);
@@ -1558,6 +1573,75 @@ const tests: TestCase[] = [
       ]) {
         assert.ok(!read(f).includes(dash), `${f}: em dash`);
       }
+    },
+  },
+  {
+    name: "U10. iter-042 (C6): smazání člena, import, kategorie, heslo, vysvětlení funkce a role, bez em dash, tykání, 44 px",
+    run: () => {
+      const del = read("app/(app)/admin/members/DeleteMemberButton.tsx");
+      for (const t of [
+        "Vrátit to nepůjde. Smaže se i jeho docházka, omluvy, semafor, hlasy u hostů, pohovory, Burza a jeho případy v Master mindu.",
+        "Když člen jen odchází, použij Deaktivovat.",
+        'return "pohovorů"',
+      ]) assert.ok(del.includes(t), `DeleteMemberButton: ${t}`);
+      assert.ok(!del.includes("Opravdu smazat"), "staré potvrzení");
+      assert.ok(del.indexOf("window.confirm") < del.indexOf("deleteMemberAction(memberId)"), "confirm před akcí");
+      assert.ok(read("app/(app)/admin/members/[id]/page.tsx").includes("Smazání vrátit nejde. Smaže se člen i jeho data. Když člen odchází, použij Deaktivovat."));
+      const imp = read("app/(app)/admin/members/ImportMembersForm.tsx");
+      for (const t of [
+        "Nahrát a zobrazit náhled",
+        "Čte se první list: sloupec B jméno (povinné), D obor, E datum vstupu",
+        "Import dokončen: ",
+        "Import s chybami: ",
+        "Importuji členy...",
+        "Nahrát další soubor",
+      ]) assert.ok(imp.includes(t), `ImportMembersForm: ${t}`);
+      assert.ok(!/preview<|zobrazit preview/.test(imp), "preview v textu");
+      const acc = read("app/(app)/admin/members/MemberAccessControls.tsx").replace(/\s+/g, " ");
+      assert.ok(acc.includes("Funkce je pozice ve vedení chapteru. Člen výboru má práva moderátora, Prezident a Viceprezident práva admina, jen nepřidělují admina, funkce a hesla. Role Moderátor a Admin se nastavují zvlášť a práva se sčítají."));
+      assert.ok(acc.indexOf("Funkce je pozice") < acc.indexOf("htmlFor={`function-"), "vysvětlení je nad výběry");
+      assert.ok(read("app/(app)/admin/categories/DeleteCategoryButton.tsx").includes("Smazat kategorii „${categoryName}“? Hosté v ní zůstanou bez kategorie."));
+      assert.ok(read("app/(app)/admin/categories/page.tsx").includes("Vytvoř první ve formuláři výše."));
+      const pw = read("actions/auth.ts");
+      for (const t of ["Nové heslo musí mít aspoň 8 znaků.", "Aktuální heslo nesedí.", "Na tohle nemáš oprávnění.", "Heslo se nepodařilo změnit. Zkus to znovu."]) {
+        assert.ok(pw.includes(t), `auth: ${t}`);
+      }
+      const form = read("app/(app)/settings/ChangePasswordForm.tsx");
+      for (const t of ["Aktuální heslo", "Nové heslo", "Potvrď nové heslo", "Heslo je změněné."]) assert.ok(form.includes(t), `ChangePasswordForm: ${t}`);
+      assert.ok(read("app/(app)/settings/page.tsx").includes("Zatím nemáš nastavené heslo. Po nastavení se přihlásíš i e-mailem a heslem."));
+      // tykání
+      const vykani = /Zkuste|Vyberte|Přidejte|Vytvořte|Kontaktujte|Otevřete|Zadejte|nemáte|vidíte|Potvrďte|Použijte/;
+      for (const f of [
+        "app/(app)/admin/members/page.tsx",
+        "app/(app)/admin/members/ImportMembersForm.tsx",
+        "app/(app)/admin/categories/page.tsx",
+        "app/(app)/settings/page.tsx",
+        "app/(app)/settings/ChangePasswordForm.tsx",
+        "actions/auth.ts",
+        "actions/categories.ts",
+        "actions/import-members.ts",
+        "actions/members.ts",
+      ]) assert.ok(!vykani.test(read(f)), `${f}: vykání`);
+      // 44 px u upravených tlačítek kategorií a hesla
+      for (const f of [
+        "app/(app)/admin/categories/CreateCategoryForm.tsx",
+        "app/(app)/admin/categories/RenameCategoryForm.tsx",
+        "app/(app)/admin/categories/DeleteCategoryButton.tsx",
+        "app/(app)/settings/ChangePasswordForm.tsx",
+      ]) assert.ok(read(f).includes("min-h-[44px]"), `${f}: 44 px`);
+      // em dash
+      const dash = String.fromCharCode(0x2014);
+      for (const f of [
+        "app/(app)/admin/members/ImportMembersForm.tsx",
+        "app/(app)/admin/members/DeleteMemberButton.tsx",
+        "app/(app)/admin/members/EditMemberJoinedAtForm.tsx",
+        "actions/members.ts",
+        "actions/import-members.ts",
+        "actions/categories.ts",
+        "actions/auth.ts",
+        "lib/import/parse-xlsx.ts",
+        "components/ui/Toast.tsx",
+      ]) assert.ok(!read(f).includes(dash), `${f}: em dash`);
     },
   },
 ];

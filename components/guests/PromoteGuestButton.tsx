@@ -52,7 +52,7 @@ export function PromoteGuestButton({
 
     if (!hasEmail) {
       lines.push(
-        "Host nemá vyplněný e-mail. Člen vznikne bez e-mailu a nepůjde mu poslat hlasovací odkaz, dokud e-mail nedoplníte v sekci Členové.",
+        "Host nemá vyplněný e-mail. Člen vznikne bez e-mailu a nepůjde mu poslat hlasovací odkaz, dokud e-mail nedoplníš v sekci Členové.",
         ""
       );
     }
@@ -67,9 +67,9 @@ export function PromoteGuestButton({
       "",
       `Nový člen NEVZNIKNE. Host "${guestName}" bude pouze NENÁVRATNĚ smazán, včetně poznámek, hlasů a účasti na schůzkách.`,
       "",
-      "Pokud jste tohoto člena už založili dříve ručně, je to v pořádku. Potvrzením se odstraní jen zbytečný záznam hosta.",
+      "Pokud jsi tohoto člena už založil(a) dříve ručně, je to v pořádku. Potvrzením se odstraní jen zbytečný záznam hosta.",
       "",
-      "Pokud jde o dva různé lidi (např. sdílený firemní e-mail), akci zrušte a nejdřív upravte e-mail hosta.",
+      "Pokud jde o dva různé lidi (např. sdílený firemní e-mail), akci zruš a nejdřív uprav e-mail hosta.",
       "",
       "Smazat hosta bez vytvoření nového člena?",
     ].join("\n");
@@ -132,6 +132,7 @@ export function PromoteGuestButton({
       size="sm"
       loading={isSubmitting}
       onClick={handlePromote}
+      className="min-h-[44px]"
     >
       Povýšit na člena
     </Button>

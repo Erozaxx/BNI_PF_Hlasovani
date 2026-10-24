@@ -20,7 +20,9 @@ import {
   pragueInstant,
 } from "../lib/attendance/rules";
 import {
+  OVERVIEW_TEXTS,
   SHEET_TEXTS,
+  confirmExcuseOffSubstituteText,
   TARGET_UNEXCUSED,
   auditValueText,
   parseWriteBody,
@@ -30,7 +32,7 @@ import {
   type SheetRow,
 } from "../lib/attendance/sheet";
 import { buildAttendanceReport, type ReportData, type ReportMember } from "../lib/attendance/report";
-import { UNEXCUSED_TEXTS } from "../lib/attendance/texts";
+import { UNEXCUSED_TEXTS, unexcusedTooEarlyHintText, unexcusedTooEarlyText } from "../lib/attendance/texts";
 
 const ROOT = join(__dirname, "..");
 const EM_DASH = String.fromCharCode(0x2014);
@@ -101,7 +103,7 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "29. rowDecided: unexcused je rozhodnutý (filtr Nezaškrtnutí ho skryje), absent a bez řádku ne",
+    name: "29. rowDecided: unexcused je rozhodnutý (filtr Bez zápisu ho skryje), absent a bez řádku ne",
     run: () => {
       assert.equal(rowDecided({ status: "unexcused" }), true);
       assert.equal(rowDecided({ status: "present" }), true);
@@ -195,6 +197,12 @@ const tests: TestCase[] = [
       }
       assert.equal(unexcusedAllowedAt(new Date("2026-10-22T12:00:00Z"), "2026-10-15"), true);
       assert.equal(unexcusedAllowedAt(new Date("2026-10-22T04:00:00Z"), "2026-10-23"), false, "budoucí den");
+      // iter-042 (B4): začátek z nastavení, např. 8:00
+      for (const date of ["2026-10-22", "2026-10-25", "2027-03-28", "2026-07-16"]) {
+        const edge = pragueInstant(date, "08:00");
+        assert.equal(unexcusedAllowedAt(new Date(edge.getTime() - 60_000), date, "08:00"), false, `${date} 7:59`);
+        assert.equal(unexcusedAllowedAt(edge, date, "08:00"), true, `${date} 8:00`);
+      }
     },
   },
   {
@@ -202,10 +210,10 @@ const tests: TestCase[] = [
     run: () => {
       const q = stripComments(read("lib/db/queries/attendance.ts"));
       const w = q.slice(q.indexOf("export async function writePresenceGuarded"), q.indexOf("export type ExcuseWriteResult"));
-      assert.ok(w.includes("unexcusedTimeSql(date)") && w.includes("AS time_ok") && w.includes("AS excuse_ok"));
+      assert.ok(w.includes("unexcusedTimeSql(date, meetingTime)") && w.includes("AS time_ok") && w.includes("AS excuse_ok"));
       assert.ok(/ok AS \(SELECT \(day_ok AND member_ok AND time_ok AND excuse_ok\) AS go FROM g\)/.test(w));
       assert.ok(w.includes("FROM member_absence ea"));
-      assert.ok(q.includes("(now() >= ((${date}::date + ${ATTENDANCE_START}::time) AT TIME ZONE 'Europe/Prague'))"));
+      assert.ok(q.includes("(now() >= ((${date}::date + ${time}::time) AT TIME ZONE 'Europe/Prague'))"), "iter-042 B4: čas z nastavení jako bind parametr");
       const e = q.slice(q.indexOf("export async function setExcuseGuarded"), q.indexOf("// ── Audit a přehled"));
       assert.ok(e.includes("ur.status = 'unexcused'") && /ok AS \(SELECT \(day_ok AND member_ok AND unexcused_ok\) AS go FROM g\)/.test(e));
       assert.ok(!/transaction\(/.test(q));
@@ -214,10 +222,16 @@ const tests: TestCase[] = [
       assert.ok(!my.includes("unexcused"));
       for (const route of ["app/api/attendance/[date]/route.ts", "app/api/d/[token]/route.ts"]) {
         const r = stripComments(read(route));
-        assert.ok(r.includes("UNEXCUSED_TEXTS.tooEarly") && r.includes("UNEXCUSED_TEXTS.excusedConflict") && r.includes("UNEXCUSED_TEXTS.unexcusedConflict"), route);
+        assert.ok(r.includes("unexcusedTooEarlyText(meetingTime)") && r.includes("getChapterSettings") && r.includes("UNEXCUSED_TEXTS.excusedConflict") && r.includes("UNEXCUSED_TEXTS.unexcusedConflict"), route);
         assert.ok(r.includes('result: "blocked"'), route);
       }
       assert.equal(UNEXCUSED_TEXTS.tooEarly, SHEET_TEXTS.unexcusedTooEarly);
+      // iter-042 (Z5): text s časem z nastavení, výchozí hodnota = dnešní znění
+      assert.equal(unexcusedTooEarlyText("07:30"), UNEXCUSED_TEXTS.tooEarly);
+      assert.equal(unexcusedTooEarlyHintText("07:30"), UNEXCUSED_TEXTS.tooEarlyHint);
+      assert.equal(unexcusedTooEarlyText("08:15"), "Chyběl(a) bez omluvy jde zapsat od 8:15. Do té doby se člen může omluvit.");
+      assert.equal(unexcusedTooEarlyHintText("10:00"), "Od 10:00. Do té doby se člen může omluvit.");
+      assert.ok(read("components/attendance/AttendanceSheet.tsx").includes("unexcusedTooEarlyHintText(payload.meetingTime)"));
     },
   },
   {
@@ -258,21 +272,54 @@ const tests: TestCase[] = [
       }
       assert.ok(ui.indexOf("SHEET_TEXTS.introTitle") < ui.indexOf("aria-live"), "úvod je nad souhrnem");
       assert.ok(ui.includes('data-testid="sheet-intro"') && !/hidden|sm:block/.test(ui.slice(ui.indexOf('data-testid="sheet-intro"') - 200, ui.indexOf('data-testid="sheet-intro"'))), "úvod je vidět na první pohled");
-      assert.ok(SHEET_TEXTS.introWays.includes("dvěma způsoby") && SHEET_TEXTS.introWays.includes("Chyběl(a) bez omluvy") && SHEET_TEXTS.introWays.includes("odškrtneš Přítomen"));
-      assert.ok(SHEET_TEXTS.introSubstitute.includes("zaškrtneš Přítomen") && SHEET_TEXTS.introSubstitute.includes("s náhradníkem") && SHEET_TEXTS.introSubstitute.includes("vyplní samo"));
-      assert.ok(SHEET_TEXTS.introOpen.includes("přítomný") && !SHEET_TEXTS.introOpen.includes("nepřítomný"));
-      assert.ok(SHEET_TEXTS.introOpen.includes("náhradník") && SHEET_TEXTS.introOpen.includes("omluvený"));
-      assert.ok(SHEET_TEXTS.introExcuse.includes("jménem náhradníka"));
+      // iter-042 (#13): zkrácený úvod, doslova z gate sekce 6 a návrhu
+      assert.equal(SHEET_TEXTS.introWays, "Zaškrtávej Přítomen u příchozích, nebo označ jen ty, kdo chyběli (Chyběl(a) bez omluvy).");
+      assert.equal(SHEET_TEXTS.introSubstitute, "Náhradníka zapíšeš zaškrtnutím Přítomen a volbou s náhradníkem. Ohlášené jméno se vyplní samo.");
+      assert.equal(
+        SHEET_TEXTS.introOpen,
+        "Kdo zůstane bez zápisu, počítá se při uzávěrce jako přítomný, s omluvou jako omluvený a s ohlášeným náhradníkem jako náhradník."
+      );
+      assert.equal(SHEET_TEXTS.introExcuse, "Odškrtnutím Omluven(a) smažeš omluvu i se jménem náhradníka.");
+      // nápověda (components/help/**) patří fázi 3 iter-042, její znění tu nehlídáme; hlídá ho test-iter-036-help a test-iter-042-srozumitelnost
       const help = read("components/help/sections/ModeratorHelp.tsx");
-      assert.ok(help.includes("u člena zaškrtnete Přítomen, tím se zpřístupní volba „s náhradníkem“"));
-      assert.ok(help.includes("Zapisovat jde dvěma způsoby"));
-      assert.ok(help.includes("Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený"));
+      assert.ok(help.includes("Omluven(a)"));
       assert.ok(!help.includes("je při uzávěrce nepřítomný"), "staré tvrzení je pryč");
-      assert.ok(help.includes("Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka"));
       assert.ok(!help.includes(EM_DASH));
       // žádný zbytek redesignu „Náhradník přišel“
       for (const f of ["components/attendance/AttendanceSheet.tsx", "lib/attendance/sheet.ts", "lib/db/queries/attendance-close.ts", "components/help/sections/ModeratorHelp.tsx"]) {
-        assert.ok(!/Náhradník přišel|arrivedSubstitute/i.test(read(f)), f);
+        assert.ok(!/Náhradník přišel|arrivedSubstitute/.test(read(f)), f); // velké N: zbytek tlačítka; věta v potvrzení iter-042 #2 má malé n
+      }
+    },
+  },
+  {
+    name: "40. iter-042 #1, #2, #12: řádek bez zápisu říká následek, odškrtnutí Omluven(a) se potvrzuje před změnou, filtr Bez zápisu a pruh bez schůzky",
+    run: () => {
+      const ui = read("components/attendance/AttendanceSheet.tsx");
+      // #2: confirm je první příkaz větve odškrtnutí, před optimistickou změnou i před fetch
+      const fn = ui.slice(ui.indexOf("async function onToggleExcuse"), ui.indexOf("// ── Vykreslení"));
+      assert.ok(fn.includes("window.confirm("));
+      assert.ok(fn.indexOf("window.confirm(") < fn.indexOf("setRow(id, { ...before, excused"), "confirm před optimistickou změnou");
+      assert.ok(fn.indexOf("window.confirm(") < fn.indexOf("postJson("), "confirm před fetch");
+      assert.ok(/if \(!excused && before\.excused\)/.test(fn), "jen při odškrtnutí");
+      assert.ok(/if \(!ok\) return;/.test(fn), "Zrušit nic nezmění");
+      assert.equal(
+        confirmExcuseOffSubstituteText("Jan Test"),
+        "Smazat omluvu i s náhradníkem Jan Test? Vrátit to nepůjde. Když náhradník přišel, dej Zrušit a zaškrtni Přítomen."
+      );
+      assert.equal(SHEET_TEXTS.confirmExcuseOff, "Smazat omluvu člena? Vrátit to nepůjde.");
+      // #12
+      assert.equal(SHEET_TEXTS.filterOpen, "Bez zápisu");
+      assert.equal(SHEET_TEXTS.noMeeting, "Na dnešek není v aplikaci žádná schůzka. Zapisuj, jen když se opravdu konala.");
+      assert.equal(SHEET_TEXTS.writeAnyway, "Zapisovat i tak");
+      // #28
+      assert.equal(SHEET_TEXTS.errInactive, "Člen ten den nebyl aktivní (neaktivní nebo vstoupil později). Docházka se mu nezapisuje.");
+      // #11
+      assert.equal(SHEET_TEXTS.unrecordedBanner, "Docházka se ten den nezapisovala. Počítají se jen omluvy bez náhradníka.");
+      assert.equal(OVERVIEW_TEXTS.detailUpcoming, "Omluvy dopředu");
+      // žádné texty o stavu dne nevzaly čas natvrdo
+      for (const f of ["lib/attendance/texts.ts", "lib/attendance/sheet.ts", "lib/attendance/rules.ts", "components/attendance/AttendanceSheet.tsx"]) {
+        const src = stripComments(read(f));
+        assert.ok(!/\b0?7:30\b/.test(src.replace(/DEFAULT_CHAPTER_SETTINGS/g, "")), `${f}: čas natvrdo`);
       }
     },
   },

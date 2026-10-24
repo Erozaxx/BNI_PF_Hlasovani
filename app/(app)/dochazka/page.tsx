@@ -8,12 +8,14 @@ import {
   ABSENCE_LIMIT,
   absenceCountText,
   absenceDayLine,
+  memberIntroText,
   absenceWindowStart,
   monthEnd,
   monthOf,
   monthStart,
-  nextThursday,
 } from "@/lib/attendance/rules";
+import { nextRegularDay } from "@/lib/chapter/settings";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import {
   listMeetingDates,
   listMyAbsenceDays,
@@ -28,8 +30,8 @@ import { AttendanceTabs } from "@/components/attendance/AttendanceTabs";
 import { AbsenceCalendar } from "@/components/attendance/AbsenceCalendar";
 
 /**
- * iter-038 (T-003a, arch 7.1): Docházka člena. Kalendář nepřítomnosti na
- * kterýkoli den až rok dopředu, čtvrtky zvýrazněné, paměť jmen náhradníků a
+ * iter-038 (T-003a, arch 7.1): Docházka člena. Kalendář omluv na
+ * kterýkoli den až rok dopředu, pravidelné dny schůzek zvýrazněné, paměť jmen náhradníků a
  * seznam vlastních absencí (`#absence`). Vidí jen svoje data. Žádný
  * `loading.tsx` v segmentu a žádný `router.refresh()` (LL-017).
  */
@@ -45,13 +47,14 @@ export default async function AttendancePage() {
   const from = monthStart(minMonth.year, minMonth.month);
   const to = monthEnd(maxMonth.year, maxMonth.month);
 
-  const [absences, meetingDates, internalDates, pastDays, names, absenceDays] = await Promise.all([
+  const [absences, meetingDates, internalDates, pastDays, names, absenceDays, settings] = await Promise.all([
     listMyAbsences(memberId, from, to),
     listMeetingDates(from, to),
     listInternalDays(from, to),
     listMyPastDays(memberId, from, today),
     listSubstituteNames(memberId),
     listMyAbsenceDays(memberId, windowStart, today),
+    getChapterSettings(),
   ]);
 
   const count = absenceDays.length;
@@ -62,7 +65,7 @@ export default async function AttendancePage() {
       <AttendanceTabs active="mine" canViewAll={can(session, "attendance.view_all")} />
       <div>
         <h1 className="text-2xl font-bold text-text-main">{MEMBER_TEXTS.title}</h1>
-        <p className="mt-1 text-sm text-text-muted">{MEMBER_TEXTS.intro}</p>
+        <p className="mt-1 text-sm text-text-muted">{memberIntroText(settings.meetingTime)}</p>
       </div>
 
       <div
@@ -86,7 +89,9 @@ export default async function AttendancePage() {
         initialAbsences={absences}
         results={pastDays.map((p) => ({ date: p.date, status: p.status }))}
         initialNames={names}
-        initialSelected={nextThursday(today)}
+        initialSelected={nextRegularDay(today, settings)}
+        regularWeekday={settings.meetingWeekday}
+        meetingTime={settings.meetingTime}
       />
 
       <Card>

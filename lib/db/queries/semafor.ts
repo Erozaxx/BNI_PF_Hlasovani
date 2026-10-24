@@ -20,7 +20,7 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { memberActiveSql } from "@/lib/db/queries/member-active";
 import { bonusForMonth, type BonusEvent, type ScoreRecord } from "@/lib/semafor/mine";
-import { bonusWindow, internalScore } from "@/lib/semafor/bonus";
+import { bonusWindow, filterBonusEvents, internalScore, type BonusSources } from "@/lib/semafor/bonus";
 import { summarizeChapter, type ChapterCounts } from "@/lib/semafor/summary";
 import type { SaveRow } from "@/lib/semafor/import";
 import type { MatchMember } from "@/lib/semafor/names";
@@ -204,30 +204,49 @@ export function bonusEventsSql(opts: { after: string; to: string; memberId?: str
   `;
 }
 
+/**
+ * Jediná cesta ke čtení událostí bonusu (BK2): vrací jen události ze zapnutých
+ * částí (`sources` z `bonusSources(await getChapterSettings())`, povinný
+ * parametr, aby ho volající nemohl vynechat). Vypnutá část nedává bonus, data
+ * v DB zůstávají a po zapnutí se bonus vrátí. Filtr je v TS
+ * (`filterBonusEvents`), SQL zůstává beze změny. Modul nečte nastavení sám,
+ * zůstává použitelný v holém Node (test PALMS importuje `bonusEventsSql`).
+ */
 export async function listBonusEvents(opts: {
   after: string;
   to: string;
   memberId?: string;
+  sources: BonusSources;
 }): Promise<BonusEvent[]> {
   const r = await getDb().execute<{ member_id: string; category: "mastermind" | "burza"; d: string }>(
     bonusEventsSql(opts)
   );
-  return r.rows.map((x) => ({ memberId: x.member_id, category: x.category, date: x.d }));
+  const events = r.rows.map((x) => ({ memberId: x.member_id, category: x.category, date: x.d }));
+  return filterBonusEvents(events, opts.sources);
 }
 
 /** Události člena pro jeho měsíce (jedno okno od nejstaršího po nejnovější, rozpad po měsících v TS). */
-export async function listMyBonusEvents(memberId: string, months: readonly string[]): Promise<BonusEvent[]> {
+export async function listMyBonusEvents(
+  memberId: string,
+  months: readonly string[],
+  sources: BonusSources
+): Promise<BonusEvent[]> {
   if (months.length === 0) return [];
   const sorted = [...months].sort();
   const oldest = bonusWindow(sorted[0]);
   const newest = bonusWindow(sorted[sorted.length - 1]);
-  return listBonusEvents({ after: oldest.after, to: newest.to, memberId });
+  return listBonusEvents({ after: oldest.after, to: newest.to, memberId, sources });
 }
 
 /** Události člena po konci posledního nahraného měsíce (pro větu „započtou se“). */
-export async function countMyEventsAfter(memberId: string, afterDate: string, today: string): Promise<number> {
+export async function countMyEventsAfter(
+  memberId: string,
+  afterDate: string,
+  today: string,
+  sources: BonusSources
+): Promise<number> {
   if (today <= afterDate) return 0;
-  const events = await listBonusEvents({ after: afterDate, to: today, memberId });
+  const events = await listBonusEvents({ after: afterDate, to: today, memberId, sources });
   return events.length;
 }
 
@@ -237,14 +256,14 @@ export async function countMyEventsAfter(memberId: string, afterDate: string, to
  * Souhrn chapteru (Z4): čtyři počty členů v interních barvách za měsíc. Jen
  * aktivní členové s řádkem. Žádná jména, do klienta jde jen výsledek.
  */
-export async function getChapterCounts(month: string): Promise<ChapterCounts> {
+export async function getChapterCounts(month: string, sources: BonusSources): Promise<ChapterCounts> {
   const rows = await getDb().execute<{ member_id: string; total_score: string }>(sql`
     SELECT s.member_id::text AS member_id, s.total_score
     FROM semafor_score s JOIN member m ON m.id = s.member_id
     WHERE s.month = ${month}::date AND ${memberActiveSql("m")}
   `);
   const w = bonusWindow(month);
-  const events = await listBonusEvents({ after: w.after, to: w.to });
+  const events = await listBonusEvents({ after: w.after, to: w.to, sources });
   return summarizeChapter(
     rows.rows.map((x) => ({
       internalScore: internalScore(Number(x.total_score), bonusForMonth(month, x.member_id, events).bonus),

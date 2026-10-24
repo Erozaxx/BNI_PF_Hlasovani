@@ -35,10 +35,10 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
-        showToast("success", "Heslo bylo uspesne zmeneno.");
+        showToast("success", "Heslo je změněné.");
       }
     } catch {
-      const msg = "Nepodarilo se zmenit heslo. Zkuste to znovu.";
+      const msg = "Heslo se nepodařilo změnit. Zkus to znovu.";
       setError(msg);
       showToast("error", msg);
     } finally {
@@ -52,7 +52,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
         <Input
           name="currentPassword"
           type="password"
-          label="Aktualni heslo"
+          label="Aktuální heslo"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           autoComplete="current-password"
@@ -62,7 +62,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       <Input
         name="newPassword"
         type="password"
-        label="Nove heslo"
+        label="Nové heslo"
         value={newPassword}
         onChange={(e) => setNewPassword(e.target.value)}
         autoComplete="new-password"
@@ -72,7 +72,7 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       <Input
         name="confirmPassword"
         type="password"
-        label="Potvrdte nove heslo"
+        label="Potvrď nové heslo"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
         autoComplete="new-password"
@@ -87,11 +87,11 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
 
       {success && (
         <p className="text-sm text-success" role="status">
-          Heslo bylo uspesne zmeneno.
+          Heslo je změněné.
         </p>
       )}
 
-      <Button type="submit" variant="primary" size="md" loading={loading}>
+      <Button type="submit" variant="primary" size="md" className="min-h-[44px]" loading={loading}>
         Změnit heslo
       </Button>
     </form>

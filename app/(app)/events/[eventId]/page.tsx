@@ -51,7 +51,7 @@ export default async function EventDetailPage({
     <div className="space-y-6 max-w-4xl">
       <Link href="/events">
         <Button variant="link" size="sm">
-          &larr; Zpet na akce
+          &larr; Zpět na akce
         </Button>
       </Link>
 

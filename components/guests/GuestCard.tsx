@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 interface GuestCardProps {
   name: string;
@@ -27,7 +28,7 @@ export function GuestCard({
         <p className="text-sm text-text-muted">{company}</p>
       )}
       <Badge variant="category" className="mt-2">
-        {categoryName ?? "[bez kategorie]"}
+        {categoryName ?? "Bez kategorie"}
       </Badge>
       {email && (
         <p className="text-xs text-text-muted mt-1">{email}</p>
@@ -39,7 +40,7 @@ export function GuestCard({
       )}
       {lastMeetingDate && (
         <p className="text-xs text-text-muted mt-2">
-          Naposledy na schůzce: {lastMeetingDate}
+          Naposledy na schůzce: {formatWeekdayFull(lastMeetingDate)}
         </p>
       )}
     </Card>

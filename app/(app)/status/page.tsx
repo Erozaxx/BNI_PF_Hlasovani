@@ -26,7 +26,7 @@ function isSeverity(value: string | undefined): value is OpsEventSeverity {
 }
 
 /** `<input type="date">` -> `Date` na hranici dne. Filtr je na den přesný,
- * ne na vteřinu — dost pro "za poslední 3 týdny", což je jediné použití. */
+ * ne na vteřinu - dost pro "za poslední 3 týdny", což je jediné použití. */
 function parseDateParam(value: string | undefined, endOfDay = false): Date | undefined {
   if (!value) return undefined;
   const suffix = endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
@@ -34,10 +34,10 @@ function parseDateParam(value: string | undefined, endOfDay = false): Date | und
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-/** "Schuzka 27. 8." (7.2 doslova). */
+/** "Schůzka 27. 8." (7.2 doslova). */
 function formatMeetingLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
-  return `Schuzka ${d}. ${m}.`;
+  return `Schůzka ${d}. ${m}.`;
 }
 
 interface StatusPageSearchParams {
@@ -50,14 +50,14 @@ interface StatusPageSearchParams {
 }
 
 /**
- * /status (arch iter-027 T-001, sekce 7). Admin i moderator — middleware jen
+ * /status (arch iter-027 T-001, sekce 7). Admin i moderator - middleware jen
  * session-gatuje (LL-005 výjimka, viz brief scope OUT), role se kontroluje
  * TADY, stejný vzor jako app/(app)/interviews/page.tsx.
  *
- * Stránka se renderuje JEN z databáze (D5) — Resend se odtud nikdy nevolá,
+ * Stránka se renderuje JEN z databáze (D5) - Resend se odtud nikdy nevolá,
  * to dělá až klientská <DeliveryStatusCell/> po namountování. Chybějící
  * tabulka ops_event (migrace ještě neproběhla, 11.5) se nesmí projevit
- * pádem stránky (7.3) — celý blok dotazů je proto v try/catch.
+ * pádem stránky (7.3) - celý blok dotazů je proto v try/catch.
  */
 export default async function StatusPage({
   searchParams,
@@ -108,21 +108,21 @@ export default async function StatusPage({
             runId: summary.runId,
             startedAt: summary.lastOccurredAt,
             actorLabel: "?",
-            meetingLabel: "—",
+            meetingLabel: "–",
             state: "unknown",
-            label: "Bez zaznamu",
+            label: "Bez záznamu",
           };
         }
         const status = deriveRunStatus(runEvents, now);
         const meetingDate = runEvents.find((e) => e.meetingDate)?.meetingDate ?? null;
         const actor = runEvents[0].actor;
         const actorLabel =
-          actor === "cron" ? "cron" : actor ? (memberNameById.get(actor) ?? "Rucne") : "Rucne";
+          actor === "cron" ? "Automaticky" : actor ? (memberNameById.get(actor) ?? "Ručně") : "Ručně";
         return {
           runId: summary.runId,
           startedAt: runEvents[0].occurredAt,
           actorLabel,
-          meetingLabel: meetingDate ? formatMeetingLabel(meetingDate) : "—",
+          meetingLabel: meetingDate ? formatMeetingLabel(meetingDate) : "–",
           state: status.state,
           label: status.label,
         };
@@ -136,7 +136,7 @@ export default async function StatusPage({
       from,
       to,
     };
-    // O jeden víc, než se ukáže (EVENTS_PAGE_SIZE + 1) — jednoduchý způsob,
+    // O jeden víc, než se ukáže (EVENTS_PAGE_SIZE + 1) - jednoduchý způsob,
     // jak poznat "existuje další stránka", bez druhého COUNT(*) dotazu.
     const fetched = await listOpsEvents(filter, EVENTS_PAGE_SIZE + 1, eventsOffset);
     hasMoreEvents = fetched.length > EVENTS_PAGE_SIZE;
@@ -144,7 +144,7 @@ export default async function StatusPage({
   } catch (err) {
     const code = (err as { code?: string } | null | undefined)?.code;
     if (code === "42P01") {
-      // Tabulka ops_event ještě neexistuje (migrace neproběhla, 11.5) —
+      // Tabulka ops_event ještě neexistuje (migrace neproběhla, 11.5) -
       // přesně ten stav, který stránka MUSÍ ustát bez pádu (7.3).
       migrationMissing = true;
     } else {
@@ -172,8 +172,8 @@ export default async function StatusPage({
       {migrationMissing && (
         <Card>
           <EmptyState
-            title="Migrace jeste neprobehla"
-            description="Tabulka ops_event jeste neexistuje. Spustte migraci iter-027."
+            title="Provoz se teď nedá zobrazit"
+            description="V databázi chybí tabulka pro provozní záznamy. Napiš adminovi."
           />
         </Card>
       )}
@@ -181,8 +181,8 @@ export default async function StatusPage({
       {loadError && (
         <Card>
           <EmptyState
-            title="Data se nepodarilo nacist"
-            description="Zkuste stranku znovu nacist za chvili."
+            title="Data se nepodařilo načíst"
+            description="Zkus stránku za chvíli načíst znovu."
           />
         </Card>
       )}

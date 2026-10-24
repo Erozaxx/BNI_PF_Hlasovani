@@ -25,7 +25,7 @@ export function RenameCategoryForm({
 
   async function handleSave() {
     if (!name.trim()) {
-      setError("Nazev je povinny.");
+      setError("Název je povinný.");
       return;
     }
     if (name.trim() === currentName) {
@@ -43,12 +43,12 @@ export function RenameCategoryForm({
         showToast("error", result.error);
       } else {
         setEditing(false);
-        showToast("success", "Kategorie byla prejmenovana.");
+        showToast("success", "Kategorie je přejmenovaná.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se prejmenovat kategorii.");
-      showToast("error", "Nepodarilo se prejmenovat kategorii.");
+      setError("Kategorii se nepodařilo přejmenovat.");
+      showToast("error", "Kategorii se nepodařilo přejmenovat.");
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export function RenameCategoryForm({
 
   if (!editing) {
     return (
-      <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+      <Button variant="ghost" size="sm" className="min-h-[44px]" onClick={() => setEditing(true)}>
         Přejmenovat
       </Button>
     );
@@ -71,19 +71,20 @@ export function RenameCategoryForm({
         error={error}
       />
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" onClick={handleSave} loading={loading}>
-          Ulozit
+        <Button variant="primary" size="sm" className="min-h-[44px]" onClick={handleSave} loading={loading}>
+          Uložit
         </Button>
         <Button
           variant="secondary"
           size="sm"
+          className="min-h-[44px]"
           onClick={() => {
             setEditing(false);
             setName(currentName);
             setError("");
           }}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </div>

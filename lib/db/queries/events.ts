@@ -136,6 +136,8 @@ export async function getEventParticipants(eventId: string) {
       externalEmail: eventParticipant.externalEmail,
       magicTokenHash: eventParticipant.magicTokenHash,
       encryptedToken: eventParticipant.encryptedToken,
+      // iter-042 (T-005, M2): má uložený odkaz? Pak Zkopírovat nic nezneplatní.
+      hasStoredLink: sql<boolean>`(${eventParticipant.encryptedToken} IS NOT NULL)`,
       tokenCreatedAt: eventParticipant.tokenCreatedAt,
       createdAt: eventParticipant.createdAt,
       memberName: member.name,
@@ -189,7 +191,7 @@ export async function getEventVotesWithNames(eventId: string) {
 }
 
 /**
- * Verify a magic link token — find event + participant by token hash.
+ * Verify a magic link token - find event + participant by token hash.
  * Returns { event, participant } or null if not found.
  */
 export async function getEventByParticipantToken(tokenHash: string) {
@@ -268,7 +270,7 @@ export async function getEventsEligibleForDone() {
  * - Set tokens_revoked_at, done_at, status = 'done' on the event
  */
 export async function markEventDone(eventId: string): Promise<void> {
-  // Two sequential queries — neon-http driver doesn't support transactions.
+  // Two sequential queries - neon-http driver doesn't support transactions.
   // Token revocation first: idempotent (NULL = already revoked).
   // If the second query fails, tokens are revoked but event is still 'closed'.
   // The cron will re-attempt on the next run.

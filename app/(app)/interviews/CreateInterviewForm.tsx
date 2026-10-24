@@ -23,10 +23,10 @@ interface MemberOption {
 
 interface CreateInterviewFormProps {
   members: MemberOption[];
-  /** Founding admin/mod — pre-filled as the default leader (arch 8a). */
+  /** Founding admin/mod - pre-filled as the default leader (arch 8a). */
   currentMemberId: string;
   /** memberId -> which types already have a non-cancelled interview, for a
-   *  comfort hint only — the DB partial UNIQUE is the real authority (8a). */
+   *  comfort hint only - the DB partial UNIQUE is the real authority (8a). */
   existingByMember: Record<string, { month5: boolean; month10: boolean }>;
   /** Pre-fill from a due-chip click on /admin/members (arch iter-023 T-001 §3.3).
    *  Bez `key` (M3): formulář se nevytváří znovu při obnovení stránky, takže
@@ -79,7 +79,7 @@ export function CreateInterviewForm({
 
   // Disable a type already occupied by a non-cancelled interview for the
   // selected member (arch 8a: "ve formulari je uz obsazeny typ disabled s
-  // vysvetlenim" — the DB partial UNIQUE stays the real authority, this is
+  // vysvetlenim" - the DB partial UNIQUE stays the real authority, this is
   // UX only, MINOR-2).
   const typeOptions = TYPE_OPTIONS.map((opt) => {
     const isTaken =
@@ -111,15 +111,15 @@ export function CreateInterviewForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!memberId) {
-      setError("Vyberte člena.");
+      setError("Vyber člena.");
       return;
     }
     if (!type) {
-      setError("Vyberte typ pohovoru.");
+      setError("Vyber typ pohovoru.");
       return;
     }
     if (!leaderId) {
-      setError("Vyberte vedoucího.");
+      setError("Vyber vedoucího.");
       return;
     }
 
@@ -152,7 +152,7 @@ export function CreateInterviewForm({
           value={memberId}
           onChange={handleMemberChange}
           options={memberOptions}
-          placeholder="Vyberte člena…"
+          placeholder="Vyber člena…"
         />
         <Select
           label="Typ pohovoru"
@@ -160,7 +160,7 @@ export function CreateInterviewForm({
           value={type}
           onChange={(e) => setType(e.target.value as InterviewType)}
           options={typeOptions}
-          placeholder="Vyberte typ…"
+          placeholder="Vyber typ…"
         />
         <Select
           label="Vedoucí pohovoru"
@@ -168,7 +168,7 @@ export function CreateInterviewForm({
           value={leaderId}
           onChange={(e) => setLeaderId(e.target.value)}
           options={leaderOptions}
-          placeholder="Vyberte vedoucího…"
+          placeholder="Vyber vedoucího…"
         />
       </div>
 

@@ -13,11 +13,11 @@ export default async function AdminCategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-main">Sprava kategorii</h1>
+      <h1 className="text-2xl font-bold text-text-main">Správa kategorií</h1>
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Nova kategorie
+          Nová kategorie
         </h2>
         <CreateCategoryForm />
       </Card>
@@ -43,8 +43,8 @@ export default async function AdminCategoriesPage() {
         ) : (
           <Card>
             <EmptyState
-              title="Zatim zadne kategorie"
-              description="Vytvorte prvni kategorii pomoci formulare vyse."
+              title="Zatím žádné kategorie"
+              description="Vytvoř první ve formuláři výše."
             />
           </Card>
         )}

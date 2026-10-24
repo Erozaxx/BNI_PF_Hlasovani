@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/Button";
 import { AuditList } from "@/components/attendance/AuditList";
 import { validateSubstituteName } from "@/lib/attendance/rules";
 import { INTERNAL_TEXTS } from "@/lib/attendance/internal";
+import { unexcusedTooEarlyHintText } from "@/lib/attendance/texts";
 import {
   SHEET_TEXTS,
   TARGET_ABSENT,
   announcedText,
   enqueueTarget,
   conflictText,
+  confirmExcuseOffSubstituteText,
   formatPragueTime,
   newRowSync,
   nextRequest,
@@ -148,7 +150,7 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
   const [subOpen, setSubOpen] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "open">("all");
   const [unlocked, setUnlocked] = useState(false);
-  // iter-041 (Z1): „Chyběl(a) bez omluvy“ je od 7:30 v den schůzky, čas se průběžně obnovuje.
+  // iter-041 (Z1): „Chyběl(a) bez omluvy“ je od začátku schůzky (čas z nastavení chapteru), čas se průběžně obnovuje.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 20_000);
@@ -375,6 +377,16 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
   async function onToggleExcuse(row: SheetRow, excused: boolean) {
     const id = row.memberId;
     const before = rowsRef.current.find((r) => r.memberId === id) ?? row;
+    // iter-042 (#2): odškrtnutí smaže omluvu i se jménem náhradníka a nevrátí se.
+    // Potvrzení je před optimistickou změnou, Zrušit nic nemění.
+    if (!excused && before.excused) {
+      const ok = window.confirm(
+        before.announcedName
+          ? confirmExcuseOffSubstituteText(before.announcedName)
+          : SHEET_TEXTS.confirmExcuseOff
+      );
+      if (!ok) return;
+    }
     setRow(id, { ...before, excused, announcedName: excused ? before.announcedName : null });
     patchUi(id, { saving: true, message: null });
     try {
@@ -404,7 +416,7 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
   const presenceDisabled = payload.mode === "denied" || locked;
   const excuseDisabled = payload.excuseMode === "denied" || locked;
   const visible = filter === "open" ? rows.filter((r) => !rowDecided(r)) : rows;
-  const unexcusedOpen = unexcusedAllowedAt(now, payload.date);
+  const unexcusedOpen = unexcusedAllowedAt(now, payload.date, payload.meetingTime);
 
   return (
     <div className="space-y-4">
@@ -546,7 +558,7 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
                 )}
               </div>
               {!checked && !row.excused && !unexcusedOpen && row.status !== "unexcused" && (
-                <p className="text-xs text-text-muted">{SHEET_TEXTS.unexcusedTooEarlyHint}</p>
+                <p className="text-xs text-text-muted">{unexcusedTooEarlyHintText(payload.meetingTime)}</p>
               )}
 
               {showSubInput && (

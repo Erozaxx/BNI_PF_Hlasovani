@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { can } from "@/lib/auth/permissions";
 import { getCasesForOverview, getThursdayData, type CaseListRow } from "@/lib/db/queries/mastermind";
 import { todayInPrague } from "@/lib/meetings/voting-window";
@@ -8,9 +10,11 @@ import {
   formatDM,
   formatWeekdayDM,
   MESSAGES,
-  thursdayOptions,
-  type ThursdayOption,
+  UI_TEXTS,
+  dayOptions,
+  type DayOption,
 } from "@/lib/mastermind/rules";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { Card } from "@/components/ui/Card";
 import { CaseCard, type CaseCardData } from "@/components/mastermind/CaseCard";
 import { ConfirmPresentedButtons } from "@/components/mastermind/ConfirmPresentedButtons";
@@ -40,18 +44,22 @@ function byDate(a: CaseListRow, b: CaseListRow): number {
 
 export default async function MastermindPage() {
   const session = await requirePageSession();
+  if (await featureOff("mastermind")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const isManagement = can(session, "mastermind.manage");
   const viewer = { memberId: session.memberId, name: session.name, isManagement };
   const today = todayInPrague();
+  // Den schůzky a bonus ze zapnutého semaforu jsou z nastavení chapteru (iter-042).
+  const settings = await getChapterSettings();
+  const bonusOn = settings.semaforEnabled;
 
   const rows = await getCasesForOverview();
 
-  let thursdays: ThursdayOption[] | undefined;
+  let days: DayOption[] | undefined;
   let meetingDates = new Set<string>();
   if (isManagement) {
     const data = await getThursdayData(today);
     meetingDates = new Set(data.meetingDates);
-    thursdays = thursdayOptions(today, data.meetingDates, data.caseDates);
+    days = dayOptions(today, data.meetingDates, data.caseDates, undefined, settings.meetingWeekday);
   }
 
   const awaiting = rows
@@ -88,9 +96,10 @@ export default async function MastermindPage() {
 
       {isManagement && awaiting.length > 0 && (
         <section aria-labelledby="mm-awaiting">
-          <h2 id="mm-awaiting" className="mb-3 text-lg font-semibold text-text-main">
+          <h2 id="mm-awaiting" className="text-lg font-semibold text-text-main">
             Čeká na potvrzení
           </h2>
+          <p className="mb-3 mt-1 text-sm text-text-muted">{UI_TEXTS.awaitingIntro}</p>
           <ul className="space-y-3">
             {awaiting.map((r) => (
               <li key={r.id}>
@@ -103,6 +112,7 @@ export default async function MastermindPage() {
                       caseId={r.id}
                       mode="scheduled"
                       canConfirm={r.memberId !== session.memberId}
+                      bonusOn={bonusOn}
                     />
                     {r.memberId === session.memberId && (
                       <p className="mt-2 text-sm text-text-muted">{MESSAGES.ownCase}</p>
@@ -133,6 +143,7 @@ export default async function MastermindPage() {
                   viewer={viewer}
                   today={today}
                   collision={isManagement && r.internalDate !== null && meetingDates.has(r.internalDate)}
+                  bonusOn={bonusOn}
                 />
               </div>
             ))}
@@ -154,7 +165,7 @@ export default async function MastermindPage() {
                 data={toCardData(r)}
                 viewer={viewer}
                 today={today}
-                thursdays={thursdays}
+                days={days}
               />
             ))}
           </div>

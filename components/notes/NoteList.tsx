@@ -10,12 +10,12 @@ interface NoteListProps {
 
 /**
  * Server Component: displays a list of anonymous notes.
- * Shows text and date/time only — NEVER shows author.
+ * Shows text and date/time only - NEVER shows author.
  */
 export function NoteList({ notes }: NoteListProps) {
   if (notes.length === 0) {
     return (
-      <p className="text-text-muted text-sm">Zatim zadne poznamky.</p>
+      <p className="text-text-muted text-sm">Zatím žádné poznámky.</p>
     );
   }
 

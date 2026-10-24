@@ -108,6 +108,10 @@ export function InterviewDueTable({
         )}
       </div>
 
+      <p className="text-sm text-text-muted mb-3">
+        Na řadě = od vstupu člena uplynulo 5 nebo 10 měsíců. Blíží se = bude na řadě brzy.
+      </p>
+
       <MobileFilters filters={filters} options={options} activeCount={activeCount} />
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
@@ -260,8 +264,8 @@ function DueChip({
   const text =
     state === "sviti"
       ? sinceDays !== null
-        ? `Svítí ${sinceDays} ${daysLabel(sinceDays)}`
-        : "Svítí"
+        ? `Na řadě ${sinceDays} ${daysLabel(sinceDays)}`
+        : "Na řadě"
       : "Blíží se";
   const color =
     state === "sviti"
@@ -355,7 +359,7 @@ function ChipPanel({
             className="h-11 w-full rounded-lg border border-border bg-white px-3 text-base sm:text-sm text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background"
           >
             <option value="" disabled>
-              Vyberte vedoucího…
+              Vyber vedoucího…
             </option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>

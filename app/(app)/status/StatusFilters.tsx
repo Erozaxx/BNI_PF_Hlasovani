@@ -17,7 +17,7 @@ interface StatusFiltersProps {
 /**
  * Pruh 2 „Filtr" (arch iter-027 T-001, sekce 7.2): "Querystring,
  * server-rendered, žádný stav v klientovi." Obyčejný `<form method="get">`
- * bez JS — hodnoty přežívají reload jen díky URL, žádný `useState`, žádná
+ * bez JS - hodnoty přežívají reload jen díky URL, žádný `useState`, žádná
  * `"use client"` direktiva. Přesně tenhle filtr na členovi je krok 2 case
  * Kateřiny Černé (7.4).
  */
@@ -27,7 +27,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
       <form method="get" className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor="status-filter-member" className="text-sm font-medium text-text-main">
-            Clen
+            Člen
           </label>
           <select
             id="status-filter-member"
@@ -35,7 +35,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
             defaultValue={current.member ?? ""}
             className="h-10 px-3 rounded-lg border border-border bg-white text-sm"
           >
-            <option value="">Vsichni</option>
+            <option value="">Všichni</option>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -46,7 +46,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
 
         <div className="flex flex-col gap-1">
           <label htmlFor="status-filter-meeting" className="text-sm font-medium text-text-main">
-            Schuzka
+            Schůzka
           </label>
           <select
             id="status-filter-meeting"
@@ -54,7 +54,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
             defaultValue={current.meeting ?? ""}
             className="h-10 px-3 rounded-lg border border-border bg-white text-sm"
           >
-            <option value="">Vsechny</option>
+            <option value="">Všechny</option>
             {meetings.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.date}
@@ -65,7 +65,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
 
         <div className="flex flex-col gap-1">
           <label htmlFor="status-filter-severity" className="text-sm font-medium text-text-main">
-            Zavaznost
+            Důležitost
           </label>
           <select
             id="status-filter-severity"
@@ -73,9 +73,9 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
             defaultValue={current.severity ?? ""}
             className="h-10 px-3 rounded-lg border border-border bg-white text-sm"
           >
-            <option value="">Vse</option>
+            <option value="">Vše</option>
             <option value="info">Info</option>
-            <option value="warn">Varovani</option>
+            <option value="warn">Varování</option>
             <option value="error">Chyba</option>
           </select>
         </div>
@@ -108,7 +108,7 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
 
         <button
           type="submit"
-          className="h-10 px-4 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-hover focus:outline-none focus:shadow-focus"
+          className="h-11 px-4 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-hover focus:outline-none focus:shadow-focus"
         >
           Filtrovat
         </button>
@@ -116,9 +116,9 @@ export function StatusFilters({ members, meetings, current, hasActiveFilter }: S
         {hasActiveFilter && (
           <Link
             href="/status"
-            className="h-10 flex items-center px-2 text-sm text-text-muted underline"
+            className="h-11 flex items-center px-2 text-sm text-text-muted underline"
           >
-            Zrusit filtr
+            Zrušit filtr
           </Link>
         )}
       </form>

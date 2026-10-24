@@ -22,10 +22,10 @@ const MAX_TEXT_LENGTH = 1000;
 function validateText(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) {
-    return "Text otazky je povinny.";
+    return "Text otázky je povinný.";
   }
   if (trimmed.length > MAX_TEXT_LENGTH) {
-    return `Text otazky muze mit nejvyse ${MAX_TEXT_LENGTH} znaku.`;
+    return `Text otázky může mít nejvýš ${MAX_TEXT_LENGTH} znaků.`;
   }
   return null;
 }
@@ -40,7 +40,7 @@ function validateApplies(
   appliesMonth10: boolean
 ): string | null {
   if (!appliesMonth5 && !appliesMonth10) {
-    return "Otazka musi platit alespon pro jeden typ pohovoru.";
+    return "Otázka musí platit aspoň pro jeden typ pohovoru.";
   }
   return null;
 }
@@ -78,16 +78,16 @@ export async function createQuestionAction(
     return { success: true, data: { id: created.id } };
   } catch (error) {
     console.error("createQuestionAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit otazku." };
+    return { success: false, error: "Otázku se nepodařilo vytvořit." };
   }
 }
 
 /**
  * Update the text and applicability flags of an existing question. Requires
  * admin or moderator role. Existing snapshots (already-founded interviews) are
- * copies and are unaffected — only future interviews pick up the new values.
+ * copies and are unaffected - only future interviews pick up the new values.
  *
- * One call updates text + both flags atomically (arch T-001 7.2 — a separate
+ * One call updates text + both flags atomically (arch T-001 7.2 - a separate
  * flags-only action was rejected, the "aspoň jeden true" validation needs
  * both flags together).
  */
@@ -113,7 +113,7 @@ export async function updateQuestionAction(
   try {
     const existing = await getQuestionById(id);
     if (!existing) {
-      return { success: false, error: "Otazka nebyla nalezena." };
+      return { success: false, error: "Otázka nebyla nalezena." };
     }
 
     await dbUpdateQuestion(id, {
@@ -125,13 +125,13 @@ export async function updateQuestionAction(
     return { success: true };
   } catch (error) {
     console.error("updateQuestionAction error:", error);
-    return { success: false, error: "Nepodarilo se upravit otazku." };
+    return { success: false, error: "Otázku se nepodařilo upravit." };
   }
 }
 
 /**
  * Archive (soft delete) or reactivate a question. Requires admin or moderator
- * role. Archiving never removes the row — source_question_id pairing for
+ * role. Archiving never removes the row - source_question_id pairing for
  * existing snapshots (arch section 4.1/4.2) stays intact; it only excludes the
  * question from future interview snapshots.
  */
@@ -145,7 +145,7 @@ export async function setQuestionActiveAction(
   try {
     const existing = await getQuestionById(id);
     if (!existing) {
-      return { success: false, error: "Otazka nebyla nalezena." };
+      return { success: false, error: "Otázka nebyla nalezena." };
     }
 
     await dbSetQuestionActive(id, active);
@@ -156,14 +156,14 @@ export async function setQuestionActiveAction(
     return {
       success: false,
       error: active
-        ? "Nepodarilo se obnovit otazku."
-        : "Nepodarilo se archivovat otazku.",
+        ? "Otázku se nepodařilo obnovit."
+        : "Otázku se nepodařilo archivovat.",
     };
   }
 }
 
 /**
- * Persist a new order for ALL questions (active + archived — the editor lists
+ * Persist a new order for ALL questions (active + archived - the editor lists
  * both). Sequential UPDATEs, no db.transaction() (LL-003); `position` has no
  * UNIQUE constraint precisely so this can run without transient collisions
  * mid-reorder (same pattern as reorderMembers/display_order, iter-019).
@@ -182,11 +182,11 @@ export async function reorderQuestionsAction(
     !Array.isArray(orderedIds) ||
     orderedIds.some((id) => typeof id !== "string" || id.length === 0)
   ) {
-    return { success: false, error: "Neplatny seznam otazek." };
+    return { success: false, error: "Neplatný seznam otázek." };
   }
 
   if (new Set(orderedIds).size !== orderedIds.length) {
-    return { success: false, error: "Seznam otazek obsahuje duplicity." };
+    return { success: false, error: "Seznam otázek obsahuje duplicity." };
   }
 
   try {
@@ -199,7 +199,7 @@ export async function reorderQuestionsAction(
     ) {
       return {
         success: false,
-        error: "Seznam otazek musi obsahovat prave vsechny existujici otazky.",
+        error: "Seznam otázek musí obsahovat všechny existující otázky.",
       };
     }
 
@@ -208,6 +208,6 @@ export async function reorderQuestionsAction(
     return { success: true };
   } catch (error) {
     console.error("reorderQuestionsAction error:", error);
-    return { success: false, error: "Nepodarilo se ulozit poradi otazek." };
+    return { success: false, error: "Pořadí otázek se nepodařilo uložit." };
   }
 }

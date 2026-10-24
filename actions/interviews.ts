@@ -55,7 +55,7 @@ const RESEND_MIN_INTERVAL_MS = 60 * 1000;
  * Leader defaults to the founding admin/mod in the caller's UI, but any
  * member id can be passed (leader can be changed to another member at
  * creation time). Duplicate (member, type) hits the partial UNIQUE index and
- * comes back as a readable error — never a 500 (T-004a delta 3).
+ * comes back as a readable error - never a 500 (T-004a delta 3).
  */
 export async function createInterviewAction(
   memberId: string,
@@ -66,13 +66,13 @@ export async function createInterviewAction(
   if (!auth.success) return auth;
 
   if (!memberId) {
-    return { success: false, error: "Vyberte člena." };
+    return { success: false, error: "Vyber člena." };
   }
   if (type !== "month_5" && type !== "month_10") {
     return { success: false, error: "Neplatný typ pohovoru." };
   }
   if (!leaderId) {
-    return { success: false, error: "Vyberte vedoucího pohovoru." };
+    return { success: false, error: "Vyber vedoucího pohovoru." };
   }
 
   try {
@@ -101,37 +101,37 @@ export async function createInterviewAction(
       case "repaired":
         revalidatePath(INTERVIEWS_PATH);
         // D-1 (decision_iter-023_T-002): without this the due5/due10 chip on
-        // /admin/members would only disappear after a hard refresh — the
+        // /admin/members would only disappear after a hard refresh - the
         // page relies on getInterviewDueList(), which is correct, but Next's
         // client router cache would keep serving the stale chip otherwise.
         revalidatePath("/admin/members");
         return { success: true, data: { id: result.interviewId } };
       case "duplicate":
-        // Readable dedup error (T-004a delta 3, arch 8a) — never a 500.
+        // Readable dedup error (T-004a delta 3, arch 8a) - never a 500.
         return {
           success: false,
-          error: `Pohovor ${TYPE_LABELS[type]} pro tohoto člena už existuje. Nejdřív smažte stávající pohovor.`,
+          error: `Pohovor ${TYPE_LABELS[type]} pro tohoto člena už existuje. Nejdřív smaž stávající pohovor.`,
         };
       case "empty_question_set":
         return {
           success: false,
           error:
-            "Sada otázek pro pohovory je prázdná. Před založením přidejte aspoň jednu otázku v sekci Pohovory > Správa otázek.",
+            "Sada otázek pro pohovory je prázdná. Před založením přidej aspoň jednu otázku v sekci Pohovory > Správa otázek.",
         };
       case "no_applicable_questions":
         // iter-021 (arch T-003 MAJOR-2): zivá sada nema pro tento typ pohovoru
-        // jedinou platnou otazku — zalozeni by vytvorilo 100% preskrtnuty
+        // jedinou platnou otazku - zalozeni by vytvorilo 100% preskrtnuty
         // formular. Vraceno jen pro cerstve zalozeni (repair-on-retry existujiciho
         // pohovoru timhle statusem nikdy neprojde, viz lib/db/queries/interviews.ts).
         return {
           success: false,
-          error: `Sada neobsahuje žádnou otázku platnou pro pohovor ${TYPE_LABELS[type]}. Upravte sadu otázek v sekci Pohovory > Správa otázek.`,
+          error: `Sada neobsahuje žádnou otázku platnou pro pohovor ${TYPE_LABELS[type]}. Uprav sadu otázek v sekci Pohovory > Správa otázek.`,
         };
       case "failed":
       default:
         return {
           success: false,
-          error: "Založení pohovoru se nepovedlo, zkuste to prosím znovu.",
+          error: "Založení pohovoru se nepovedlo. Zkus to znovu.",
         };
     }
   } catch (error) {
@@ -141,9 +141,9 @@ export async function createInterviewAction(
 }
 
 /**
- * Change the leader of an interview (arch 8b). Guarded to status='open' —
+ * Change the leader of an interview (arch 8b). Guarded to status='open' -
  * once submitted the leader is frozen. Sequence (LL-003, no db.transaction()):
- * revoke any existing link first (idempotent no-op when none exists yet —
+ * revoke any existing link first (idempotent no-op when none exists yet -
  * link generation itself is T-008), then update the leader row.
  */
 export async function updateInterviewLeaderAction(
@@ -154,7 +154,7 @@ export async function updateInterviewLeaderAction(
   if (!auth.success) return auth;
 
   if (!newLeaderId) {
-    return { success: false, error: "Vyberte vedoucího." };
+    return { success: false, error: "Vyber vedoucího." };
   }
 
   try {
@@ -205,11 +205,11 @@ export async function updateInterviewLeaderAction(
  * magic link and email it to the current leader (arch 8c, T-008). This is
  * intentionally a SINGLE action for both cases: generateOrRegenerateInterviewToken
  * is a single UPSERT on the interview_id-unique interview_link row, so "send"
- * and "regenerate and send" are exactly the same code path — the previous
+ * and "regenerate and send" are exactly the same code path - the previous
  * token_hash is overwritten atomically with no fallback (H-9). The caller UI
  * only changes the button label depending on whether a link already exists.
  *
- * Order (LL-003): the token is (re)generated first — if the email send then
+ * Order (LL-003): the token is (re)generated first - if the email send then
  * fails, the admin/mod can simply click again (regeneration is harmless,
  * there is no "previous token" to lose). last_sent_at is only stamped after a
  * confirmed successful send.
@@ -228,19 +228,19 @@ export async function sendInterviewLinkAction(
     if (detail.status !== "open") {
       return {
         success: false,
-        error: "Odkaz lze odeslat jen u otevreneho pohovoru.",
+        error: "Odkaz jde odeslat jen u otevřeného pohovoru.",
       };
     }
     if (!detail.leaderId) {
       return {
         success: false,
-        error: "Pohovoru neni prirazen vedouci.",
+        error: "Pohovoru není přiřazený vedoucí.",
       };
     }
 
     const leader = await getMemberById(detail.leaderId);
     if (!leader) {
-      return { success: false, error: "Vedouci nebyl nalezen." };
+      return { success: false, error: "Vedoucí nebyl nalezen." };
     }
     if (!isMemberActive(leader, pragueToday())) {
       return { success: false, error: LEADER_INACTIVE_TEXT };
@@ -248,13 +248,13 @@ export async function sendInterviewLinkAction(
     if (!leader.email) {
       return {
         success: false,
-        error: "Vedouci nema email — doplnte ho v sekci Clenove.",
+        error: "Vedoucí nemá e-mail. Doplň ho v sekci Členové.",
       };
     }
 
     // Anti-spam guard: refuse a resend within RESEND_MIN_INTERVAL_MS of the
     // last successful send (protects against double-click, not a security
-    // control — mod/admin is already authenticated via session).
+    // control - mod/admin is already authenticated via session).
     const linkStatus = await getInterviewLinkStatus(interviewId);
     if (
       linkStatus?.lastSentAt &&
@@ -262,7 +262,7 @@ export async function sendInterviewLinkAction(
     ) {
       return {
         success: false,
-        error: "Link byl odeslan pred chvili, zkuste to prosim za minutu.",
+        error: "Odkaz byl odeslaný před chvílí. Zkus to za minutu.",
       };
     }
 
@@ -283,7 +283,7 @@ export async function sendInterviewLinkAction(
     if (!sendResult.success) {
       return {
         success: false,
-        error: `Token byl vygenerovan, ale odeslani emailu selhalo: ${sendResult.error ?? "neznama chyba"}. Zkuste odeslat znovu.`,
+        error: `Odkaz je vytvořený, ale e-mail se nepodařilo odeslat: ${sendResult.error ?? "neznámá chyba"}. Zkus ho odeslat znovu.`,
       };
     }
 
@@ -293,15 +293,15 @@ export async function sendInterviewLinkAction(
     return { success: true };
   } catch (error) {
     console.error("sendInterviewLinkAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat link." };
+    return { success: false, error: "Odkaz se nepodařilo odeslat." };
   }
 }
 
 /**
  * Hard delete an interview (arch 8h, T-004a delta 2). Admin + moderator, NO
- * status guard — works for open AND submitted, per the human-gate decision
+ * status guard - works for open AND submitted, per the human-gate decision
  * ("bez ohledu na stav"). The DB cascade (snapshot/answers/link) runs
- * atomically inside the single DELETE in deleteInterview() — LL-003 is
+ * atomically inside the single DELETE in deleteInterview() - LL-003 is
  * satisfied trivially, there is no application-level sequencing here.
  */
 export async function deleteInterviewAction(
@@ -318,7 +318,7 @@ export async function deleteInterviewAction(
 
     // Return value ignored on purpose: 0 rows affected (double-click / race
     // with a concurrent delete) still means the target state "pohovor
-    // neexistuje" holds (arch 8h) — that is success, not an error.
+    // neexistuje" holds (arch 8h) - that is success, not an error.
     await dbDeleteInterview(interviewId);
 
     revalidatePath(INTERVIEWS_PATH);
@@ -328,13 +328,13 @@ export async function deleteInterviewAction(
     return { success: true };
   } catch (error) {
     console.error("deleteInterviewAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat pohovor." };
+    return { success: false, error: "Pohovor se nepodařilo smazat." };
   }
 }
 
 // ============================================================
 // Reports (arch section 8g, T-004a/T-003 MINOR-3 signatures, T-009). Two
-// separate actions on purpose — different guards and different inputs, a
+// separate actions on purpose - different guards and different inputs, a
 // compare report is keyed by member (a pair of interviews), not by a single
 // interview id. Both mail an arbitrary recipient member (never a free-text
 // email) and never include a magic link.
@@ -342,7 +342,7 @@ export async function deleteInterviewAction(
 
 /**
  * Send a single interview's report by email to an arbitrary recipient member
- * (arch 8g). Guarded to status='submitted' — an in-progress (open) interview
+ * (arch 8g). Guarded to status='submitted' - an in-progress (open) interview
  * has no stable report to send, answers can still change until submit.
  */
 export async function sendInterviewReportAction(
@@ -353,7 +353,7 @@ export async function sendInterviewReportAction(
   if (!auth.success) return auth;
 
   if (!recipientMemberId) {
-    return { success: false, error: "Vyberte prijemce." };
+    return { success: false, error: "Vyber příjemce." };
   }
 
   try {
@@ -364,16 +364,16 @@ export async function sendInterviewReportAction(
     if (detail.status !== "submitted") {
       return {
         success: false,
-        error: "Report lze odeslat jen u odeslaneho (submitted) pohovoru.",
+        error: "Report jde odeslat až po odeslání pohovoru.",
       };
     }
 
     const recipient = await getMemberById(recipientMemberId);
     if (!recipient) {
-      return { success: false, error: "Prijemce nebyl nalezen." };
+      return { success: false, error: "Příjemce nebyl nalezen." };
     }
     if (!recipient.email) {
-      return { success: false, error: "Vybrany prijemce nema email." };
+      return { success: false, error: "Vybraný příjemce nemá e-mail." };
     }
     // iter-037 (security L-2): deaktivace vypíná maily, report neaktivnímu neodejde.
     if (!isMemberActive(recipient, pragueToday())) {
@@ -390,7 +390,7 @@ export async function sendInterviewReportAction(
       createdAt: detail.createdAt,
       submittedAt: detail.submittedAt,
       // iter-021 (arch T-001 6.3 / 1.8): applies derived from interview.type,
-      // same pattern as the fill-form (T-007) — the mail must not render
+      // same pattern as the fill-form (T-007) - the mail must not render
       // "Bez odpovedi" for a question the leader could not fill in.
       questions: questions.map((q) => ({
         text: q.text,
@@ -402,28 +402,28 @@ export async function sendInterviewReportAction(
 
     const sendResult = await sendInterviewReportEmail(
       recipient.email,
-      `BNI Hlasovani - Report pohovoru: ${detail.memberName} (${typeLabel})`,
+      `BNI Hlasování: report pohovoru: ${detail.memberName} (${typeLabel})`,
       html
     );
 
     if (!sendResult.success) {
       return {
         success: false,
-        error: `Odeslani reportu selhalo: ${sendResult.error ?? "neznama chyba"}. Zkuste to prosim znovu.`,
+        error: `Report se nepodařilo odeslat: ${sendResult.error ?? "neznámá chyba"}. Zkus to znovu.`,
       };
     }
 
     return { success: true };
   } catch (error) {
     console.error("sendInterviewReportAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat report." };
+    return { success: false, error: "Report se nepodařilo odeslat." };
   }
 }
 
 /**
  * Send the 5-vs-10 compare report for a member by email to an arbitrary
  * recipient (arch sections 4.2 / 8g). Requires BOTH interviews to exist and
- * be 'submitted' (T-003 decision) — comparing against an in-progress
+ * be 'submitted' (T-003 decision) - comparing against an in-progress
  * interview would show answers that can still change underneath the report.
  */
 export async function sendInterviewCompareReportAction(
@@ -434,13 +434,13 @@ export async function sendInterviewCompareReportAction(
   if (!auth.success) return auth;
 
   if (!recipientMemberId) {
-    return { success: false, error: "Vyberte prijemce." };
+    return { success: false, error: "Vyber příjemce." };
   }
 
   try {
     const member = await getMemberById(memberId);
     if (!member) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const { month5, month10 } = await getMemberInterviewsForCompare(memberId);
@@ -448,23 +448,23 @@ export async function sendInterviewCompareReportAction(
       return {
         success: false,
         error:
-          "Porovnavaci report vyzaduje zalozene oba pohovory (5 i 10 mesicu).",
+          "Srovnávací report potřebuje oba pohovory, po 5 i po 10 měsících.",
       };
     }
     if (month5.status !== "submitted" || month10.status !== "submitted") {
       return {
         success: false,
         error:
-          "Porovnavaci report lze odeslat, jen kdyz jsou oba pohovory odeslane (submitted).",
+          "Srovnávací report jde odeslat, až budou oba pohovory odeslané.",
       };
     }
 
     const recipient = await getMemberById(recipientMemberId);
     if (!recipient) {
-      return { success: false, error: "Prijemce nebyl nalezen." };
+      return { success: false, error: "Příjemce nebyl nalezen." };
     }
     if (!recipient.email) {
-      return { success: false, error: "Vybrany prijemce nema email." };
+      return { success: false, error: "Vybraný příjemce nemá e-mail." };
     }
     // iter-037 (security L-2): deaktivace vypíná maily, report neaktivnímu neodejde.
     if (!isMemberActive(recipient, pragueToday())) {
@@ -485,14 +485,14 @@ export async function sendInterviewCompareReportAction(
 
     const sendResult = await sendInterviewReportEmail(
       recipient.email,
-      `BNI Hlasovani - Porovnani pohovoru: ${member.name} (5 vs 10 mesicu)`,
+      `BNI Hlasování: porovnání pohovorů: ${member.name} (5 vs 10 měsíců)`,
       html
     );
 
     if (!sendResult.success) {
       return {
         success: false,
-        error: `Odeslani reportu selhalo: ${sendResult.error ?? "neznama chyba"}. Zkuste to prosim znovu.`,
+        error: `Report se nepodařilo odeslat: ${sendResult.error ?? "neznámá chyba"}. Zkus to znovu.`,
       };
     }
 
@@ -501,7 +501,7 @@ export async function sendInterviewCompareReportAction(
     console.error("sendInterviewCompareReportAction error:", error);
     return {
       success: false,
-      error: "Nepodarilo se odeslat porovnavaci report.",
+      error: "Srovnávací report se nepodařilo odeslat.",
     };
   }
 }

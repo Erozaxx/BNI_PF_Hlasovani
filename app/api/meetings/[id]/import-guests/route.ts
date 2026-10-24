@@ -19,7 +19,7 @@ import {
   type ImportGuestRow,
 } from "@/lib/import/dedup-guests";
 
-// Dávkový import až 500 řádků (viz krok 14 níže) — skutečný časový limit
+// Dávkový import až 500 řádků (viz krok 14 níže) - skutečný časový limit
 // funkce nejde z repa zjistit (vercel.json nemá `functions` sekci a
 // `maxDuration` není v žádné jiné route v projektu). Žádné chování v téhle
 // route na té hodnotě nezávisí, je to jen pojistka: při potížích s
@@ -87,15 +87,15 @@ export async function POST(
 
   const { id: meetingId } = await params;
 
-  // 2. Load meeting — validate exists
+  // 2. Load meeting - validate exists
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
-    return err(404, "Meeting not found");
+    return err(404, "Schůzka nebyla nalezena.");
   }
 
   // 3. Status guard (UX-001)
   if (meetingData.status !== "draft") {
-    return err(409, "Meeting is not in draft status");
+    return err(409, "Hosty jde importovat jen ke schůzce, která ještě nemá spuštěné hlasování.");
   }
 
   // 4. Parse multipart form data
@@ -103,17 +103,17 @@ export async function POST(
   try {
     formData = await req.formData();
   } catch {
-    return err(400, "Invalid form data");
+    return err(400, "Formulář se nepodařilo přečíst. Zkus to znovu.");
   }
 
   const file = formData.get("file") as File | null;
   if (!file) {
-    return err(400, "No file uploaded");
+    return err(400, "Nebyl vybrán žádný soubor.");
   }
 
   // 5. File size check
   if (file.size > MAX_FILE_SIZE) {
-    return err(413, "File too large (max 5MB)");
+    return err(413, "Soubor je moc velký (nejvýš 5 MB).");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -123,7 +123,7 @@ export async function POST(
     buffer.length < 4 ||
     !ZIP_SIGNATURE.every((b, i) => buffer[i] === b)
   ) {
-    return err(400, "Invalid file signature");
+    return err(400, "Soubor není platný Excel (.xlsx).");
   }
 
   // 7. Parse workbook
@@ -131,17 +131,17 @@ export async function POST(
   try {
     wb = XLSX.read(buffer, { type: "buffer" });
   } catch {
-    return err(400, "Invalid file format");
+    return err(400, "Soubor není platný Excel (.xlsx).");
   }
 
-  // 8. Find sheet — prefer "All_Registrations", fallback to first
+  // 8. Find sheet - prefer "All_Registrations", fallback to first
   const sheetName =
     wb.SheetNames.includes("All_Registrations")
       ? "All_Registrations"
       : wb.SheetNames[0];
 
   if (!sheetName) {
-    return err(400, "No sheets found in workbook");
+    return err(400, "V souboru není žádný list.");
   }
 
   const ws = wb.Sheets[sheetName];
@@ -150,7 +150,7 @@ export async function POST(
   const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
 
   if (rawRows.length < 2) {
-    // No data rows (only header or empty) — a status-200 return must still
+    // No data rows (only header or empty) - a status-200 return must still
     // carry a full-shape GuestImportResult, so the client never has to guard
     // against undefined fields (architecture 4.4).
     return NextResponse.json(emptyGuestImportResult(), { status: 200 });
@@ -173,13 +173,13 @@ export async function POST(
   };
 
   if (colIdx.name === -1) {
-    return err(400, "Required column 'Full Name' not found in sheet");
+    return err(400, "V souboru chybí sloupec „Full Name“.");
   }
 
   // 10. Parse every row after the header into an ImportGuestRow. rowNumber
   // is the index in rawRows (header = 1), assigned BEFORE any filtering, so
   // it keeps matching what the moderator sees in Excel (gate P1). Rows
-  // without a name are NOT filtered here — they flow through with
+  // without a name are NOT filtered here - they flow through with
   // name: "" and are resolved by planGuestDedup ("skipped-no-name").
   const allParsedRows: ImportGuestRow[] = rawRows.slice(1).map((row, i) => {
     const arr = row as unknown[];
@@ -201,7 +201,7 @@ export async function POST(
     };
   });
 
-  // 10b. Gate P1 — a row where every mapped column is empty is not a
+  // 10b. Gate P1 - a row where every mapped column is empty is not a
   // skipped row, it is a non-existent row: xlsx "header: 1" parsing emits
   // blank rows that are inside the sheet's used range (e.g. left over from
   // manual edits). Drop those completely, BEFORE the MAX_ROWS cut, so
@@ -227,7 +227,7 @@ export async function POST(
     );
   }
 
-  // 12. Load ALL guest candidates, no WHERE (architecture 7.1) — the old
+  // 12. Load ALL guest candidates, no WHERE (architecture 7.1) - the old
   // `where(inArray(guest.email, emails))` can't dedup by name and compares
   // un-normalized values. 89 rows today (~11 kB), one round trip; revisit
   // with a filter if the `guest` table grows past ~10 000 rows.
@@ -266,7 +266,7 @@ export async function POST(
         if (inserted.length > 0) {
           categoryMap.set(inserted[0].name, inserted[0].id);
         } else {
-          // Race condition: another request inserted it — fetch it
+          // Race condition: another request inserted it - fetch it
           const fetched = await db2
             .select({ id: category.id })
             .from(category)
@@ -278,7 +278,7 @@ export async function POST(
     }
   }
 
-  // 13. Decide what happens to each row — pure function, no DB
+  // 13. Decide what happens to each row - pure function, no DB
   // (lib/import/dedup-guests.ts). The "first wins" guard on duplicate DB
   // keys lives inside planGuestDedup, not here.
   const plan = planGuestDedup(dataRows, existingGuests);
@@ -286,8 +286,8 @@ export async function POST(
 
   // 14. Batch INSERT new guests, sequentially, NO db.transaction() (LL-003).
   // Guard on empty array is required, not defensive decoration (7.5, gate
-  // P6): every row reusing an existing card — the idempotent second import
-  // of the same file — leaves createDecisions empty, and calling
+  // P6): every row reusing an existing card - the idempotent second import
+  // of the same file - leaves createDecisions empty, and calling
   // `.insert(guest).values([])` is untested territory without a dev DB.
   const db = getDb();
   const dedupKeyToGuestId = new Map<string, string>();
@@ -317,7 +317,7 @@ export async function POST(
         .returning({ id: guest.id, name: guest.name, email: guest.email });
 
       // Map RETURNING rows back to decisions via buildDedupKey, NOT row
-      // order (gate P6) — Postgres does not guarantee RETURNING preserves
+      // order (gate P6) - Postgres does not guarantee RETURNING preserves
       // the VALUES order.
       for (const returned of inserted) {
         const key = buildDedupKey(returned.name, returned.email);
@@ -326,7 +326,7 @@ export async function POST(
     }
   }
 
-  // 15. Batch link guests to meeting — ON CONFLICT DO NOTHING, order
+  // 15. Batch link guests to meeting - ON CONFLICT DO NOTHING, order
   // preserved from the file (architecture 7.2): guestIds are collected in
   // file order first, THEN de-duplicated, so [...new Set(...)] keeps the
   // first occurrence's position.
@@ -345,7 +345,7 @@ export async function POST(
   if (uniqueGuestIds.length > 0) {
     // Continue the per-meeting display order from the current max (max+1, …).
     // Guests already linked to this meeting are skipped by ON CONFLICT DO
-    // NOTHING, so their reserved index leaves a small gap — intentional,
+    // NOTHING, so their reserved index leaves a small gap - intentional,
     // see architecture 7.2 (no re-numbering after partial merges).
     const maxRows = await db
       .select({ maxOrder: max(meetingGuest.displayOrder) })
@@ -369,7 +369,7 @@ export async function POST(
     alreadyLinked = uniqueGuestIds.length - linkedToMeeting;
   }
 
-  // 16. Build the jmenovitý report (gate P2, P3) straight from the plan —
+  // 16. Build the jmenovitý report (gate P2, P3) straight from the plan  -
   // it is the single source of truth for what happened to each row.
   const createdRowsReport: GuestImportCreatedRow[] = createDecisions.map(
     (d) => ({
@@ -412,7 +412,7 @@ export async function POST(
       reason: "missing-name",
     }));
 
-  // SEC-004: Audit log — counts only. Names and emails are personal data;
+  // SEC-004: Audit log - counts only. Names and emails are personal data;
   // they belong in the response to the logged-in moderator, not in Vercel
   // logs (architecture 7.4).
   console.info(

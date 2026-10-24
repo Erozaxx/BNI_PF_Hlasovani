@@ -81,7 +81,7 @@ export function GuestCardMeeting({
         </div>
         {showVoteBadgeHere && initialVote && (
           <div className="flex flex-col items-start sm:items-end gap-1">
-            <span className="text-xs text-text-muted">Vas hlas</span>
+            <span className="text-xs text-text-muted">Tvůj hlas</span>
             <Badge
               variant={
                 ({ up: "success", neutral: "neutral", down: "danger" } as Record<string, "success" | "neutral" | "danger">)[initialVote.value] ?? "neutral"
@@ -109,7 +109,7 @@ export function GuestCardMeeting({
       {notes.length > 0 && (
         <div className="mb-4">
           <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">
-            Poznamky
+            Poznámky
           </h4>
           <ul className="space-y-1">
             {notes.map((n) => (
@@ -133,7 +133,7 @@ export function GuestCardMeeting({
         />
       )}
 
-      {/* Vote buttons — shown whenever voting phase is active, regardless of prior vote */}
+      {/* Vote buttons - shown whenever voting phase is active, regardless of prior vote */}
       {showVoteButtons && (
         <div className="mt-4 pt-4 border-t border-border">
           <MeetingVoteButtons
@@ -145,7 +145,7 @@ export function GuestCardMeeting({
         </div>
       )}
 
-      {/* Vote summary — visible in voting and closed phases */}
+      {/* Vote summary - visible in voting and closed phases */}
       {(phase === "voting" || phase === "closed") && (
         <div className="mt-4 pt-4 border-t border-border">
           <MeetingResultsView summary={voteSummary} guestName={name} voteDetail={voteDetail} />

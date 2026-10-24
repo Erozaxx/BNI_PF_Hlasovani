@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { can, hasPasswordSession } from "@/lib/auth/permissions";
 import { sessionHeaderLabel } from "@/lib/members/labels";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { logoutAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -18,9 +19,15 @@ export default async function AppLayout({
   // je volání ve stránce, layout se při měkké navigaci nevykresluje.
   const session = await requirePageSession();
   // iter-037 (arch 6.3): menu podle práv. Dnešní moderátor vidí totéž co
-  // před iter-037 (Akce, Časovače, Pohovory, Provoz, Nastavení), Členové a
+  // před iter-037 (Akce, Časovače, Pohovory, Provoz, Heslo), Členové a
   // Kategorie jen admin (`members.manage`, `categories.manage`).
+  // iter-042: vypnuté části (Master mind, Burza, Semafor) zmizí z menu.
+  const settings = await getChapterSettings();
   const show = {
+    mastermind: settings.mastermindEnabled,
+    burza: settings.burzaEnabled,
+    semafor: settings.semaforEnabled,
+    chapterSettings: can(session, "chapter.settings"),
     events: can(session, "events.manage"),
     timers: can(session, "timers.manage"),
     interviews: can(session, "interviews.manage"),
@@ -47,9 +54,9 @@ export default async function AppLayout({
           <NavLink href="/dashboard">Dashboard</NavLink>
           <NavLink href="/guests">Hosté</NavLink>
           <NavLink href="/meetings">Schůzky</NavLink>
-          <NavLink href="/mastermind">Master mind</NavLink>
-          <NavLink href="/burza">Burza pomoci</NavLink>
-          <NavLink href="/semafor">Semafor</NavLink>
+          {show.mastermind && <NavLink href="/mastermind">Master mind</NavLink>}
+          {show.burza && <NavLink href="/burza">Burza pomoci</NavLink>}
+          {show.semafor && <NavLink href="/semafor">Semafor</NavLink>}
           <NavLink href="/dochazka">Docházka</NavLink>
           {show.events && <NavLink href="/events">Akce</NavLink>}
           {show.timers && <NavLink href="/timers">Časovače</NavLink>}
@@ -58,7 +65,7 @@ export default async function AppLayout({
           <NavLink href="/archive">Archiv</NavLink>
           <NavLink href="/help">Nápověda</NavLink>
 
-          {(show.members || show.categories) && (
+          {(show.members || show.categories || show.chapterSettings) && (
             <>
               <div className="pt-4 pb-2">
                 <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -67,6 +74,9 @@ export default async function AppLayout({
               </div>
               {show.members && <NavLink href="/admin/members">Členové</NavLink>}
               {show.categories && <NavLink href="/admin/categories">Kategorie</NavLink>}
+              {show.chapterSettings && (
+                <NavLink href="/admin/nastaveni">Nastavení chapteru</NavLink>
+              )}
             </>
           )}
 
@@ -77,7 +87,7 @@ export default async function AppLayout({
                   Účet
                 </span>
               </div>
-              <NavLink href="/settings">Nastavení</NavLink>
+              <NavLink href="/settings">Heslo</NavLink>
             </>
           )}
         </nav>

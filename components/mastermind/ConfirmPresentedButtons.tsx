@@ -9,11 +9,13 @@ import {
   undoPresentedAction,
   unscheduleCaseAction,
 } from "@/actions/mastermind";
+import { UI_TEXTS } from "@/lib/mastermind/rules";
 
 /**
  * Tlačítka vedení u zařazeného a proběhlého případu (K13, 7.2).
  * - `scheduled`: „Proběhlo“ (jen když je `canConfirm`, tj. v den interní
- *   nebo po ní) a „Vrátit do zásobníku“.
+ *   nebo po ní) a „Vrátit do zásobníku“. Obě tlačítka se ptají `window.confirm`
+ *   dřív, než se cokoli pošle (iter-042, #14); Zrušit nic nemění.
  * - `presented`: „Vrátit potvrzení“ s potvrzovacím dotazem, jen na opravu
  *   překlepu (v logu `warn`).
  */
@@ -21,10 +23,13 @@ export function ConfirmPresentedButtons({
   caseId,
   mode,
   canConfirm,
+  bonusOn = true,
 }: {
   caseId: string;
   mode: "scheduled" | "presented";
   canConfirm: boolean;
+  /** Master mind dává bonus do semaforu: věta o bonusu v potvrzení „Proběhlo“. */
+  bonusOn?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -81,7 +86,10 @@ export function ConfirmPresentedButtons({
           loading={busy === "confirm"}
           disabled={busy !== null}
           className="min-h-[44px]"
-          onClick={() => void run("confirm", () => confirmPresentedAction(caseId), "Potvrzeno, že proběhlo.")}
+          onClick={() => {
+            if (!window.confirm(UI_TEXTS.confirmPresented(bonusOn))) return;
+            void run("confirm", () => confirmPresentedAction(caseId), "Potvrzeno, že proběhlo.");
+          }}
         >
           Proběhlo
         </Button>
@@ -93,7 +101,10 @@ export function ConfirmPresentedButtons({
         loading={busy === "unschedule"}
         disabled={busy !== null}
         className="min-h-[44px]"
-        onClick={() => void run("unschedule", () => unscheduleCaseAction(caseId), "Případ je zpátky v zásobníku.")}
+        onClick={() => {
+          if (!window.confirm(UI_TEXTS.confirmUnschedule)) return;
+          void run("unschedule", () => unscheduleCaseAction(caseId), "Případ je zpátky v zásobníku.");
+        }}
       >
         Vrátit do zásobníku
       </Button>

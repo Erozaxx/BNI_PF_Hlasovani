@@ -53,7 +53,7 @@ export function EventReport({ event, options, participants, votersByOption }: Ev
       </div>
 
       <p className="text-sm text-text-muted mb-4">
-        Celkem ucastniku: {participants.length} | Celkem moznosti:{" "}
+        Účastníků celkem: {participants.length} | Možností celkem:{" "}
         {options.length}
       </p>
 
@@ -78,13 +78,17 @@ export function EventReport({ event, options, participants, votersByOption }: Ev
                   <span className="font-medium text-text-main">{opt.label}</span>
                   {isSelected && (
                     <span className="text-xs text-success font-semibold">
-                      ✓ Vitezny termin
+                      ✓ Vítězný termín
                     </span>
                   )}
                 </div>
                 <span className="text-sm font-semibold text-text-main">
                   {opt.voteCount}{" "}
-                  {opt.voteCount === 1 ? "hlas" : "hlasu"}
+                  {opt.voteCount === 1
+                    ? "hlas"
+                    : opt.voteCount >= 2 && opt.voteCount <= 4
+                      ? "hlasy"
+                      : "hlasů"}
                 </span>
               </div>
 
@@ -104,7 +108,7 @@ export function EventReport({ event, options, participants, votersByOption }: Ev
       </div>
 
       {sortedOptions.length === 0 && (
-        <p className="text-sm text-text-muted">Zadne moznosti.</p>
+        <p className="text-sm text-text-muted">Žádné možnosti.</p>
       )}
     </Card>
   );

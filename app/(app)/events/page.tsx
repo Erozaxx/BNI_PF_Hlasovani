@@ -9,18 +9,18 @@ import { EmptyState } from "@/components/ui/EmptyState";
 type EventStatus = "draft" | "active" | "closed" | "done";
 
 const STATUS_LABELS: Record<EventStatus, string> = {
-  draft: "Priprava",
-  active: "Aktivni",
-  closed: "Uzavrena",
-  done: "Konana",
+  draft: "Příprava",
+  active: "Aktivní",
+  closed: "Uzavřená",
+  done: "Konaná",
 };
 
 const STATUS_TABS: Array<{ value: EventStatus | "all"; label: string }> = [
-  { value: "all", label: "Vse" },
-  { value: "draft", label: "Priprava" },
-  { value: "active", label: "Aktivni" },
-  { value: "closed", label: "Uzavrena" },
-  { value: "done", label: "Konana" },
+  { value: "all", label: "Vše" },
+  { value: "draft", label: "Příprava" },
+  { value: "active", label: "Aktivní" },
+  { value: "closed", label: "Uzavřená" },
+  { value: "done", label: "Konaná" },
 ];
 
 function eventStatusBadge(status: string) {
@@ -101,7 +101,11 @@ export default async function EventsPage({
                       {eventStatusBadge(ev.status)}
                       <span className="text-xs text-text-muted">
                         {ev.participantCount}{" "}
-                        {ev.participantCount === 1 ? "ucastnik" : "ucastniku"}
+                        {ev.participantCount === 1
+                          ? "účastník"
+                          : ev.participantCount >= 2 && ev.participantCount <= 4
+                            ? "účastníci"
+                            : "účastníků"}
                       </span>
                       {ev.selectedOptionId && ev.selectedOptionLabel && (
                         <span className="text-xs text-success font-medium">
@@ -121,11 +125,11 @@ export default async function EventsPage({
       ) : (
         <Card>
           <EmptyState
-            title="Zadne akce"
+            title="Zatím žádné akce"
             description={
               filter
-                ? `Zadne akce ve stavu „${STATUS_LABELS[filter]}". Zkuste jiny filtr nebo vytvorte novou akci.`
-                : "Zatim zadne akce. Vytvorte prvni akci."
+                ? `Žádné akce ve stavu „${STATUS_LABELS[filter]}“. Zkus jiný filtr nebo vytvoř novou akci.`
+                : "Zatím žádné akce. Vytvoř první akci."
             }
           />
         </Card>

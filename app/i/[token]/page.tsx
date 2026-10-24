@@ -36,7 +36,7 @@ type FetchResult = FormData | "expired" | null;
  * egress IP) rather than the real end-user IP, weakening per-IP throttle
  * isolation and risking a shared-bucket 429 for unrelated legitimate leaders.
  * Calling verifyInterviewToken()/the queries in-process instead means the
- * throttle key is keyed on headers() from THIS actual incoming request — the
+ * throttle key is keyed on headers() from THIS actual incoming request - the
  * real client IP, exactly like the direct API routes (form/answers/submit)
  * already get it. The mutating endpoints (PUT /answers, POST /submit) are
  * always called client-side from the browser (InterviewFillForm) and are
@@ -56,7 +56,7 @@ async function loadFormData(token: string): Promise<FetchResult> {
     const detail = await getInterviewDetail(interviewId);
     if (!detail) {
       // Extremely unlikely race (interview deleted between verify and this
-      // read) — treat the same as an expired/invalid link, no enumeration.
+      // read) - treat the same as an expired/invalid link, no enumeration.
       return "expired";
     }
 
@@ -74,7 +74,7 @@ async function loadFormData(token: string): Promise<FetchResult> {
         text: q.text,
         valueText: q.valueText,
         // iter-021 (arch T-001 5.1): same server-side derivation as
-        // GET /api/i/[token]/form — this server component loads the data
+        // GET /api/i/[token]/form - this server component loads the data
         // in-process rather than self-fetching that route (see loadFormData
         // doc comment above), so the CALL is duplicated here, but the
         // derivation rule itself is shared via deriveApplies() (T-009 review
@@ -89,7 +89,7 @@ async function loadFormData(token: string): Promise<FetchResult> {
 
 /**
  * Public fill-form entry point for the interview leader (arch section 8d,
- * T-008). Server component — no iron-session, the scoped token is the sole
+ * T-008). Server component - no iron-session, the scoped token is the sole
  * authority (verified server-side via verifyInterviewToken, same as the
  * /api/i/[token]/* routes used for save/submit).
  */

@@ -42,7 +42,7 @@ export async function GET(
   // 2. Load meeting
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
-    return err(404, "Meeting not found");
+    return err(404, "Schůzka nebyla nalezena.");
   }
 
   // 3. LEFT JOIN: all members with email + their link for this meeting (if any)

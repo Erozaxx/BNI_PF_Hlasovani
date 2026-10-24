@@ -48,6 +48,7 @@ import {
   formatWeekdayLong,
   isThursday,
   memberDeadline,
+  memberIntroText,
   memberMayEditAbsence,
   monthEnd,
   monthGrid,
@@ -184,6 +185,21 @@ const tests: TestCase[] = [
     },
   },
   {
+    name: "A1b. iter-042 B4: uzávěrka člena podle času z nastavení, bez parametru výchozí 7:30",
+    run: () => {
+      assert.equal(memberDeadline("2026-01-15").toISOString(), memberDeadline("2026-01-15", ATTENDANCE_START).toISOString());
+      assert.equal(memberDeadline("2026-01-15", "08:00").toISOString(), "2026-01-15T07:00:00.000Z");
+      assert.equal(memberDeadline("2026-07-15", "11:00").toISOString(), "2026-07-15T09:00:00.000Z");
+      // 7:45 se členovi ještě omluvit dá při začátku v 8:00, v 8:05 už ne
+      const at = (iso: string) => new Date(iso);
+      assert.equal(decideMemberAbsenceEdit(at("2026-01-15T06:45:00Z"), "2026-01-15", "08:00").ok, true);
+      assert.equal(decideMemberAbsenceEdit(at("2026-01-15T07:05:00Z"), "2026-01-15", "08:00").ok, false);
+      // bez třetího parametru platí výchozí začátek
+      assert.equal(decideMemberAbsenceEdit(at("2026-01-15T06:31:00Z"), "2026-01-15").ok, false);
+      assert.equal(memberMayEditAbsence(at("2026-01-15T06:31:00Z"), "2026-01-15", "08:00"), true);
+    },
+  },
+  {
     name: "A2. DST: přechody 25. 10. 2026 a 28. 3. 2027, uzávěrka v pondělí po přechodu a ve čtvrtek před ním",
     run: () => {
       // konec letního času: neděle 25. 10. 2026
@@ -295,7 +311,7 @@ const tests: TestCase[] = [
     run: () => {
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
-      assert.equal(PERMISSIONS.length, 27, "iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import");
+      assert.equal(PERMISSIONS.length, 28, "iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));
@@ -367,7 +383,7 @@ const tests: TestCase[] = [
       );
       assert.equal(
         dayAriaLabel("2026-11-19", { mark: "substitute", result: null, hasMeeting: true }),
-        "čtvrtek 19. listopadu, nepřijdeš, pošleš náhradníka, schůzka v aplikaci"
+        "čtvrtek 19. listopadu, nepřijdeš, pošleš náhradníka, schůzka s hosty"
       );
       assert.equal(
         dayAriaLabel("2026-10-08", { mark: "none", result: "absent", hasMeeting: false }),
@@ -406,7 +422,7 @@ const tests: TestCase[] = [
       });
       assert.equal(absenceCountParts(0).strong, null);
       assert.equal(absenceCountParts(3).after.startsWith(" ze 3"), true);
-      assert.equal(DASHBOARD_TEXTS.action, "Ohlásit nepřítomnost");
+      assert.equal(DASHBOARD_TEXTS.action, "Omluvit se");
       assert.equal(DASHBOARD_TEXTS.showDays, "Zobrazit dny");
       assert.equal(DASHBOARD_TEXTS.rulesLink, "Jak se absence počítají");
     },
@@ -445,9 +461,14 @@ const tests: TestCase[] = [
     name: "A13. texty člena doslova z gate sekce 5",
     run: () => {
       assert.equal(MEMBER_TEXTS.title, "Docházka");
+      // iter-042 (#10, Z5): čas uzávěrky z nastavení chapteru, výchozí hodnota = dnešní chování
       assert.equal(
         MEMBER_TEXTS.intro,
-        "Když na schůzku nemůžeš, dej vědět tady. Bez záznamu počítáme, že přijdeš."
+        "Když na schůzku nemůžeš, omluv se tady, nejpozději do 7:30 v den schůzky. Omluva bez náhradníka se počítá jako absence, s náhradníkem ne. Bez záznamu počítáme, že přijdeš."
+      );
+      assert.equal(
+        memberIntroText("08:15"),
+        "Když na schůzku nemůžeš, omluv se tady, nejpozději do 8:15 v den schůzky. Omluva bez náhradníka se počítá jako absence, s náhradníkem ne. Bez záznamu počítáme, že přijdeš."
       );
       assert.equal(MEMBER_TEXTS.optionPresent, "Přijdu");
       assert.equal(MEMBER_TEXTS.optionAbsent, "Nepřijdu, bez náhradníka");
@@ -457,21 +478,21 @@ const tests: TestCase[] = [
       assert.equal(MEMBER_TEXTS.recentNames, "Dřív:");
       assert.equal(
         MEMBER_TEXTS.legend,
-        "Modrý den je běžná schůzka s hosty, zelený den interní schůzka. ● nepřijdu, ◐ pošlu náhradníka."
+        "Světle modrý den je pravidelná schůzka, tmavě modrý schůzka s hosty, zelený interní schůzka. ● omluva bez náhradníka, ◐ omluva s náhradníkem."
       );
-      assert.equal(MEMBER_TEXTS.legendPast, "✓ přítomen, N náhradník, A absence");
+      assert.equal(MEMBER_TEXTS.legendPast, "Po schůzce: ✓ přišel(a), N přišel náhradník, A absence.");
       assert.equal(MEMBER_TEXTS.closedPanel, "Na tenhle den už změnu zapíše jen správce docházky.");
       assert.equal(MEMBER_TEXTS.closedPanel, MEMBER_TEXTS.errClosed, "panel a hláška mají jedno znění (gate)");
-      assert.equal(MEMBER_TEXTS.listTitle, "Ohlášené nepřítomnosti");
+      assert.equal(MEMBER_TEXTS.listTitle, "Tvoje omluvy");
       assert.equal(MEMBER_TEXTS.listEmpty, "–");
       assert.equal(MEMBER_TEXTS.cancel, "Zrušit");
       assert.equal(MEMBER_TEXTS.change, "Změnit");
       assert.equal(MEMBER_TEXTS.savedNamesTitle, "Uložená jména náhradníků");
       assert.equal(MEMBER_TEXTS.toastSaved, "Uloženo.");
-      assert.equal(MEMBER_TEXTS.toastCancelled, "Nepřítomnost zrušena.");
+      assert.equal(MEMBER_TEXTS.toastCancelled, "Omluva zrušena.");
       assert.equal(MEMBER_TEXTS.toastNameForgotten, "Jméno smazáno ze seznamu.");
       assert.equal(MEMBER_TEXTS.errClosed, "Na tenhle den už změnu zapíše jen správce docházky.");
-      assert.equal(MEMBER_TEXTS.errTooFar, "Nepřítomnost jde ohlásit nejvýš rok dopředu.");
+      assert.equal(MEMBER_TEXTS.errTooFar, "Omluvit se jde nejvýš rok dopředu.");
       assert.equal(MEMBER_TEXTS.errNameEmpty, "Napiš jméno náhradníka.");
       assert.equal(MEMBER_TEXTS.errNameShort, "Jméno náhradníka je moc krátké.");
       assert.equal(MEMBER_TEXTS.errNameLong, "Jméno náhradníka je moc dlouhé.");
@@ -548,7 +569,8 @@ const tests: TestCase[] = [
       const q = stripComments(read("lib/db/queries/attendance.ts"));
       assert.ok(!/\.transaction\(|BEGIN;|COMMIT;/.test(q));
       assert.ok(q.includes("AT TIME ZONE 'Europe/Prague'"));
-      assert.ok(q.includes("${ATTENDANCE_START}::time"), "čas uzávěrky z konstanty jako bind parametr");
+      assert.ok(q.includes("${time}::time"), "čas uzávěrky z nastavení chapteru jako bind parametr");
+      assert.ok(!q.includes("ATTENDANCE_START"), "iter-042: žádný čas natvrdo v SQL");
       assert.ok(q.includes("${MAX_ADVANCE_DAYS}::int"));
       assert.ok(/memberActiveSql\("gm"\)/.test(q), "neaktivní člen nezapíše");
       // jméno do paměti ve stejném příkazu jako ohlášení (CTE names)
@@ -602,7 +624,7 @@ const tests: TestCase[] = [
       assert.ok(cal.includes("grid-cols-7"));
       assert.ok(cal.includes("aria-label={dayAriaLabel("));
       assert.ok(cal.includes("dayNumberClass(tone)") && read("lib/attendance/internal.ts").includes("underline"), "den se schůzkou podtržený");
-      assert.ok(cal.includes("isThursday(date)"));
+      assert.ok(cal.includes("isRegularDay(date, { meetingWeekday: regularWeekday })") && !cal.includes("isThursday("), "iter-042: pravidelný den z nastavení");
       // legenda pod mřížkou
       assert.ok(cal.includes("MEMBER_TEXTS.legend") && cal.includes("MEMBER_TEXTS.legendPast"));
       const panel = read("components/attendance/DayPanel.tsx");
@@ -652,14 +674,15 @@ const tests: TestCase[] = [
       for (const s of [
         "V menu Docházka klepněte na den.",
         "Zvolte „Nepřijdu, bez náhradníka“, nebo „Nepřijdu, pošlu náhradníka“ a napište jméno. Uloží se hned.",
-        "Změnit nebo zrušit to můžete do 7:30 v den schůzky. Potom už to zapíše správce docházky.",
+        // iter-042 (Z5): čas schůzky z nastavení, funkce `memberDeadlineHelp` (výchozí 7:30 hlídá test-iter-036-help).
+        "memberDeadlineHelp(settings)",
         "Bez záznamu počítáme, že přijdete. Náhradník se jako absence nepočítá. Na dashboardu vidíte své absence za posledních 6 měsíců.",
         "Kdo vidí, že chybím?",
         "Správci docházky, Prezident, Viceprezident a admin. Ostatní členové ne.",
         "Proč mám absenci, i když jsem se omluvil(a)?",
         "Omluva bez náhradníka se podle pravidel počítá jako absence. Když pošlete náhradníka, absence to není.",
         "Jak smažu jméno náhradníka?",
-        "Dole na stránce Docházka v Uložených jménech.",
+        "Dole na stránce Docházka v části Uložená jména náhradníků.",
       ]) {
         assert.ok(member.includes(s), `chybí: ${s}`);
       }
@@ -799,7 +822,7 @@ const tests: TestCase[] = [
       assert.equal(isGuardedDay({ ...base, hasManagerRecord: true }), false, "den už má zápis");
       assert.equal(isGuardedDay({ ...base, mode: "history" }), false);
       assert.equal(isGuardedDay({ ...base, date: "2026-10-15" }), false, "jen dnešek");
-      assert.equal(SHEET_TEXTS.noMeeting, "Na dnešek není v aplikaci založená schůzka.");
+      assert.equal(SHEET_TEXTS.noMeeting, "Na dnešek není v aplikaci žádná schůzka. Zapisuj, jen když se opravdu konala.");
       assert.equal(SHEET_TEXTS.writeAnyway, "Zapisovat i tak");
       // UI: zatržítka neaktivní, dokud se neklepne na „Zapisovat i tak“; server zůstává otevřený (K5 A)
       const ui = read("components/attendance/AttendanceSheet.tsx");
@@ -822,13 +845,16 @@ const tests: TestCase[] = [
       assert.deepEqual(s, { total: 5, present: 3, substitutes: 1, missing: 2, excused: 2 });
       assert.equal(summaryText(s), "Přítomno 3 z 5 · náhradníci 1 · chybí 2 (omluveno 2)");
       assert.equal(sheetTitle("2026-10-22"), "Docházka · čtvrtek 22. 10. 2026");
-      assert.equal(announcedText({ excused: false, announcedName: null }), null);
-      assert.equal(announcedText({ excused: true, announcedName: null }), "Ohlásil(a): bez náhradníka");
-      assert.equal(announcedText({ excused: true, announcedName: "Jan Test" }), "Ohlásil(a): náhradník Jan Test");
+      // iter-042 (#1): každý řádek říká, jak se spočítá při uzávěrce
+      assert.equal(announcedText({ excused: false, announcedName: null }), "Bez zápisu: počítá se jako přítomen(a).");
+      assert.equal(announcedText({ excused: false, announcedName: null, status: "present" }), null);
+      assert.equal(announcedText({ excused: true, announcedName: null }), "Omluva bez náhradníka: počítá se jako omluven(a).");
+      assert.equal(announcedText({ excused: true, announcedName: "Jan Test" }), "Omluva, náhradník Jan Test: počítá se jako náhradník.");
+      assert.equal(announcedText({ excused: true, announcedName: "Jan Test", status: "present" }), "Omluva, náhradník Jan Test.", "po zaškrtnutí Přítomen bez následku");
       assert.equal(SHEET_TEXTS.filterAll, "Všichni");
-      assert.equal(SHEET_TEXTS.filterOpen, "Nezaškrtnutí");
+      assert.equal(SHEET_TEXTS.filterOpen, "Bez zápisu");
       assert.equal(SHEET_TEXTS.errSave, "Neuložilo se. Zkus to znovu.");
-      assert.equal(SHEET_TEXTS.errInactive, "Člen je neaktivní.");
+      assert.equal(SHEET_TEXTS.errInactive, "Člen ten den nebyl aktivní (neaktivní nebo vstoupil později). Docházka se mu nezapisuje.");
       assert.equal(SHEET_TEXTS.meetingLink, "Docházka tohoto dne");
       assert.equal(SHEET_TEXTS.auditTitle, "Historie oprav");
       const ui = read("components/attendance/AttendanceSheet.tsx");
@@ -1072,9 +1098,10 @@ const tests: TestCase[] = [
         'title="Docházka pro správce"',
         "V den schůzky vám ráno před 7:00 přijde mail s odkazem na zápis. Platí 12 hodin a nepotřebuje přihlášení. Docházku najdete i v aplikaci v menu Docházka, záložka Zápis.",
         // T-005b: původní věta o zaškrtávání příchozích nahrazena dvěma kroky podle rozhodnutí Toma 23. 10.
-        "Zapisovat jde dvěma způsoby: průběžně zaškrtávejte Přítomen u příchozích, nebo označte jen ty, kdo chyběli (Chyběl(a) bez omluvy, případně odškrtněte Přítomen).",
-        "Náhradníka zapíšete tak, že u člena zaškrtnete Přítomen, tím se zpřístupní volba „s náhradníkem“ (u ohlášeného náhradníka se jméno vyplní samo). Kdo zůstane nezaškrtnutý, bere se při uzávěrce jako přítomný, s ohlášeným náhradníkem jako náhradník a s omluvou jako omluvený. Odškrtnutím Omluven(a) se smaže ohlášení i se jménem náhradníka.",
-        "Kdo se omluvil až ráno, tomu zaškrtněte Omluven(a).",
+        // iter-042 (#11, #13): slovník omluva, znění podle úvodu Zápisu.
+        "Zapisovat jde dvěma způsoby: průběžně zaškrtávejte Přítomen u příchozích, nebo označte jen ty, kdo chyběli (Chyběl(a) bez omluvy).",
+        "Náhradníka zapíšete tak, že u člena zaškrtnete Přítomen, tím se zpřístupní volba „s náhradníkem“ (u omluvy s náhradníkem se jméno vyplní samo). Kdo zůstane bez zápisu, počítá se při uzávěrce jako přítomný, s omluvou jako omluvený a s omluvou s náhradníkem jako náhradník. Pod jménem řádku bez zápisu to vidíte napsané.",
+        "Kdo se omluvil až ráno, tomu zaškrtněte Omluven(a). Odškrtnutím Omluven(a) se smaže omluva i se jménem náhradníka, aplikace se předtím zeptá a vrátit to nejde.",
         "Každé kliknutí se hned uloží. Když řádek mezitím změnil jiný správce, uvidíte jeho stav a hlášku. Klikněte znovu.",
         "V 17:00 se den uzavře a přijde vám report. Potom už zápis nejde.",
         "Ranní mail nepřišel.",

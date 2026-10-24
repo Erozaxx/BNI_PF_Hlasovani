@@ -5,7 +5,7 @@ import { todayInPrague } from "@/lib/meetings/voting-window";
 import { addDaysIso, findDraftWarnings } from "@/lib/meetings/draft-warning";
 import { can } from "@/lib/auth/permissions";
 
-/** "YYYY-MM-DD" -> "D. M." (bez roku — arch iter-026 8.2 doslova). */
+/** "YYYY-MM-DD" -> "D. M." (bez roku, arch iter-026 8.2 doslova). */
 function formatDateShort(iso: string): string {
   const [, m, d] = iso.split("-").map(Number);
   return `${d}. ${m}.`;
@@ -13,13 +13,13 @@ function formatDateShort(iso: string): string {
 
 /**
  * Pruh nad neaktivovanou schůzkou (arch iter-026 T-001, sekce 8). Renderuje
- * se v app/(app)/layout.tsx nad {children}, na KAŽDÉ stránce aplikace —
+ * se v app/(app)/layout.tsx nad {children}, na KAŽDÉ stránce aplikace,
  * záměrně ne jen na dashboardu, protože příčinou incidentu 13. 8. bylo, že
  * "nikde to nesvítilo", ne že by na dashboard nikdo nepřišel.
  *
  * Self-gating: server component si sám čte session (iron-session, cookie,
  * bez DB dotazu) a při ne-management uživateli i při žádné relevantní
- * schůzce vrací `null` — žádný prázdný box, žádný posun layoutu (arch 8.2).
+ * schůzce vrací `null` - žádný prázdný box, žádný posun layoutu (arch 8.2).
  */
 export async function DraftMeetingBanner() {
   const session = await getSession();

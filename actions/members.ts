@@ -47,7 +47,7 @@ export async function createMemberAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Jmeno clena je povinne." };
+    return { success: false, error: "Jméno člena je povinné." };
   }
 
   try {
@@ -68,7 +68,7 @@ export async function createMemberAction(
       return { success: false, error: EMAIL_TAKEN_TEXT };
     }
     console.error("createMemberAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit clena." };
+    return { success: false, error: "Člena se nepodařilo vytvořit." };
   }
 }
 
@@ -85,7 +85,7 @@ export async function generateMagicLinkAction(
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
     const denied = await adminTargetError(auth.session, memberId);
     if (denied) return { success: false, error: denied };
@@ -102,7 +102,7 @@ export async function generateMagicLinkAction(
     return { success: true, data: { magicLink } };
   } catch (error) {
     console.error("generateMagicLinkAction error:", error);
-    return { success: false, error: "Nepodarilo se vygenerovat odkaz." };
+    return { success: false, error: "Odkaz se nepodařilo vytvořit." };
   }
 }
 
@@ -126,7 +126,7 @@ export async function revokeTokenAction(
 
     const row = await revokeMagicLinkGuarded(memberId, actor.memberId);
     if (!row) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     // LL-011: vstup se sestaví a zapíše uvnitř try, logOpsEvent sám nevyhodí.
@@ -150,7 +150,7 @@ export async function revokeTokenAction(
     return { success: true };
   } catch (error) {
     console.error("revokeTokenAction error:", error);
-    return { success: false, error: "Nepodarilo se zneplatnit odkaz." };
+    return { success: false, error: "Odkaz se nepodařilo zneplatnit." };
   }
 }
 
@@ -167,14 +167,14 @@ export async function sendMagicLinkEmailAction(
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const denied = await adminTargetError(auth.session, memberId);
     if (denied) return { success: false, error: denied };
 
     if (!memberData.email) {
-      return { success: false, error: "Clen nema zadany email." };
+      return { success: false, error: "Člen nemá zadaný e-mail." };
     }
     if (!isMemberActive(memberData, pragueToday())) {
       return { success: false, error: INACTIVE_NO_LINK_TEXT };
@@ -194,7 +194,7 @@ export async function sendMagicLinkEmailAction(
     if (!emailResult.success) {
       return {
         success: false,
-        error: emailResult.error ?? "Nepodarilo se odeslat email.",
+        error: emailResult.error ?? "E-mail se nepodařilo odeslat.",
       };
     }
 
@@ -202,7 +202,7 @@ export async function sendMagicLinkEmailAction(
     return { success: true, data: { magicLink } };
   } catch (error) {
     console.error("sendMagicLinkEmailAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat odkaz emailem." };
+    return { success: false, error: "Odkaz se nepodařilo poslat e-mailem." };
   }
 }
 
@@ -220,7 +220,7 @@ export async function updateMemberCompanyAction(
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const denied = await adminTargetError(auth.session, memberId);
@@ -238,7 +238,7 @@ export async function updateMemberCompanyAction(
     return { success: true };
   } catch (error) {
     console.error("updateMemberCompanyAction error:", error);
-    return { success: false, error: "Nepodarilo se aktualizovat firmu/obor." };
+    return { success: false, error: "Firmu a obor se nepodařilo uložit." };
   }
 }
 
@@ -264,7 +264,7 @@ export async function updateMemberEmailAction(
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const denied = await adminTargetError(auth.session, memberId);
@@ -283,7 +283,7 @@ export async function updateMemberEmailAction(
 
     const updated = await dbUpdateMemberEmail(memberId, email ?? null, auth.session.memberId);
     if (!updated) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     revalidatePath("/admin/members");
@@ -299,17 +299,17 @@ export async function updateMemberEmailAction(
       return { success: false, error: EMAIL_TAKEN_TEXT };
     }
     console.error("updateMemberEmailAction error:", error);
-    return { success: false, error: "Nepodarilo se aktualizovat email." };
+    return { success: false, error: "E-mail se nepodařilo uložit." };
   }
 }
 
 /**
  * Update the joined_at (entry date) for a member. Requires admin role
- * (arch 7.1 — deliberately admin-only, not moderator, unlike the interview
+ * (arch 7.1 - deliberately admin-only, not moderator, unlike the interview
  * question editor).
  *
  * Editing this value is also how the "neoverene datum vstupu" indicator on
- * the /interviews due-list clears — that indicator is a zero-schema
+ * the /interviews due-list clears - that indicator is a zero-schema
  * heuristic (joined_at == created_at::date), so once an admin sets a real
  * entry date it naturally stops matching created_at and disappears.
  */
@@ -321,18 +321,18 @@ export async function updateMemberJoinedAtAction(
   if (!auth.success) return auth;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(joinedAt)) {
-    return { success: false, error: "Neplatny format data. Pouzijte format RRRR-MM-DD." };
+    return { success: false, error: "Neplatný formát data. Použij RRRR-MM-DD." };
   }
 
   const parsed = new Date(`${joinedAt}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) {
-    return { success: false, error: "Neplatne datum." };
+    return { success: false, error: "Neplatné datum." };
   }
 
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const denied = await adminTargetError(auth.session, memberId);
@@ -345,7 +345,7 @@ export async function updateMemberJoinedAtAction(
     return { success: true };
   } catch (error) {
     console.error("updateMemberJoinedAtAction error:", error);
-    return { success: false, error: "Nepodarilo se aktualizovat datum vstupu." };
+    return { success: false, error: "Datum vstupu se nepodařilo uložit." };
   }
 }
 
@@ -370,7 +370,7 @@ export async function deleteMemberAction(
   try {
     const memberData = await getMemberById(memberId);
     if (!memberData) {
-      return { success: false, error: "Clen nebyl nalezen." };
+      return { success: false, error: "Člen nebyl nalezen." };
     }
 
     const denied = await adminTargetError(auth.session, memberId);
@@ -391,14 +391,14 @@ export async function deleteMemberAction(
       await clearHelpNotesForRecipient(memberId);
     } catch (err) {
       console.error(`deleteMemberAction burza cleanup failed: ${err instanceof Error ? err.name : typeof err}`);
-      return { success: false, error: "Nepodarilo se smazat clena." };
+      return { success: false, error: "Člena se nepodařilo smazat." };
     }
 
     const deleted = await deleteMemberGuarded(memberId, actorId);
     if (!deleted) {
       return {
         success: false,
-        error: "Clena se nepodarilo smazat, obnov stranku.",
+        error: "Člena se nepodařilo smazat, obnov stránku.",
       };
     }
 
@@ -406,6 +406,6 @@ export async function deleteMemberAction(
     return { success: true };
   } catch (error) {
     console.error("deleteMemberAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat clena." };
+    return { success: false, error: "Člena se nepodařilo smazat." };
   }
 }

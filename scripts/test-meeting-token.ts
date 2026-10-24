@@ -94,11 +94,15 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: 'N2 (review T-007). meetingTokenActionError("expired","note") -> "Poznamka se neulozila, platnost odkazu skoncila."',
+    name: 'N2 (review T-007). meetingTokenActionError("expired","note") -> "Poznámka se neuložila, platnost odkazu skončila."',
     run: () => {
       assert.equal(
         meetingTokenActionError("expired", "note"),
-        "Poznamka se neulozila, platnost odkazu skoncila."
+        "Poznámka se neuložila, platnost odkazu skončila."
+      );
+      assert.equal(
+        meetingTokenActionError("invalid", "vote"),
+        "Hlas se neuložil, odkaz už neplatí. Otevři odkaz z posledního mailu."
       );
     },
   },

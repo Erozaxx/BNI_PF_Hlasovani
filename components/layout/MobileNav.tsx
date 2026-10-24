@@ -6,6 +6,11 @@ import { logoutAction } from "@/actions/auth";
 
 /** iter-037: položky menu podle práv session (počítá layout přes `can`). */
 export interface MobileNavShow {
+  /** iter-042: přepínače částí aplikace a právo `chapter.settings`. */
+  mastermind: boolean;
+  burza: boolean;
+  semafor: boolean;
+  chapterSettings: boolean;
   events: boolean;
   timers: boolean;
   interviews: boolean;
@@ -82,27 +87,33 @@ export function MobileNav({ show, name }: MobileNavProps) {
         >
           Schůzky
         </Link>
-        <Link
-          href="/mastermind"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-          onClick={() => setOpen(false)}
-        >
-          Master mind
-        </Link>
-        <Link
-          href="/burza"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-          onClick={() => setOpen(false)}
-        >
-          Burza pomoci
-        </Link>
-        <Link
-          href="/semafor"
-          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
-          onClick={() => setOpen(false)}
-        >
-          Semafor
-        </Link>
+        {show.mastermind && (
+          <Link
+            href="/mastermind"
+            className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+            onClick={() => setOpen(false)}
+          >
+            Master mind
+          </Link>
+        )}
+        {show.burza && (
+          <Link
+            href="/burza"
+            className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+            onClick={() => setOpen(false)}
+          >
+            Burza pomoci
+          </Link>
+        )}
+        {show.semafor && (
+          <Link
+            href="/semafor"
+            className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+            onClick={() => setOpen(false)}
+          >
+            Semafor
+          </Link>
+        )}
         <Link
           href="/dochazka"
           className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
@@ -160,7 +171,7 @@ export function MobileNav({ show, name }: MobileNavProps) {
         >
           Nápověda
         </Link>
-        {(show.members || show.categories) && (
+        {(show.members || show.categories || show.chapterSettings) && (
           <>
             <hr className="my-2 border-border" />
             {show.members && (
@@ -181,6 +192,15 @@ export function MobileNav({ show, name }: MobileNavProps) {
                 Kategorie
               </Link>
             )}
+            {show.chapterSettings && (
+              <Link
+                href="/admin/nastaveni"
+                className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+                onClick={() => setOpen(false)}
+              >
+                Nastavení chapteru
+              </Link>
+            )}
           </>
         )}
         {show.settings && (
@@ -191,7 +211,7 @@ export function MobileNav({ show, name }: MobileNavProps) {
               className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
               onClick={() => setOpen(false)}
             >
-              Nastavení
+              Heslo
             </Link>
           </>
         )}

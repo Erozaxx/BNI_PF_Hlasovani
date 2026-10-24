@@ -23,7 +23,7 @@ export function ImportMembersForm() {
   const [state, setState] = useState<FormState>("idle");
   const [error, setError] = useState<string>("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  // rows the admin did NOT uncheck — starts as all new+update rows
+  // rows the admin did NOT uncheck - starts as all new+update rows
   const [selectedRowIndexes, setSelectedRowIndexes] = useState<Set<number>>(new Set());
   const [doneResult, setDoneResult] = useState<DoneResult | null>(null);
 
@@ -35,14 +35,14 @@ export function ImportMembersForm() {
 
     const fileInput = fileInputRef.current;
     if (!fileInput?.files?.[0]) {
-      setError("Vyberte soubor .xlsx.");
+      setError("Vyber soubor .xlsx.");
       return;
     }
 
     const formData = new FormData();
     formData.append("file", fileInput.files[0]);
 
-    setState("previewing"); // optimistic — show spinner while parsing
+    setState("previewing"); // optimistic - show spinner while parsing
 
     try {
       const result = await parseXlsxAction(formData);
@@ -64,7 +64,7 @@ export function ImportMembersForm() {
       });
       setSelectedRowIndexes(selected);
     } catch {
-      setError("Nepodarilo se zpracovat soubor.");
+      setError("Soubor se nepodařilo zpracovat.");
       setState("idle");
     }
   }
@@ -96,16 +96,16 @@ export function ImportMembersForm() {
       if (data.errorCount === 0) {
         showToast(
           "success",
-          `Import dokoncen: ${data.createdCount} novych, ${data.updatedCount} aktualizovanych.`
+          `Import dokončen: ${data.createdCount} nových, ${data.updatedCount} aktualizovaných.`
         );
       } else {
         showToast(
           "error",
-          `Import s chybami: ${data.errorCount} radku selhalo.`
+          `Import s chybami: ${data.errorCount} řádků selhalo.`
         );
       }
     } catch {
-      setError("Nepodarilo se provest import.");
+      setError("Import se nepodařilo provést.");
       setState("previewing");
     }
   }
@@ -144,13 +144,13 @@ export function ImportMembersForm() {
   function statusBadge(row: ImportPreviewRow) {
     switch (row.status) {
       case "new":
-        return <Badge variant="success">novy</Badge>;
+        return <Badge variant="success">nový</Badge>;
       case "update":
-        return <Badge variant="warning">update</Badge>;
+        return <Badge variant="warning">aktualizace</Badge>;
       case "unchanged":
-        return <Badge variant="neutral">beze zmeny</Badge>;
+        return <Badge variant="neutral">beze změny</Badge>;
       case "skipped":
-        return <Badge variant="danger">preskocen</Badge>;
+        return <Badge variant="danger">přeskočen</Badge>;
     }
   }
 
@@ -178,9 +178,12 @@ export function ImportMembersForm() {
             {error}
           </div>
         )}
+        <p className="text-sm text-text-muted">
+          Čte se první list: sloupec B jméno (povinné), D obor, E datum vstupu (nepovinné, 15. 4. 2026 nebo 2026-04-15). Nejvýš 500 řádků.
+        </p>
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-text-main" htmlFor="import-xlsx-file">
-            XLSX soubor
+            Soubor .xlsx
           </label>
           <input
             id="import-xlsx-file"
@@ -191,18 +194,18 @@ export function ImportMembersForm() {
           />
         </div>
         <Button type="submit" variant="primary" size="sm" className="min-h-[44px]">
-          Nahrát a zobrazit preview
+          Nahrát a zobrazit náhled
         </Button>
       </form>
     );
   }
 
-  // previewing state (also used as loading state while parsing — preview===null means parsing in progress)
+  // previewing state (also used as loading state while parsing - preview===null means parsing in progress)
   if (state === "previewing") {
     if (!preview) {
       return (
         <div className="text-sm text-text-muted py-4">
-          Zpracovavam soubor...
+          Zpracovávám soubor...
         </div>
       );
     }
@@ -223,11 +226,11 @@ export function ImportMembersForm() {
         {/* Summary */}
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="text-text-muted">Souhrn:</span>
-          <Badge variant="success">{summary.newCount} novych</Badge>
-          <Badge variant="warning">{summary.updateCount} aktualizaci</Badge>
-          <Badge variant="neutral">{summary.unchangedCount} beze zmeny</Badge>
+          <Badge variant="success">{summary.newCount} nových</Badge>
+          <Badge variant="warning">{summary.updateCount} aktualizací</Badge>
+          <Badge variant="neutral">{summary.unchangedCount} beze změny</Badge>
           {summary.skippedCount > 0 && (
-            <Badge variant="danger">{summary.skippedCount} preskoceno</Badge>
+            <Badge variant="danger">{summary.skippedCount} přeskočeno</Badge>
           )}
         </div>
 
@@ -238,9 +241,9 @@ export function ImportMembersForm() {
               <tr className="border-b-2 border-primary text-left bg-background">
                 <th className="px-3 py-2 font-semibold w-8"></th>
                 <th className="px-3 py-2 font-semibold">Stav</th>
-                <th className="px-3 py-2 font-semibold">Jmeno</th>
-                <th className="px-3 py-2 font-semibold">Obor (novy)</th>
-                <th className="px-3 py-2 font-semibold">Obor (stavajici)</th>
+                <th className="px-3 py-2 font-semibold">Jméno</th>
+                <th className="px-3 py-2 font-semibold">Obor (nový)</th>
+                <th className="px-3 py-2 font-semibold">Obor (stávající)</th>
                 <th className="px-3 py-2 font-semibold">Datum vstupu</th>
               </tr>
             </thead>
@@ -271,22 +274,22 @@ export function ImportMembersForm() {
                     <td className="px-3 py-2">{statusBadge(row)}</td>
                     <td className="px-3 py-2 font-medium">{row.xlsxName}</td>
                     <td className="px-3 py-2">
-                      {row.xlsxObor ?? <span className="text-text-muted">—</span>}
+                      {row.xlsxObor ?? <span className="text-text-muted">-</span>}
                     </td>
                     <td className="px-3 py-2 text-text-muted">
                       {row.status === "skipped"
                         ? <span className="text-danger text-xs">{row.reason}</span>
-                        : row.existingObor ?? "—"}
+                        : row.existingObor ?? "-"}
                     </td>
                     <td className="px-3 py-2 text-text-muted">
                       {row.xlsxJoinedAt ??
                         (row.status === "new" ? (
-                          <span title="Chybi/nerozpoznano v souboru — pouzije se aktualni datum">
-                            — (dnesni datum)
+                          <span title="V souboru chybí nebo se nepodařilo přečíst. Použije se dnešní datum.">
+                            - (dnešní datum)
                           </span>
                         ) : (
-                          <span title="Chybi/nerozpoznano v souboru — stavajici datum vstupu zustane beze zmeny">
-                            —
+                          <span title="V souboru chybí nebo se nepodařilo přečíst. Stávající datum vstupu zůstane beze změny.">
+                            -
                           </span>
                         ))}
                     </td>
@@ -316,7 +319,7 @@ export function ImportMembersForm() {
             className="min-h-[44px]"
             onClick={handleCancel}
           >
-            Zrusit
+            Zrušit
           </Button>
         </div>
       </div>
@@ -327,7 +330,7 @@ export function ImportMembersForm() {
   if (state === "importing") {
     return (
       <div className="text-sm text-text-muted py-4">
-        Importuji cleny...
+        Importuji členy...
       </div>
     );
   }
@@ -343,9 +346,9 @@ export function ImportMembersForm() {
               : "bg-yellow-50 text-yellow-800"
           }`}
         >
-          <p className="font-semibold">Import dokoncen</p>
-          <p>Vytvoreno: {doneResult.createdCount} clenu</p>
-          <p>Aktualizovano: {doneResult.updatedCount} clenu</p>
+          <p className="font-semibold">Import dokončen</p>
+          <p>Vytvořeno: {doneResult.createdCount} členů</p>
+          <p>Aktualizováno: {doneResult.updatedCount} členů</p>
           {doneResult.errorCount > 0 && (
             <p className="text-danger">Chyby: {doneResult.errorCount}</p>
           )}
@@ -358,7 +361,7 @@ export function ImportMembersForm() {
           )}
         </div>
         <Button type="button" variant="secondary" size="sm" className="min-h-[44px]" onClick={handleReset}>
-          Nahrat dalsi soubor
+          Nahrát další soubor
         </Button>
       </div>
     );

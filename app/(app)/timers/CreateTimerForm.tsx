@@ -24,12 +24,12 @@ export function CreateTimerForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      setError("Nazev je povinny.");
+      setError("Název je povinný.");
       return;
     }
     const seconds = parseInt(displaySeconds, 10);
     if (!displaySeconds || isNaN(seconds) || seconds < 1 || seconds > 86400) {
-      setError("Delka musi byt celé cislo 1–86400.");
+      setError("Délka musí být celé číslo od 1 do 86400.");
       return;
     }
 
@@ -45,9 +45,9 @@ export function CreateTimerForm() {
       });
       setName("");
       setDisplaySeconds("");
-      showToast("success", "Casovac byl vytvoren. Zkopirujte odkazy nize.");
+      showToast("success", "Časovač je vytvořený. Zkopíruj odkazy níže.");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Nepodarilo se vytvorit casovac.";
+      const msg = err instanceof Error ? err.message : "Časovač se nepodařilo vytvořit.";
       setError(msg);
       showToast("error", msg);
     } finally {
@@ -58,9 +58,9 @@ export function CreateTimerForm() {
   async function copyToClipboard(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
-      showToast("success", `${label} zkopirovan.`);
+      showToast("success", `${label} zkopírován.`);
     } catch {
-      showToast("error", "Kopirovani selhalo — zkopirujte rucne.");
+      showToast("error", "Kopírování se nepodařilo, zkopíruj odkaz ručně.");
     }
   }
 
@@ -73,12 +73,12 @@ export function CreateTimerForm() {
     return (
       <div className="space-y-4 max-w-xl">
         <p className="text-sm font-semibold text-text-main">
-          Časovač byl vytvořen. Zkopírujte oba odkazy. Ze seznamu časovačů je zkopírujete znovu.
+          Časovač je vytvořený. Zkopíruj oba odkazy. Ze seznamu časovačů je zkopíruješ znovu.
         </p>
 
         <div className="space-y-3">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-text-muted">Zobrazovací link (pro publikum)</span>
+            <span className="text-xs font-medium text-text-muted">Odkaz pro publikum (zobrazit)</span>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs bg-background border border-border rounded px-2 py-1.5 break-all">
                 {createdLinks.viewUrl}
@@ -87,7 +87,8 @@ export function CreateTimerForm() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => copyToClipboard(createdLinks.viewUrl, "Zobrazovací link")}
+                onClick={() => copyToClipboard(createdLinks.viewUrl, "Odkaz pro publikum")}
+                className="min-h-[44px]"
               >
                 Kopírovat
               </Button>
@@ -95,7 +96,7 @@ export function CreateTimerForm() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-text-muted">Ovládací link (pro moderátora)</span>
+            <span className="text-xs font-medium text-text-muted">Odkaz pro moderátora (ovládat)</span>
             <div className="flex items-center gap-2">
               <code className="flex-1 text-xs bg-background border border-border rounded px-2 py-1.5 break-all">
                 {createdLinks.controlUrl}
@@ -104,7 +105,8 @@ export function CreateTimerForm() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => copyToClipboard(createdLinks.controlUrl, "Ovládací link")}
+                onClick={() => copyToClipboard(createdLinks.controlUrl, "Odkaz pro moderátora")}
+                className="min-h-[44px]"
               >
                 Kopírovat
               </Button>
@@ -112,8 +114,8 @@ export function CreateTimerForm() {
           </div>
         </div>
 
-        <Button type="button" variant="primary" size="sm" onClick={handleDone}>
-          Hotovo — zobrazit seznam
+        <Button type="button" variant="primary" size="sm" className="min-h-[44px]" onClick={handleDone}>
+          Hotovo, zobrazit seznam
         </Button>
       </div>
     );
@@ -126,21 +128,21 @@ export function CreateTimerForm() {
         label="Název časovače"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Napr. Prezentace clena"
+        placeholder="Např. Prezentace člena"
         maxLength={100}
       />
       <Input
         name="displaySeconds"
-        label="Délka v sekundách"
+        label="Délka v sekundách (3 minuty = 180)"
         type="number"
         min={1}
         max={86400}
         value={displaySeconds}
         onChange={(e) => setDisplaySeconds(e.target.value)}
-        placeholder="Napr. 120"
+        placeholder="Např. 180"
         error={error}
       />
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
+      <Button type="submit" variant="primary" size="sm" loading={loading} className="min-h-[44px]">
         Vytvořit časovač
       </Button>
     </form>

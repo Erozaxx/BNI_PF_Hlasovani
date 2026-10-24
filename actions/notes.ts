@@ -9,8 +9,8 @@ import type { ActionResult } from "@/lib/types";
 const noteSchema = z.object({
   text: z
     .string()
-    .min(1, "Poznamka nesmi byt prazdna.")
-    .max(2000, "Poznamka muze mit maximalne 2000 znaku."),
+    .min(1, "Poznámka nesmí být prázdná.")
+    .max(2000, "Poznámka může mít nejvýš 2000 znaků."),
 });
 
 /**
@@ -26,12 +26,12 @@ export async function createNoteAction(
 
   const parsed = noteSchema.safeParse({ text });
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0]?.message ?? "Neplatna poznamka.";
+    const firstError = parsed.error.errors[0]?.message ?? "Neplatná poznámka.";
     return { success: false, error: firstError };
   }
 
   if (!guestId) {
-    return { success: false, error: "Host nebyl specifikovan." };
+    return { success: false, error: "Host nebyl zadaný." };
   }
 
   try {
@@ -41,6 +41,6 @@ export async function createNoteAction(
     return { success: true };
   } catch (error) {
     console.error("createNoteAction error:", error);
-    return { success: false, error: "Nepodarilo se ulozit poznamku." };
+    return { success: false, error: "Poznámku se nepodařilo uložit." };
   }
 }

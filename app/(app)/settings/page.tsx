@@ -10,15 +10,15 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-lg">
-      <h1 className="text-2xl font-bold text-text-main">Nastavení</h1>
+      <h1 className="text-2xl font-bold text-text-main">Heslo</h1>
 
       <Card>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          {hasPassword ? "Zmena hesla" : "Nastavit heslo"}
+          {hasPassword ? "Změna hesla" : "Nastavit heslo"}
         </h2>
         {!hasPassword && (
           <p className="text-sm text-text-muted mb-4">
-            Zatim nemáte nastaveno heslo. Po nastavení se budete moci přihlásit i přes email a heslo.
+            Zatím nemáš nastavené heslo. Po nastavení se přihlásíš i e-mailem a heslem.
           </p>
         )}
         <ChangePasswordForm hasPassword={hasPassword} />

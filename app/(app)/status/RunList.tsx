@@ -6,11 +6,11 @@ import type { RunState } from "@/lib/ops/run-status";
 
 export interface RunListItem {
   runId: string;
-  /** Čas nejstarší události běhu (typicky `*.started`) — kdy běh začal. */
+  /** Čas nejstarší události běhu (typicky `*.started`) - kdy běh začal. */
   startedAt: Date;
   /** "cron" nebo jméno člověka, který ho spustil. */
   actorLabel: string;
-  /** "Schuzka 27. 8." nebo "—", když se ke schůzce nedostal (guard `not-found`). */
+  /** "Schůzka 27. 8." nebo "–", když se ke schůzce nedostal (guard `not-found`). */
   meetingLabel: string;
   state: RunState;
   label: string;
@@ -25,7 +25,7 @@ const STATE_BADGE: Record<RunState, BadgeVariant> = {
   unknown: "neutral",
 };
 
-/** "22. 8. 07:00" — den. měsíc. HH:MM, Europe/Prague vždy (R9). */
+/** "22. 8. 07:00" - den. měsíc. HH:MM, Europe/Prague vždy (R9). */
 function formatRunTime(date: Date): string {
   const day = date.toLocaleDateString("cs-CZ", {
     day: "numeric",
@@ -51,8 +51,8 @@ export function RunList({ runs }: { runs: RunListItem[] }) {
     return (
       <Card>
         <EmptyState
-          title="Zatim zadne bezy"
-          description="Log zacina dnem nasazeni. Starsi behy se zpetne nedopocitavaji."
+          title="Zatím žádné běhy"
+          description="Záznamy začínají dnem nasazení. Starší běhy se zpětně nedopočítávají."
         />
       </Card>
     );
@@ -60,14 +60,14 @@ export function RunList({ runs }: { runs: RunListItem[] }) {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-text-muted mb-3">Posledni behy</h2>
+      <h2 className="text-sm font-semibold text-text-muted mb-3">Poslední běhy</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-primary text-left">
               <th className="px-3 py-2 font-semibold">Kdy</th>
               <th className="px-3 py-2 font-semibold">Kdo</th>
-              <th className="px-3 py-2 font-semibold">Schuzka</th>
+              <th className="px-3 py-2 font-semibold">Schůzka</th>
               <th className="px-3 py-2 font-semibold">Stav</th>
               <th className="px-3 py-2 font-semibold" aria-label="Detail"></th>
             </tr>
@@ -91,7 +91,7 @@ export function RunList({ runs }: { runs: RunListItem[] }) {
                     href={`/status/${run.runId}`}
                     className="text-primary text-xs underline focus:outline-none focus:shadow-focus"
                   >
-                    detail →
+                    běh →
                   </Link>
                 </td>
               </tr>

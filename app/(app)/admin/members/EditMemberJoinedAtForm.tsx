@@ -9,7 +9,7 @@ import { updateMemberJoinedAtAction } from "@/actions/members";
 
 interface Props {
   memberId: string;
-  /** "YYYY-MM-DD" — matches the DATE column and the <input type="date"> value format. */
+  /** "YYYY-MM-DD" - matches the DATE column and the <input type="date"> value format. */
   initialJoinedAt: string;
 }
 

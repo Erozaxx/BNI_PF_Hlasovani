@@ -23,7 +23,7 @@ export async function createMeetingAction(
   if (!auth.success) return auth;
 
   if (!date) {
-    return { success: false, error: "Datum schuzky je povinne." };
+    return { success: false, error: "Datum schůzky je povinné." };
   }
 
   try {
@@ -33,10 +33,10 @@ export async function createMeetingAction(
   } catch (error: unknown) {
     const dbError = error as { code?: string };
     if (dbError?.code === "23505") {
-      return { success: false, error: `Schuzka na datum ${date} jiz existuje.` };
+      return { success: false, error: `Schůzka na datum ${date} už existuje.` };
     }
     console.error("createMeetingAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit schuzku." };
+    return { success: false, error: "Schůzku se nepodařilo vytvořit." };
   }
 }
 
@@ -52,7 +52,7 @@ export async function deleteMeetingAction(
   try {
     const mtg = await getMeetingById(meetingId);
     if (!mtg) {
-      return { success: false, error: "Schuzka nebyla nalezena." };
+      return { success: false, error: "Schůzka nebyla nalezena." };
     }
 
     await dbDeleteMeeting(meetingId);
@@ -61,7 +61,7 @@ export async function deleteMeetingAction(
     return { success: true };
   } catch (error) {
     console.error("deleteMeetingAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat schuzku." };
+    return { success: false, error: "Schůzku se nepodařilo smazat." };
   }
 }
 
@@ -79,12 +79,12 @@ export async function addGuestToMeetingAction(
   try {
     const mtg = await getMeetingById(meetingId);
     if (!mtg) {
-      return { success: false, error: "Schuzka nebyla nalezena." };
+      return { success: false, error: "Schůzka nebyla nalezena." };
     }
     if (mtg.status !== "draft") {
       return {
         success: false,
-        error: "Hosty lze prirazovat pouze ke schuzkam ve stavu draft.",
+        error: "Hosty jde přidávat jen ke schůzce, která ještě nemá spuštěné hlasování.",
       };
     }
 
@@ -93,7 +93,7 @@ export async function addGuestToMeetingAction(
     return { success: true };
   } catch (error) {
     console.error("addGuestToMeetingAction error:", error);
-    return { success: false, error: "Nepodarilo se pridat hosta ke schuzce." };
+    return { success: false, error: "Hosta se nepodařilo přidat ke schůzce." };
   }
 }
 
@@ -115,7 +115,7 @@ export async function removeGuestFromMeetingAction(
     console.error("removeGuestFromMeetingAction error:", error);
     return {
       success: false,
-      error: "Nepodarilo se odebrat hosta ze schuzky.",
+      error: "Hosta se nepodařilo odebrat ze schůzky.",
     };
   }
 }
@@ -132,12 +132,12 @@ export async function closeVotingAction(
   try {
     const mtg = await getMeetingById(meetingId);
     if (!mtg) {
-      return { success: false, error: "Schuzka nebyla nalezena." };
+      return { success: false, error: "Schůzka nebyla nalezena." };
     }
     if (mtg.status !== "voting") {
       return {
         success: false,
-        error: "Uzavrit lze pouze schuzku s aktivnim hlasovanim.",
+        error: "Uzavřít jde jen schůzku, kde hlasování běží.",
       };
     }
 
@@ -149,6 +149,6 @@ export async function closeVotingAction(
     return { success: true };
   } catch (error) {
     console.error("closeVotingAction error:", error);
-    return { success: false, error: "Nepodarilo se uzavrit hlasovani." };
+    return { success: false, error: "Hlasování se nepodařilo uzavřít." };
   }
 }

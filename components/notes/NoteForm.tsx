@@ -26,11 +26,11 @@ export function NoteForm({ guestId }: NoteFormProps) {
 
     const trimmed = text.trim();
     if (!trimmed) {
-      setError("Poznamka nesmi byt prazdna.");
+      setError("Poznámka nesmí být prázdná.");
       return;
     }
     if (trimmed.length > MAX_LENGTH) {
-      setError(`Poznamka muze mit maximalne ${MAX_LENGTH} znaku.`);
+      setError(`Poznámka může mít nejvýš ${MAX_LENGTH} znaků.`);
       return;
     }
 
@@ -44,12 +44,12 @@ export function NoteForm({ guestId }: NoteFormProps) {
         showToast("error", result.error);
       } else {
         setText("");
-        showToast("success", "Poznamka byla pridana.");
+        showToast("success", "Poznámka je přidaná.");
         router.refresh();
       }
     } catch {
-      setError("Doslo k neocekavane chybe.");
-      showToast("error", "Doslo k neocekavane chybe.");
+      setError("Něco se pokazilo. Zkus to znovu.");
+      showToast("error", "Něco se pokazilo. Zkus to znovu.");
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export function NoteForm({ guestId }: NoteFormProps) {
         name="note-text"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Napiste poznamku k tomuto hostu..."
+        placeholder="Napiš poznámku k tomuto hostu..."
         maxLength={MAX_LENGTH}
       />
 
@@ -81,6 +81,7 @@ export function NoteForm({ guestId }: NoteFormProps) {
           size="sm"
           loading={loading}
           disabled={!text.trim()}
+          className="min-h-[44px]"
         >
           Přidat poznámku
         </Button>

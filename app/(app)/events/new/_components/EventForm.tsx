@@ -27,7 +27,7 @@ export function EventForm() {
     useState<WhoCanAddOptions>("members_only");
   const [error, setError] = useState<string | null>(null);
 
-  // Expiry date — default: today + 3 months
+  // Expiry date - default: today + 3 months
   const defaultExpiry = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 3);
@@ -106,9 +106,9 @@ export function EventForm() {
           disabled={isPending}
           className="h-11 px-3.5 py-2.5 rounded-lg border border-border text-base bg-white text-text-main focus:outline-none focus:border-primary focus:shadow-focus disabled:bg-background disabled:cursor-not-allowed"
         >
-          <option value="pick_one">Vyber jednu možnost (pick_one)</option>
-          <option value="multiple">Vyber více možností (multiple)</option>
-          <option value="max_x">Max. N možností (max_x)</option>
+          <option value="pick_one">Jedna možnost</option>
+          <option value="multiple">Více možností</option>
+          <option value="max_x">Nejvýš N možností</option>
         </select>
       </div>
 
@@ -269,7 +269,7 @@ export function EventForm() {
           </div>
         </div>
         <p className="text-xs text-text-muted">
-          Po tomto datu budou přístupové odkazy zneplatněny. U akcí s datumovými možnostmi se automaticky nastaví na datum vítězné možnosti.
+          Po tomto datu přestanou odkazy platit. U akcí s datumovými možnostmi se platnost automaticky nastaví na datum vítězné možnosti.
         </p>
       </div>
 
@@ -280,16 +280,17 @@ export function EventForm() {
       )}
 
       <div className="flex gap-3 pt-2">
-        <Button type="submit" variant="primary" loading={isPending}>
+        <Button type="submit" variant="primary" loading={isPending} className="min-h-[44px]">
           Vytvořit akci
         </Button>
         <Button
           type="button"
           variant="secondary"
+          className="min-h-[44px]"
           disabled={isPending}
           onClick={() => router.push("/events")}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </form>

@@ -99,7 +99,7 @@ export function GuestCardInteractive({
       </Link>
 
       {voted && (
-        <p className="text-sm text-success font-medium px-1">Hlasovano ✓</p>
+        <p className="text-sm text-success font-medium px-1">Hlasováno ✓</p>
       )}
 
       {showVoting && selected !== "down" && (
@@ -111,7 +111,7 @@ export function GuestCardInteractive({
               onClick={() => handleSelect(opt.value)}
               disabled={isPending}
               className={`
-                flex flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 transition-colors
+                flex min-h-[44px] flex-col items-center gap-1 px-3 py-2 rounded-lg border-2 transition-colors
                 focus:outline-none focus:shadow-focus text-sm font-medium
                 border-border bg-white hover:border-primary/50
                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -127,14 +127,14 @@ export function GuestCardInteractive({
       {showVoting && selected === "down" && (
         <div className="flex flex-col gap-2 p-3 bg-background border border-border rounded-lg">
           <label className="text-sm font-medium text-text-main">
-            Duvod pro hlasovani Proti (povinny):
+            Důvod pro hlas Proti (povinný):
           </label>
           <textarea
             className="w-full text-sm border border-border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
             rows={3}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Zadejte duvod..."
+            placeholder="Napiš důvod..."
             disabled={isPending}
             autoFocus
           />
@@ -144,7 +144,7 @@ export function GuestCardInteractive({
               type="button"
               onClick={handleDownSubmit}
               disabled={isPending || comment.trim().length === 0}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg border-2 border-danger bg-danger text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex min-h-[44px] items-center gap-1 px-3 py-2 rounded-lg border-2 border-danger bg-danger text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               👎 Potvrdit
             </button>
@@ -152,9 +152,9 @@ export function GuestCardInteractive({
               type="button"
               onClick={handleDownCancel}
               disabled={isPending}
-              className="px-3 py-2 rounded-lg border-2 border-border bg-white text-sm font-medium text-text-main"
+              className="min-h-[44px] px-3 py-2 rounded-lg border-2 border-border bg-white text-sm font-medium text-text-main"
             >
-              Zrusit
+              Zrušit
             </button>
           </div>
         </div>

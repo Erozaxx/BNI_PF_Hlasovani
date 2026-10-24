@@ -15,7 +15,8 @@ import { sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { actorMayChangeSql, memberActiveSql } from "@/lib/db/queries/member-active";
-import { ATTENDANCE_START, MAX_ADVANCE_DAYS, SUBSTITUTE_NAME_MEMORY_LIMIT } from "@/lib/attendance/rules";
+import { MAX_ADVANCE_DAYS, SUBSTITUTE_NAME_MEMORY_LIMIT } from "@/lib/attendance/rules";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { absenceStatusSql } from "@/lib/db/queries/absence-status";
 import type { AuditRow, PresenceStatus, SheetRow } from "@/lib/attendance/sheet";
 import type { PlanEntry } from "@/lib/attendance/plan";
@@ -29,16 +30,16 @@ export const TODAY_SQL = sql`(now() AT TIME ZONE 'Europe/Prague')::date`;
 
 /**
  * Pojistka „člen smí dnes změnit nepřítomnost na den D“ (arch 6.1): D je od
- * dneška do dnes + 365, ještě před začátkem schůzky v den D (7:30 pražského
- * času) a člen je aktivní. TS protějšek `decideMemberAbsenceEdit`
- * (lib/attendance/rules.ts) slouží jen pro srozumitelnou hlášku, tohle je
- * pravda.
+ * dneška do dnes + 365, ještě před začátkem schůzky v den D (`time` z nastavení
+ * chapteru, pražský čas, bind parametr) a člen je aktivní. TS protějšek
+ * `decideMemberAbsenceEdit` (lib/attendance/rules.ts) slouží jen pro srozumitelnou
+ * hlášku, tohle je pravda.
  */
-function absenceEditGuardSql(memberId: string, date: string): SQL {
+function absenceEditGuardSql(memberId: string, date: string, time: string): SQL {
   return sql`(
     ${date}::date >= ${TODAY_SQL}
     AND ${date}::date <= ${TODAY_SQL} + ${MAX_ADVANCE_DAYS}::int
-    AND now() < ((${date}::date + ${ATTENDANCE_START}::time) AT TIME ZONE 'Europe/Prague')
+    AND now() < ((${date}::date + ${time}::time) AT TIME ZONE 'Europe/Prague')
     AND EXISTS (SELECT 1 FROM member gm WHERE gm.id = ${memberId}::uuid AND ${memberActiveSql("gm")})
   )`;
 }
@@ -182,8 +183,8 @@ export type SetAbsenceKind = "none" | "absence" | "substitute";
 
 /**
  * Člen nastaví svou nepřítomnost na den D jedním příkazem (arch 6.1, 6.2).
- * `ok` = pojistka (rozsah dnů, 7:30, aktivita) prošla. Cíl je vždy volající
- * člen. Jméno náhradníka se uloží do paměti jmen ve stejném příkazu.
+ * `ok` = pojistka (rozsah dnů, začátek schůzky, aktivita) prošla. Cíl je vždy
+ * volající člen. Jméno náhradníka se uloží do paměti jmen ve stejném příkazu.
  *
  * `none` smaže řádek (bez řádku je člen přítomen). Smazání neexistujícího
  * řádku je úspěch (cílový stav je splněn).
@@ -194,9 +195,12 @@ export async function setMyAbsenceGuarded(input: {
   kind: SetAbsenceKind;
   /** Už ořezané a zvalidované jméno, jen u `substitute`. */
   name: string | null;
+  /** Začátek schůzky `HH:MM`; bez něj se čte z nastavení chapteru. */
+  meetingTime?: string;
 }): Promise<{ ok: boolean }> {
   const { memberId, date, kind, name } = input;
-  const guard = absenceEditGuardSql(memberId, date);
+  const meetingTime = input.meetingTime ?? (await getChapterSettings()).meetingTime;
+  const guard = absenceEditGuardSql(memberId, date, meetingTime);
 
   if (kind === "none") {
     const result = await getDb().execute<{ ok: boolean }>(sql`
@@ -500,18 +504,19 @@ export type PresenceWriteResult =
   /** Den už není v režimu `normal` (uzavřený nebo ne dnešní), případně nesedí `history`. */
   | { result: "day-closed" }
   | { result: "inactive" }
-  /** iter-041 (Z1): „Chyběl(a) bez omluvy“ před 7:30 v den schůzky. */
+  /** iter-041 (Z1): „Chyběl(a) bez omluvy“ před začátkem schůzky v den schůzky. */
   | { result: "too-early" }
   /** iter-041 (K6): člen má na ten den omluvu, `unexcused` nejde. */
   | { result: "excused-conflict" };
 
 /**
- * iter-041 (gate Z1): „Chyběl(a) bez omluvy“ až od 7:30 v den schůzky, do té
- * doby se člen smí omluvit (`absenceEditGuardSql`). Podmínka je v `g` stejně jako
- * u omluvy. Zpětná oprava minulého dne omezená není (7:30 už dávno uplynulo).
+ * iter-041 (gate Z1): „Chyběl(a) bez omluvy“ až od začátku schůzky v den schůzky,
+ * do té doby se člen smí omluvit (`absenceEditGuardSql`). Čas je z nastavení
+ * chapteru (iter-042 B4) a jde jako bind parametr. Podmínka je v `g` stejně jako
+ * u omluvy. Zpětná oprava minulého dne omezená není (začátek už dávno uplynul).
  */
-function unexcusedTimeSql(date: string): SQL {
-  return sql`(now() >= ((${date}::date + ${ATTENDANCE_START}::time) AT TIME ZONE 'Europe/Prague'))`;
+function unexcusedTimeSql(date: string, time: string): SQL {
+  return sql`(now() >= ((${date}::date + ${time}::time) AT TIME ZONE 'Europe/Prague'))`;
 }
 
 /** Pojistka na den: `normal` = dnes a neuzavřený, `history` = zápis do minulosti/dnes; nepřítomnost do dnes + 365. */
@@ -563,10 +568,13 @@ export async function writePresenceGuarded(input: {
   expectedVersion: number;
   actorId: string;
   mode: WriteMode2;
+  /** Začátek schůzky `HH:MM`; bez něj se čte z nastavení (jen u „Chyběl(a) bez omluvy“). */
+  meetingTime?: string;
 }): Promise<PresenceWriteResult> {
   const { date, memberId, status, name, expectedVersion, actorId, mode } = input;
   const nameValue = status === "substitute" ? sql`${name}::text` : sql`NULL::text`;
   const isUnexcused = status === "unexcused";
+  const meetingTime = isUnexcused ? (input.meetingTime ?? (await getChapterSettings()).meetingTime) : "";
 
   const audit =
     mode === "history"
@@ -601,7 +609,7 @@ export async function writePresenceGuarded(input: {
     WITH g AS (
       SELECT ${dayGuardSql(date, mode, "presence")} AS day_ok,
              ${memberGuardSql(date, memberId, mode)} AS member_ok,
-             ${isUnexcused ? unexcusedTimeSql(date) : sql`true`} AS time_ok,
+             ${isUnexcused ? unexcusedTimeSql(date, meetingTime) : sql`true`} AS time_ok,
              ${
                isUnexcused
                  ? sql`NOT EXISTS (SELECT 1 FROM member_absence ea WHERE ea.member_id = ${memberId}::uuid AND ea.absence_date = ${date}::date)`

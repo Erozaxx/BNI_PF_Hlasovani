@@ -511,6 +511,7 @@ const cases: TestCase[] = [
         "admin/categories/page.tsx": "categories.manage",
         "admin/members/page.tsx": "members.manage",
         "admin/members/[id]/page.tsx": "members.manage",
+        "admin/nastaveni/page.tsx": "chapter.settings",
       };
       for (const f of pages) {
         const rel = relative(join(ROOT, "app", "(app)"), f).split("\\").join("/");

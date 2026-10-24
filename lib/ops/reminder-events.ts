@@ -1,5 +1,5 @@
 /**
- * iter-028 (T-006) — čisté stavitelky OpsEventInput pro připomínky (arch
+ * iter-028 (T-006) - čisté stavitelky OpsEventInput pro připomínky (arch
  * iter-028 T-001, sekce 7). Volá je lib/meetings/reminder-run.ts, samy nikdy
  * nezapisují do DB.
  *
@@ -9,10 +9,10 @@
  * `safeReminderEvent`/`safeReminderRoundEvent` jsou bezpečné obaly (LL-011,
  * stejný vzor jako `safeDispatchOutcomeEvent` v dispatch-events.ts):
  * stavitelka je čistá, ale volá se s daty (jméno člena, důvod chyby), která
- * mohou v budoucnu nést getter nebo jinou past — obal vrátí `null` místo
+ * mohou v budoucnu nést getter nebo jinou past - obal vrátí `null` místo
  * vyhození, aby volající mohl bezpečně psát
  * `const ev = safeReminderEvent(...); if (ev) await logOpsEvent(ev);`
- * (nikdy `logOpsEvent(reminderEvent(...))` — to by se vyhodnotilo mimo
+ * (nikdy `logOpsEvent(reminderEvent(...))` - to by se vyhodnotilo mimo
  * `logOpsEvent`'s vlastní try/catch).
  */
 import type { OpsEventInput, OpsEventSeverity } from "./types";
@@ -34,7 +34,7 @@ export type ReminderOutcome =
   | { status: "failed"; reason: string };
 
 /**
- * Vstup pro `reminder.sent` / `reminder.failed` — jeden řádek za člena,
+ * Vstup pro `reminder.sent` / `reminder.failed` - jeden řádek za člena,
  * volaný ve fázi 8 hned po pokusu o odeslání (4.4 kroky d/g).
  */
 export function reminderEvent(
@@ -59,7 +59,7 @@ export function reminderEvent(
       ...base,
       kind: "reminder.sent",
       severity: "info",
-      message: `Pripominka (kolo ${ctx.round}) odeslana: ${ctx.memberName}.`,
+      message: `Připomínka (kolo ${ctx.round}) odeslána: ${ctx.memberName}.`,
       resendEmailId: outcome.resendEmailId,
     };
   }
@@ -69,7 +69,7 @@ export function reminderEvent(
     kind: "reminder.failed",
     severity: "error",
     code: "send-failed",
-    message: `Pripominka (kolo ${ctx.round}) selhala: ${ctx.memberName} - ${outcome.reason}`,
+    message: `Připomínka (kolo ${ctx.round}) selhala: ${ctx.memberName} - ${outcome.reason}`,
   };
 }
 
@@ -104,10 +104,10 @@ export interface ReminderRoundContext {
 }
 
 /**
- * Souhrn kola (7, tabulka "Souhrn kola") — jeden řádek na konci fáze 8, po
+ * Souhrn kola (7, tabulka "Souhrn kola") - jeden řádek na konci fáze 8, po
  * všech pokusech o odeslání (4.4 krok 6). `severity` je `warn`, když něco
- * selhalo nebo rozpočet useknul zbytek — `info` jinak. NENÍ v
- * `TERMINAL_KINDS` (types.ts) — je to souhrn, ne konec běhu.
+ * selhalo nebo rozpočet useknul zbytek - `info` jinak. NENÍ v
+ * `TERMINAL_KINDS` (types.ts) - je to souhrn, ne konec běhu.
  */
 export function reminderRoundEvent(ctx: ReminderRoundContext): OpsEventInput {
   const severity: OpsEventSeverity =
@@ -122,7 +122,7 @@ export function reminderRoundEvent(ctx: ReminderRoundContext): OpsEventInput {
     severity,
     meetingId: ctx.meetingId,
     meetingDate: ctx.meetingDate,
-    message: `Kolo pripominek ${ctx.round}: ${ctx.sent} odeslano, ${ctx.failed} chyb, ${ctx.eligible} melo dostat.`,
+    message: `Kolo připomínek ${ctx.round}: ${ctx.sent} odesláno, ${ctx.failed} chyb, ${ctx.eligible} mělo dostat.`,
     detail: {
       round: ctx.round,
       eligible: ctx.eligible,

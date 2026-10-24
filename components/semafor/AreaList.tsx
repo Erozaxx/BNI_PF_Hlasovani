@@ -1,5 +1,5 @@
 import type { AreaKey, AreaView } from "@/lib/semafor/mine";
-import { SEMAFOR_TEXTS, fmtMoney, fmtNum, fmtPercent, fmtRate, rateWeekText } from "@/lib/semafor/texts";
+import { SEMAFOR_TEXTS, areaValueText, fmtNum } from "@/lib/semafor/texts";
 
 const NAME_INDEX: Record<AreaKey, number> = {
   attendance: 0,
@@ -10,22 +10,6 @@ const NAME_INDEX: Record<AreaKey, number> = {
   visitors: 5,
   sponsors: 6,
 };
-
-/** Hodnota oblasti: docházka v procentech, TYFCB v Kč, ostatní za týden. */
-export function areaValueText(a: AreaView): string | null {
-  if (a.value === null) return null;
-  switch (a.key) {
-    case "attendance":
-      return fmtPercent(a.value);
-    case "tyfcb":
-      return fmtMoney(a.value);
-    case "visitors":
-    case "sponsors":
-      return fmtRate(a.value);
-    default:
-      return rateWeekText(fmtRate(a.value));
-  }
-}
 
 /**
  * iter-041 (arch 6.2): oblasti skóre (docházka, CEU, 1-2-1, doporučení, TYFCB,

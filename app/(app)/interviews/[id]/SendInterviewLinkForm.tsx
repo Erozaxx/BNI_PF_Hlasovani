@@ -23,7 +23,7 @@ interface SendInterviewLinkFormProps {
 /**
  * Detail-page card for sending / (re)generating the interview leader's scoped
  * magic link (arch 8c, T-008). Generation and regeneration are the exact same
- * server action (generateOrRegenerateInterviewToken is UPSERT-only, H-9) — the
+ * server action (generateOrRegenerateInterviewToken is UPSERT-only, H-9) - the
  * button label just reflects whether a link has ever been sent yet.
  */
 export function SendInterviewLinkForm({
@@ -44,11 +44,11 @@ export function SendInterviewLinkForm({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", "Link byl odeslan.");
+        showToast("success", "Odkaz je odeslaný.");
         router.refresh();
       }
     } catch {
-      showToast("error", "Nepodarilo se odeslat link.");
+      showToast("error", "Odkaz se nepodařilo odeslat.");
     } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export function SendInterviewLinkForm({
   if (interviewStatus !== "open") {
     return (
       <p className="text-sm text-text-muted">
-        Link lze odeslat / pregenerovat jen u otevreneho pohovoru.
+        Odkaz jde odeslat jen u otevřeného pohovoru.
       </p>
     );
   }
@@ -65,7 +65,7 @@ export function SendInterviewLinkForm({
   if (!leaderName) {
     return (
       <p className="text-sm text-text-muted">
-        Nejprve pridelte vedouciho pohovoru vyse.
+        Nejdřív výše přiřaď vedoucího pohovoru.
       </p>
     );
   }
@@ -77,8 +77,7 @@ export function SendInterviewLinkForm({
     <div className="space-y-3">
       {!leaderHasEmail && (
         <p className="text-sm text-warning">
-          Vedouci ({leaderName}) nema email — doplnte ho v sekci Clenove,
-          nez pujde link odeslat.
+          Vedoucí ({leaderName}) nemá e-mail. Doplň ho v sekci Členové, pak půjde odkaz odeslat.
         </p>
       )}
 
@@ -86,14 +85,14 @@ export function SendInterviewLinkForm({
         <div className="text-sm text-text-muted space-y-1">
           {linkStatus.lastSentAt && (
             <p>
-              Naposledy odeslano:{" "}
+              Naposledy odesláno:{" "}
               {new Date(linkStatus.lastSentAt).toLocaleString("cs-CZ")}
             </p>
           )}
           <p>
             Platnost do: {new Date(linkStatus.expiresAt).toLocaleString("cs-CZ")}
-            {revoked && " (zneplatneno)"}
-            {!revoked && expired && " (vyprselo)"}
+            {revoked && " (zneplatněný)"}
+            {!revoked && expired && " (vypršel)"}
           </p>
         </div>
       )}
@@ -102,11 +101,12 @@ export function SendInterviewLinkForm({
         type="button"
         variant="secondary"
         size="sm"
+        className="min-h-[44px]"
         loading={loading}
         disabled={!leaderHasEmail}
         onClick={handleSend}
       >
-        {linkStatus ? "Pregenerovat a odeslat" : "Odeslat link"}
+        {linkStatus ? "Nový odkaz a odeslat" : "Odeslat odkaz"}
       </Button>
     </div>
   );

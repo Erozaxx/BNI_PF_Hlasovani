@@ -17,7 +17,7 @@ export function CreateCategoryForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      setError("Nazev je povinny.");
+      setError("Název je povinný.");
       return;
     }
 
@@ -31,12 +31,12 @@ export function CreateCategoryForm() {
         showToast("error", result.error);
       } else {
         setName("");
-        showToast("success", "Kategorie byla vytvorena.");
+        showToast("success", "Kategorie je vytvořená.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se vytvorit kategorii.");
-      showToast("error", "Nepodarilo se vytvorit kategorii.");
+      setError("Kategorii se nepodařilo vytvořit.");
+      showToast("error", "Kategorii se nepodařilo vytvořit.");
     } finally {
       setLoading(false);
     }
@@ -53,11 +53,11 @@ export function CreateCategoryForm() {
           label="Název kategorie"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Napr. IT / Technologie"
+          placeholder="Např. IT / Technologie"
           error={error}
         />
       </div>
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
+      <Button type="submit" variant="primary" size="sm" className="min-h-[44px]" loading={loading}>
         Přidat
       </Button>
     </form>

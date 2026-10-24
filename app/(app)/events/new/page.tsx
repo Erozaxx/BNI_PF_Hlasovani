@@ -11,11 +11,11 @@ export default async function NewEventPage() {
     <div className="space-y-6 max-w-2xl">
       <Link href="/events">
         <Button variant="link" size="sm">
-          &larr; Zpet na akce
+          &larr; Zpět na akce
         </Button>
       </Link>
 
-      <h1 className="text-2xl font-bold text-text-main">Nova akce</h1>
+      <h1 className="text-2xl font-bold text-text-main">Nová akce</h1>
 
       <Card>
         <EventForm />

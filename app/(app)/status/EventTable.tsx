@@ -21,40 +21,40 @@ const SEVERITY_BADGE: Record<string, BadgeVariant> = {
 };
 
 /**
- * Český popisek pro `kind` (3.3) — "Výsledek aplikace" ve sloupci Druh
- * (7.4 krok 3: "Odeslano" místo syrového `email.sent`). Sdílené i s
+ * Český popisek pro `kind` (3.3) - "Výsledek aplikace" ve sloupci Druh
+ * (7.4 krok 3: "Odesláno" místo syrového `email.sent`). Sdílené i s
  * `[runId]/page.tsx` (detail běhu), aby obě místa ukazovala stejné slovo.
  * Neznámý/budoucí `kind` (R13) se ukáže doslovně, ne skryje.
  */
 export const KIND_LABELS: Record<string, string> = {
-  "cron.started": "Cron zahajen",
-  "cron.finished": "Cron dokoncen",
-  "cron.failed": "Cron selhal",
-  "cron.phase-failed": "Faze cronu selhala",
-  "meeting.closed": "Schuzka uzavrena",
-  "dispatch.started": "Zahajeno",
-  "dispatch.guard-failed": "Guard",
+  "cron.started": "Automatický běh zahájen",
+  "cron.finished": "Automatický běh dokončen",
+  "cron.failed": "Automatický běh selhal",
+  "cron.phase-failed": "Krok automatického běhu selhal",
+  "meeting.closed": "Schůzka uzavřena",
+  "dispatch.started": "Zahájeno",
+  "dispatch.guard-failed": "Pojistka",
   "dispatch.failed": "Chyba",
-  "dispatch.finished": "Dokonceno",
-  "email.sent": "Odeslano",
+  "dispatch.finished": "Dokončeno",
+  "email.sent": "Odesláno",
   "email.failed": "Chyba",
-  "email.skipped": "Preskoceno",
-  "warning.sent": "Varovani odeslano",
-  "warning.failed": "Varovani selhalo",
-  "report.sent": "Report odeslan",
+  "email.skipped": "Přeskočeno",
+  "warning.sent": "Varování odesláno",
+  "warning.failed": "Varování selhalo",
+  "report.sent": "Report odeslán",
   "report.failed": "Report selhal",
-  "retention.purged": "Retence",
+  "retention.purged": "Úklid starých záznamů",
   "migration.applied": "Migrace",
   // iter-028 (T-006, arch 7)
-  "reminder.sent": "Pripominka odeslana",
-  "reminder.failed": "Pripominka selhala",
-  "reminder.round": "Kolo pripominek",
+  "reminder.sent": "Připomínka odeslána",
+  "reminder.failed": "Připomínka selhala",
+  "reminder.round": "Kolo připomínek",
   // iter-032 (K9, review F-04): změny přístupu z /admin/members a /login/heslo
-  "access.role-changed": "Zmena role",
-  "access.password-reset": "Heslo zruseno",
+  "access.role-changed": "Změna role",
+  "access.password-reset": "Heslo zrušeno",
   "access.password-set": "Heslo nastaveno",
-  "access.password-link-copied": "Odkaz ke zkopirovani",
-  "access.password-link-resent": "Odkaz poslan znovu",
+  "access.password-link-copied": "Odkaz ke zkopírování",
+  "access.password-link-resent": "Odkaz poslán znovu",
   // iter-037 (gate sekce 5)
   "access.member-deactivated": "Deaktivace člena",
   "access.member-reactivated": "Návrat člena",
@@ -89,13 +89,15 @@ export const KIND_LABELS: Record<string, string> = {
   "semafor.month-deleted": "Semafor: měsíc smazán",
   "semafor.row-deleted": "Semafor: řádek smazán",
   "semafor.alias-removed": "Semafor: párování smazáno",
+  // iter-042: nastavení chapteru
+  "settings.changed": "Nastavení chapteru změněno",
 };
 
 export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
-/** "22. 8. 2026 07:00" — Europe/Prague vždy (R9). */
+/** "22. 8. 2026 07:00" - Europe/Prague vždy (R9). */
 function formatEventTime(date: Date): string {
   const day = date.toLocaleDateString("cs-CZ", {
     day: "numeric",
@@ -121,7 +123,7 @@ function formatMeetingDate(dateStr: string): string {
  * Pruh 3 „Události" (arch iter-027 T-001, sekce 7.2, 7.4). Tahle tabulka je
  * to, co case Kateřiny Černé ukazuje krok za krokem: vyfiltrováno na
  * člena, nejnovější nahoře, s Resend stavem doplněným klientsky
- * (`<DeliveryStatusCell/>`) po namountování — stránka samotná se renderuje
+ * (`<DeliveryStatusCell/>`) po namountování - stránka samotná se renderuje
  * jen z databáze (D5).
  */
 export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: EventTableProps) {
@@ -129,8 +131,8 @@ export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: Even
     return (
       <Card>
         <EmptyState
-          title={hasActiveFilter ? "Zadne udalosti pro tento filtr" : "Zatim zadne udalosti"}
-          description="Log zacina dnem nasazeni. Starsi behy se zpetne nedopocitavaji."
+          title={hasActiveFilter ? "Žádné události pro tento filtr" : "Zatím žádné události"}
+          description="Záznamy začínají dnem nasazení. Starší běhy se zpětně nedopočítávají."
         />
       </Card>
     );
@@ -138,19 +140,19 @@ export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: Even
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-text-muted mb-3">Udalosti</h2>
+      <h2 className="text-sm font-semibold text-text-muted mb-3">Události</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-primary text-left">
               <th className="px-3 py-2 font-semibold">Kdy</th>
               <th className="px-3 py-2 font-semibold">Druh</th>
-              <th className="px-3 py-2 font-semibold">Clen</th>
-              <th className="px-3 py-2 font-semibold">Schuzka</th>
+              <th className="px-3 py-2 font-semibold">Člen</th>
+              <th className="px-3 py-2 font-semibold">Schůzka</th>
               <th className="px-3 py-2 font-semibold">Adresa</th>
-              <th className="px-3 py-2 font-semibold">Zprava</th>
+              <th className="px-3 py-2 font-semibold">Zpráva</th>
               <th className="px-3 py-2 font-semibold">Stav u poskytovatele</th>
-              <th className="px-3 py-2 font-semibold" aria-label="Beh"></th>
+              <th className="px-3 py-2 font-semibold" aria-label="Běh"></th>
             </tr>
           </thead>
           <tbody>
@@ -167,11 +169,11 @@ export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: Even
                     {kindLabel(event.kind)}
                   </Badge>
                 </td>
-                <td className="px-3 py-2">{event.memberName ?? "—"}</td>
+                <td className="px-3 py-2">{event.memberName ?? "–"}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {event.meetingDate ? formatMeetingDate(event.meetingDate) : "—"}
+                  {event.meetingDate ? formatMeetingDate(event.meetingDate) : "–"}
                 </td>
-                <td className="px-3 py-2">{event.email ?? "—"}</td>
+                <td className="px-3 py-2">{event.email ?? "–"}</td>
                 <td className="px-3 py-2 max-w-xs">{event.message}</td>
                 <td className="px-3 py-2">
                   <DeliveryStatusCell
@@ -186,7 +188,7 @@ export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: Even
                     href={`/status/${event.runId}`}
                     className="text-primary text-xs underline focus:outline-none focus:shadow-focus"
                   >
-                    beh →
+                    běh →
                   </Link>
                 </td>
               </tr>
@@ -199,14 +201,14 @@ export function EventTable({ events, hasActiveFilter, prevHref, nextHref }: Even
         <div className="flex items-center justify-between mt-4 text-sm">
           {prevHref ? (
             <Link href={prevHref} className="text-primary underline">
-              ← Novejsi
+              ← Novější
             </Link>
           ) : (
             <span />
           )}
           {nextHref ? (
             <Link href={nextHref} className="text-primary underline">
-              Starsi →
+              Starší →
             </Link>
           ) : (
             <span />

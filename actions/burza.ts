@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAuth, requirePermission } from "@/lib/auth/guards";
+import { requireFeature } from "@/lib/chapter/feature-guard";
 import { can } from "@/lib/auth/permissions";
 import {
   confirmOfferGuarded,
@@ -137,6 +138,8 @@ export async function saveOfferAction(
 ): Promise<ActionResult<{ created: boolean }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (typeof input !== "object" || input === null) {
@@ -185,6 +188,8 @@ export async function saveOfferAction(
 export async function confirmOfferAction(): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   try {
@@ -202,6 +207,8 @@ export async function confirmOfferAction(): Promise<ActionResult> {
 export async function removeOfferAction(memberId: string): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(memberId)) return { success: false, error: MESSAGES.invalidInput };
@@ -298,6 +305,8 @@ export async function setHelpUsedAction(
 ): Promise<ActionResult<{ used: boolean; helpId: string | null }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (typeof input !== "object" || input === null) {
@@ -342,6 +351,8 @@ export async function recordHelpForAction(
 ): Promise<ActionResult<RecordHelpResult>> {
   const auth = await requirePermission("burza.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   // L-1: vedení nezapisuje pomoc sobě jako pomocníkovi (druhá pojistka je v SQL).
@@ -354,6 +365,8 @@ export async function recordHelpForAction(
 export async function removeHelpAction(helpId: string): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(helpId)) return { success: false, error: MESSAGES.invalidInput };
@@ -396,6 +409,8 @@ export async function saveContactItemAction(
 ): Promise<ActionResult<{ created: boolean }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (typeof input !== "object" || input === null) {
@@ -452,6 +467,8 @@ export async function saveContactItemAction(
 export async function removeContactItemAction(contactId: string): Promise<ActionResult> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(contactId)) return { success: false, error: MESSAGES.invalidInput };
@@ -488,6 +505,8 @@ export async function setContactUsedAction(
 ): Promise<ActionResult<{ used: boolean }>> {
   const auth = await requireAuth();
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (typeof input !== "object" || input === null) {
@@ -530,6 +549,8 @@ export async function setContactUsedAction(
 export async function removeContactUseAction(useId: string): Promise<ActionResult> {
   const auth = await requirePermission("burza.manage");
   if (!auth.success) return auth;
+  const off = await requireFeature("burza");
+  if (off) return off;
   const actor = auth.session;
 
   if (!isUuid(useId)) return { success: false, error: MESSAGES.invalidInput };

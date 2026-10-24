@@ -26,6 +26,8 @@ interface Participant {
   memberEmail: string | null;
   /** iter-037: členové deaktivovaní k dnešku jsou `false`, externí vždy `true`. */
   memberActive: boolean;
+  /** iter-042: účastník má uložený odkaz, Zkopírovat ho jen přečte a nic nezneplatní. */
+  hasStoredLink: boolean;
   voteCount: number;
 }
 
@@ -58,7 +60,7 @@ export function ParticipantsManager({
   }
 
   function getParticipantName(p: Participant) {
-    return p.memberName ?? p.externalName ?? "Nezname";
+    return p.memberName ?? p.externalName ?? "Neznámý";
   }
 
   function getParticipantEmail(p: Participant) {
@@ -73,12 +75,20 @@ export function ParticipantsManager({
     return p.magicTokenHash !== null;
   }
 
-  async function handleCopyLink(participantId: string) {
+  async function handleCopyLink(participantId: string, hasStoredLink: boolean) {
+    // Potvrzení jen když vznikne nový odkaz (účastník žádný uložený nemá).
+    if (
+      !hasStoredLink &&
+      !window.confirm(
+        "Zkopírováním vznikne nový odkaz. Ten z e-mailu přestane platit. Pokračovat?"
+      )
+    )
+      return;
     clearMessages();
     setPendingId(participantId);
 
     startTransition(async () => {
-      // Read encrypted token and decrypt — does NOT invalidate the emailed token
+      // Read encrypted token and decrypt - does NOT invalidate the emailed token
       const result = await getParticipantLinkAction(participantId);
       setPendingId(null);
       if (!result.success) {
@@ -90,12 +100,14 @@ export function ParticipantsManager({
         await navigator.clipboard.writeText(result.data!.link);
         setCopiedId(participantId);
         setTimeout(() => setCopiedId(null), 2000);
-        if (result.data!.regenerated) {
-          setSuccessMsg("Link zkopirovan. Pozor: byl vygenerovan novy token (stary odkaz z emailu je neplatny).");
-        }
+        setSuccessMsg(
+          result.data!.regenerated
+            ? "Odkaz je zkopírovaný. Vznikl nový odkaz, ten z e-mailu už neplatí."
+            : "Odkaz je zkopírovaný."
+        );
         router.refresh();
       } catch {
-        setError("Kopirovani do schranky selhalo. Zkuste to znovu.");
+        setError("Kopírování do schránky se nepodařilo. Zkus to znovu.");
       }
     });
   }
@@ -110,13 +122,13 @@ export function ParticipantsManager({
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Pozvanka odeslana.");
+        setSuccessMsg("Pozvánka je odeslaná.");
       }
     });
   }
 
   function handleResendAll() {
-    if (!confirm(`Odeslat pozvánky všem účastníkům s emailem? Každý dostane nový odkaz.`)) return;
+    if (!confirm(`Odeslat pozvánky všem účastníkům s e-mailem? Každý dostane nový odkaz.`)) return;
     clearMessages();
     startTransition(async () => {
       const result = await resendAllMagicLinksAction(event.id);
@@ -125,7 +137,7 @@ export function ParticipantsManager({
       } else {
         const inactive = result.data!.skippedInactive;
         setSuccessMsg(
-          `Odesláno: ${result.data!.sent} emailů${result.data!.skipped > 0 ? `, přeskočeno: ${result.data!.skipped} (bez emailu)` : ""}.` +
+          `Odesláno: ${result.data!.sent} e-mailů${result.data!.skipped > 0 ? `, přeskočeno: ${result.data!.skipped} (bez e-mailu)` : ""}.` +
             (inactive > 0 ? ` Přeskočeno, neaktivní: ${inactive}` : "")
         );
       }
@@ -133,7 +145,7 @@ export function ParticipantsManager({
   }
 
   function handleRemove(participantId: string, name: string) {
-    if (!confirm(`Odebrat ucastnika „${name}"?`)) return;
+    if (!confirm(`Odebrat účastníka „${name}“?`)) return;
     clearMessages();
     setPendingId(participantId);
 
@@ -143,7 +155,7 @@ export function ParticipantsManager({
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Ucastnik odebran.");
+        setSuccessMsg("Účastník je odebraný.");
         router.refresh();
       }
     });
@@ -188,13 +200,13 @@ export function ParticipantsManager({
                       {name}
                     </span>
                     <Badge variant={member ? "info" : "neutral"}>
-                      {member ? "Clen BNI" : "Externi"}
+                      {member ? "Člen BNI" : "Externí"}
                     </Badge>
                     {!p.memberActive && <Badge variant="warning">Neaktivní</Badge>}
                     {tokenActive ? (
-                      <Badge variant="success">Token aktivni</Badge>
+                      <Badge variant="success">Odkaz platí</Badge>
                     ) : (
-                      <Badge variant="neutral">Bez tokenu</Badge>
+                      <Badge variant="neutral">Bez odkazu</Badge>
                     )}
                   </div>
                   {email && (
@@ -211,16 +223,17 @@ export function ParticipantsManager({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => handleCopyLink(p.id)}
+                      className="min-h-[44px]"
+                      onClick={() => handleCopyLink(p.id, p.hasStoredLink)}
                       loading={isThisPending && pendingId === p.id}
                       disabled={isPending}
-                      title="Zkopirovat magic link (stejny odkaz jako v emailu)"
+                      title="Zkopíruje odkaz pro účastníka"
                     >
-                      {copiedId === p.id ? "Kopirovano!" : "Kopirovat link"}
+                      {copiedId === p.id ? "Zkopírováno!" : "Zkopírovat odkaz"}
                     </Button>
                   )}
 
-                  {/* Resend email — only in active state, only if email exists */}
+                  {/* Resend email - only in active state, only if email exists */}
                   {event.status === "active" && email && p.memberActive && (
                     <Button
                       variant="secondary"
@@ -233,7 +246,7 @@ export function ParticipantsManager({
                     </Button>
                   )}
 
-                  {/* Remove — only in draft/active */}
+                  {/* Remove - only in draft/active */}
                   {canEdit && (
                     <Button
                       variant="danger"
@@ -252,8 +265,8 @@ export function ParticipantsManager({
         </div>
       ) : (
         <p className="text-sm text-text-muted">
-          Zatim zadni ucastnici.
-          {canEdit && " Pridejte je pomoci formulare vyse."}
+          Zatím žádní účastníci.
+          {canEdit && " Přidej je ve formuláři výše."}
         </p>
       )}
 

@@ -11,7 +11,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "BNI · PF Hlasovani",
+  title: "BNI · PF Hlasování",
   description: "Hlasovací aplikace pro BNI Plzeň chapter",
 };
 

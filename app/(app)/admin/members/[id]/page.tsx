@@ -11,6 +11,7 @@ import {
   mayChangeMember,
 } from "@/lib/auth/permissions";
 import { hasPendingSetPasswordLink } from "@/lib/db/queries/login-links";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { getMemberById } from "@/lib/db/queries/members";
 import { getInterviewCountsByMember } from "@/lib/db/queries/interviews";
 import { getMemberFunctionId, listChapterFunctions } from "@/lib/db/queries/member-functions";
@@ -43,6 +44,7 @@ export default async function AdminMemberPage({ params }: { params: { id: string
   const session = await requirePageSession({ permission: "members.manage" });
   if (!UUID_RE.test(params.id)) notFound();
 
+  const chapterSettings = await getChapterSettings();
   const m = await getMemberById(params.id);
   if (!m) notFound();
 
@@ -185,6 +187,8 @@ export default async function AdminMemberPage({ params }: { params: { id: string
             deactivatedInfo={deactivatedInfo}
             todayPrague={today}
             isSelf={isSelf}
+            burzaEnabled={chapterSettings.burzaEnabled}
+            mastermindEnabled={chapterSettings.mastermindEnabled}
           />
         </Card>
       )}
@@ -205,7 +209,7 @@ export default async function AdminMemberPage({ params }: { params: { id: string
         <Card>
           <h2 className="text-lg font-semibold mb-3">Smazat</h2>
           <p className="mb-3 text-sm text-text-muted">
-            Smazání je samostatné a vrátit nejde. Smažou se i pohovory člena.
+            Smazání vrátit nejde. Smaže se člen i jeho data. Když člen odchází, použij Deaktivovat.
           </p>
           <DeleteMemberButton
             memberId={m.id}

@@ -10,6 +10,7 @@ import {
   date,
   numeric,
   jsonb,
+  time,
   primaryKey,
   unique,
   check,
@@ -64,7 +65,7 @@ export const member = pgTable(
       .defaultNow(),
     // iter-020: source of truth for BNI entry date (used by interview 5/10-month
     // due logic). Backfilled from created_at::date (migration); created_at is
-    // import time for bulk-imported members, NOT actual entry date — hence a
+    // import time for bulk-imported members, NOT actual entry date - hence a
     // dedicated, admin-editable column. DATE (not timestamp): entry is a
     // calendar day, month arithmetic without timezone concerns.
     joinedAt: date("joined_at").notNull().default(sql`CURRENT_DATE`),
@@ -214,6 +215,33 @@ export const attendanceInternalDay = pgTable("attendance_internal_day", {
   createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * iter-042 (B5): nastavení chapteru, jediný řádek (`id = 1`). Přepínače tří
+ * volitelných částí a pravidelná schůzka (den `getUTCDay`, začátek 7:00 až
+ * 11:00). Zdroj pravdy pro DDL je `scripts/migrate-iter-042-nastaveni.ts`.
+ */
+export const chapterSettings = pgTable(
+  "chapter_settings",
+  {
+    id: smallint("id").primaryKey().default(1),
+    mastermindEnabled: boolean("mastermind_enabled").notNull().default(true),
+    burzaEnabled: boolean("burza_enabled").notNull().default(true),
+    semaforEnabled: boolean("semafor_enabled").notNull().default(true),
+    meetingWeekday: smallint("meeting_weekday").notNull().default(4),
+    meetingTime: time("meeting_time").notNull().default("07:30"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid("updated_by").references(() => member.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    singleton: check("chapter_settings_singleton", sql`${table.id} = 1`),
+    weekday: check("chapter_settings_weekday", sql`${table.meetingWeekday} BETWEEN 0 AND 6`),
+    time: check(
+      "chapter_settings_time",
+      sql`${table.meetingTime} BETWEEN time '07:00' AND time '11:00'`
+    ),
+  })
+);
 
 /** Uzavření dne (cron 17:00, T-003c). */
 export const attendanceDay = pgTable(
@@ -546,7 +574,7 @@ export const event = pgTable(
     customOptionsAllowed: boolean("custom_options_allowed").notNull().default(false),
     whoCanAddOptions: text("who_can_add_options").notNull().default("members_only"),
     optionType: text("option_type").notNull().default("text"),
-    // FK to event_option — circular reference, enforced at DB level only
+    // FK to event_option - circular reference, enforced at DB level only
     selectedOptionId: uuid("selected_option_id"),
     createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -595,7 +623,7 @@ export const eventOption = pgTable(
       .notNull()
       .references(() => event.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
-    // FK to event_participant — circular reference, enforced at DB level only
+    // FK to event_participant - circular reference, enforced at DB level only
     addedByParticipantId: uuid("added_by_participant_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -637,7 +665,7 @@ export const eventParticipant = pgTable(
       table.magicTokenHash
     ),
     memberIdIdx: index("idx_event_participant_member_id").on(table.memberId),
-    // Partial UNIQUE indexes — defined at DB level in migration; represented here as partial indexes
+    // Partial UNIQUE indexes - defined at DB level in migration; represented here as partial indexes
     eventMemberUniqueIdx: index("idx_event_participant_event_member_unique")
       .on(table.eventId, table.memberId)
       .where(sql`${table.memberId} IS NOT NULL`),
@@ -733,7 +761,7 @@ export const timer = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
-    // User-facing duration — value entered by admin, stored in DB
+    // User-facing duration - value entered by admin, stored in DB
     displaySeconds: integer("display_seconds").notNull(),
     // Internal duration = displaySeconds + LATENCY_PADDING_SECONDS
     initialSeconds: integer("initial_seconds").notNull(),
@@ -749,7 +777,7 @@ export const timer = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    // Must be set explicitly in every UPDATE — Drizzle has no auto-update
+    // Must be set explicitly in every UPDATE - Drizzle has no auto-update
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -767,7 +795,7 @@ export const timer = pgTable(
       "timer_display_seconds_check",
       sql`${table.displaySeconds} > 0 AND ${table.displaySeconds} <= 86400`
     ),
-    // S-001: cross-column constraint — elapsed upper bound prevents negative remaining_seconds
+    // S-001: cross-column constraint - elapsed upper bound prevents negative remaining_seconds
     elapsedCheck: check(
       "timer_elapsed_check",
       sql`${table.elapsedSeconds} >= 0 AND ${table.elapsedSeconds} <= ${table.initialSeconds}`
@@ -804,13 +832,13 @@ export const meetingMemberLink = pgTable(
       .defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    // Iter-026 (arch E2, sekce 15.2): sloupec beze změny, jen nový význam —
+    // Iter-026 (arch E2, sekce 15.2): sloupec beze změny, jen nový význam -
     // "hlasovací odkaz byl tomuto členovi odeslán" (dřív: ranní e-mail
     // vypnuté Phase A). Zapisuje ho runVotingDispatch/send-email po
     // úspěšném odeslání (markLinkEmailSent), používá ho planVotingDispatch
     // pro skip "already-sent" a UI popisek "Odkaz odeslán". 42 historických
     // hodnot ze schůzek 23.4. a 7.5.2026 se před mergem jednorázově nuluje
-    // runbookem (arch 15.3, krok 1) — dělá to uživatel/orchestrátor přímo
+    // runbookem (arch 15.3, krok 1) - dělá to uživatel/orchestrátor přímo
     // na produkční DB, ne kód v tomhle repu.
     morningEmailSentAt: timestamp("morning_email_sent_at", {
       withTimezone: true,
@@ -828,8 +856,8 @@ export const meetingMemberLink = pgTable(
 );
 
 // ============================================================
-// INTERVIEW_QUESTION — iter-020, globální editovatelná sada otázek
-// position: bez UNIQUE (reorder = sekvenční UPDATEy bez transakce, LL-003 —
+// INTERVIEW_QUESTION - iter-020, globální editovatelná sada otázek
+// position: bez UNIQUE (reorder = sekvenční UPDATEy bez transakce, LL-003 -
 //           UNIQUE by kolidoval transientně; stejný přístup jako display_order)
 // active:   archivace místo hard delete (zachová source_question_id párování)
 // ============================================================
@@ -843,7 +871,7 @@ export const interviewQuestion = pgTable(
     active: boolean("active").notNull().default(true),
     // iter-021: platnost otázky pro daný typ pohovoru. Oba default TRUE
     // (zpětná kompatibilita se starou sdílenou sadou); CHECK níže vynucuje
-    // "aspoň jeden" — otázka neplatná pro oba typy je nesmyslný stav.
+    // "aspoň jeden" - otázka neplatná pro oba typy je nesmyslný stav.
     appliesMonth5: boolean("applies_month_5").notNull().default(true),
     appliesMonth10: boolean("applies_month_10").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -873,14 +901,14 @@ export const interviewQuestion = pgTable(
 );
 
 // ============================================================
-// INTERVIEW — iter-020, instance pohovoru
+// INTERVIEW - iter-020, instance pohovoru
 // Partial UNIQUE (member_id, type) WHERE status <> 'cancelled':
 //   max 1 živý pohovor 5m a 1 živý 10m na člena → porovnání 5 vs 10 je 1:1.
 // member_id ON DELETE CASCADE: smazání člena (deleteMemberAction) maže i jeho
-//   pohovory vč. submitted — VĚDOMÉ rozhodnutí, konzistentní s vote.member_id
+//   pohovory vč. submitted - VĚDOMÉ rozhodnutí, konzistentní s vote.member_id
 //   (hlasovací historie člena dnes mizí stejně). Viz R-11.
 // leader_id nullable + SET NULL: smazání člena-vedoucího nesmí smazat pohovor.
-// Smazání dotazníku (T-004a): HARD DELETE řádku (admin i mod, open i submitted) —
+// Smazání dotazníku (T-004a): HARD DELETE řádku (admin i mod, open i submitted) -
 //   DB cascade smaže snapshot/odpovědi/link jedním příkazem (flow 8h). Hodnota
 //   'cancelled' zůstává v CHECK jako rezerva; žádná MVP cesta ji nenastavuje.
 // ============================================================
@@ -907,8 +935,8 @@ export const interview = pgTable(
       "interview_status_check",
       sql`${table.status} IN ('open', 'submitted', 'cancelled')`
     ),
-    // Partial UNIQUE — enforced at DB level in migration (CREATE UNIQUE INDEX);
-    // v Drizzle jen plain index s where — konvence projektu, viz event_participant
+    // Partial UNIQUE - enforced at DB level in migration (CREATE UNIQUE INDEX);
+    // v Drizzle jen plain index s where - konvence projektu, viz event_participant
     memberTypeActiveIdx: index("idx_interview_member_type_active")
       .on(table.memberId, table.type)
       .where(sql`${table.status} <> 'cancelled'`),
@@ -919,14 +947,14 @@ export const interview = pgTable(
 );
 
 // ============================================================
-// INTERVIEW_QUESTION_SNAPSHOT — iter-020, zamrazená kopie otázek při založení
+// INTERVIEW_QUESTION_SNAPSHOT - iter-020, zamrazená kopie otázek při založení
 // source_question_id: primární párovací klíč 5 vs 10 (SET NULL při smazání zdroje)
-// position: hustý rank 1..N přiřazený při kopii (NE surová position z živé sady —
+// position: hustý rank 1..N přiřazený při kopii (NE surová position z živé sady -
 //   duplicitní pozice v živé sadě, R-8, nemůže způsobit kolizi v kopii)
 // UNIQUE(interview_id, source_question_id): idempotence repair-on-retry klíčovaná
-//   OTÁZKOU, ne pozicí — opakovaný insert nikdy tiše nezahodí jinou otázku (MAJOR-1);
+//   OTÁZKOU, ne pozicí - opakovaný insert nikdy tiše nezahodí jinou otázku (MAJOR-1);
 //   NULLs distinct (Postgres default) → řádky se source SET NULL nekolidují
-// UNIQUE(interview_id, position): tvrdá integrita pozic — neočekávaná kolize = 23505
+// UNIQUE(interview_id, position): tvrdá integrita pozic - neočekávaná kolize = 23505
 //   (viditelná chyba), už NENÍ conflict target pro DO NOTHING
 // UNIQUE(id, interview_id): cíl composite FK z interview_answer (anti-IDOR na DB úrovni)
 // ============================================================
@@ -973,12 +1001,12 @@ export const interviewQuestionSnapshot = pgTable(
 );
 
 // ============================================================
-// INTERVIEW_ANSWER — iter-020, odpovědi vedoucího
+// INTERVIEW_ANSWER - iter-020, odpovědi vedoucího
 // snapshot_question_id UNIQUE: max 1 odpověď na otázku (upsert ON CONFLICT).
 // Composite FK (snapshot_question_id, interview_id) → snapshot(id, interview_id):
-//   DB-level záruka, že odpověď patří k otázce SVÉHO pohovoru — druhá linie
+//   DB-level záruka, že odpověď patří k otázce SVÉHO pohovoru - druhá linie
 //   obrany proti IDOR (H-7/H-8 lesson). Composite FK je v projektu NOVÝ vzor
-//   (Drizzle ho neumí deklarovat) — vynucen jen na DB úrovni migrací (viz
+//   (Drizzle ho neumí deklarovat) - vynucen jen na DB úrovni migrací (viz
 //   lib/db/migrations/iter-020-interviews.sql).
 // value_text nullable: prázdná odpověď povolena (submit nevyžaduje úplnost).
 // ============================================================
@@ -1003,9 +1031,9 @@ export const interviewAnswer = pgTable(
 );
 
 // ============================================================
-// INTERVIEW_LINK — iter-020, scoped magic link pohovoru (vzor meeting_member_link)
+// INTERVIEW_LINK - iter-020, scoped magic link pohovoru (vzor meeting_member_link)
 // interview_id UNIQUE: 1 řádek per pohovor → regenerace = UPDATE (starý hash
-//   okamžitě zaniká; žádný previous_token fallback — H-9 lesson).
+//   okamžitě zaniká; žádný previous_token fallback - H-9 lesson).
 // expires_at NOT NULL: token NIKDY bez expirace (H-3 lesson).
 // leader_id: token je vázán na konkrétního vedoucího; změna vedoucího token revokuje.
 // ============================================================
@@ -1032,12 +1060,12 @@ export const interviewLink = pgTable(
 );
 
 // ============================================================
-// AUTH_THROTTLE — iter-020, DB-backed fixed-window rate-limit (H-4 lesson, bez Upstash)
+// AUTH_THROTTLE - iter-020, DB-backed fixed-window rate-limit (H-4 lesson, bez Upstash)
 // key formát: "<scope>:<ip>" např. "i-verify:203.0.113.5"
-// Jediný atomický UPSERT per failed pokus — bezpečné v serverless bez transakce.
+// Jediný atomický UPSERT per failed pokus - bezpečné v serverless bez transakce.
 // ============================================================
 // ============================================================
-// MEMBER_LOGIN_LINK — iter-032 (arch 8.1). Jednorázové odkazy: přihlášení
+// MEMBER_LOGIN_LINK - iter-032 (arch 8.1). Jednorázové odkazy: přihlášení
 // člena z mailu (purpose 'login', 15 min) a nastavení hesla vedení
 // (purpose 'set-password', 24 h). Spotřebování je atomický UPDATE
 // ... WHERE used_at IS NULL AND expires_at > now() RETURNING. Úklid ve
@@ -1085,15 +1113,15 @@ export const authThrottle = pgTable("auth_throttle", {
 });
 
 // ============================================================
-// OPS_EVENT — iter-027, historie běhů (cron/dispatch/e-maily). "ops_" prefix
+// OPS_EVENT - iter-027, historie běhů (cron/dispatch/e-maily). "ops_" prefix
 // aby se nekolidovalo se stávající "event" (společenská akce, lib/events/).
 // meeting_id/member_id: ON DELETE SET NULL, proto snapshoty meeting_date /
-// member_name / email — odpověď "proč tenhle člověk nedostal mail" se hledá
+// member_name / email - odpověď "proč tenhle člověk nedostal mail" se hledá
 // týdny zpátky, JOIN by ukázal dnešní (třeba opravenou) adresu.
-// severity má CHECK (jen 3 hodnoty, viz níže); kind NEMÁ CHECK — autoritou
+// severity má CHECK (jen 3 hodnoty, viz níže); kind NEMÁ CHECK - autoritou
 // je TS union OpsEventKind (lib/ops/types.ts), bude přibývat bez migrace.
 // Skutečné DDL (vč. pořadí kroků, lock_timeout) je v
-// lib/db/migrations/iter-027-ops-event.sql — tahle definice je typová
+// lib/db/migrations/iter-027-ops-event.sql - tahle definice je typová
 // reference pro dotazy, ne zdroj pravdy pro strukturu DB (stejná konvence
 // jako u interview_question_snapshot, partial index výše).
 // ============================================================
@@ -1146,22 +1174,22 @@ export const opsEvent = pgTable(
 );
 
 // ============================================================
-// MEETING_MEMBER_REMINDER — iter-028, evidence připomínkových kol (T-006,
+// MEETING_MEMBER_REMINDER - iter-028, evidence připomínkových kol (T-006,
 // arch 6.1, 6.2). Vlastní tabulka místo sloupců v meeting_member_link: kdyby
 // se sloupce přidaly do meeting_member_link a kód nasadil dřív než migrace,
-// Drizzle skládá INSERT ze VŠECH sloupců schema.ts — generateMeetingToken i
+// Drizzle skládá INSERT ze VŠECH sloupců schema.ts - generateMeetingToken i
 // getMeetingMemberLink by padaly na 42703 undefined_column a rozbily by i
-// spuštění hlasování, ne jen připomínky. ops_event nepřipadá v úvahu — je to
+// spuštění hlasování, ne jen připomínky. ops_event nepřipadá v úvahu - je to
 // best-effort log s retencí, ztracený zápis by znamenal druhou připomínku.
 //
-// UNIQUE(meeting_id, member_id, round): nejvýš jedno kolo na člena — hlavní
+// UNIQUE(meeting_id, member_id, round): nejvýš jedno kolo na člena - hlavní
 // záruka "nejvýš jednou" (4.3), zabraňuje zapsat spolu s ON CONFLICT DO
 // NOTHING v claimReminder.
 // UNIQUE(token_hash): slouží zároveň jako index pro alias ověření tokenu
-// (D4 C, 4.5) — víc řádků s NULL (u variant bez vlastního tokenu) Postgres
+// (D4 C, 4.5) - víc řádků s NULL (u variant bez vlastního tokenu) Postgres
 // v UNIQUE připouští.
 // token_hash / link_token_hash: hash tokenu z připomínky (D4 C, jinak NULL) a
-// hash meeting_member_link.token_hash v okamžiku zabrání — dvojice, kterou
+// hash meeting_member_link.token_hash v okamžiku zabrání - dvojice, kterou
 // ověření tokenu (lib/auth/meeting-token-access.ts) porovná proti aktuálnímu
 // řádku odkazu, aby revokace/přegenerování alias nikdy neobešly.
 // ============================================================
@@ -1199,7 +1227,7 @@ export const meetingMemberReminder = pgTable(
 );
 
 // ============================================================
-// MASTERMIND_CASE / MASTERMIND_INTEREST — iter-033 (T-005, arch T-001 sekce 4):
+// MASTERMIND_CASE / MASTERMIND_INTEREST - iter-033 (T-005, arch T-001 sekce 4):
 // zásobník případů „5 minut pro ostatní“. Pravdou je migrační skript
 // scripts/migrate-iter-033-mastermind.ts (konvence iter-027, 028), tohle
 // schéma slouží jen typům. `meeting` se nemění a mezi `meeting` a případy
@@ -1313,7 +1341,7 @@ export const mastermindInterest = pgTable(
 );
 
 // ============================================================
-// BURZA_OFFER / BURZA_HELP — iter-035 (T-005, arch T-001 sekce 3, gate Z1 až Z5):
+// BURZA_OFFER / BURZA_HELP - iter-035 (T-005, arch T-001 sekce 3, gate Z1 až Z5):
 // Burza pomoci. Pravdou je migrační skript scripts/migrate-iter-035-burza.ts
 // (konvence iter-027 až 033), tohle schéma slouží jen typům. `member` se
 // nemění. Zápisy jsou jednopříkazové SQL v lib/db/queries/burza.ts (LL-003).
@@ -1396,7 +1424,7 @@ export const burzaHelp = pgTable(
 );
 
 // ============================================================
-// BURZA_CONTACT / BURZA_CONTACT_USE — iter-035 doplnění (T-013, arch T-011
+// BURZA_CONTACT / BURZA_CONTACT_USE - iter-035 doplnění (T-013, arch T-011
 // sekce 3, gate T-012 Z9): položky „Na koho mám kontakt“ a jejich využití.
 // Pravdou je migrační skript scripts/migrate-iter-035b-burza-kontakty.ts,
 // tohle schéma slouží jen typům. `burza_offer` a `burza_help` se nemění.

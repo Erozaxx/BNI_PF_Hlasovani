@@ -23,11 +23,14 @@ export function ContactCard({
   viewerId,
   viewerIsManagement,
   used,
+  bonusOn = true,
 }: {
   data: ContactCardData;
   viewerId: string;
   viewerIsManagement: boolean;
   used: boolean;
+  /** Burza dává bonus do semaforu (semafor i Burza zapnuté): rozhoduje o větě pod přepínačem. */
+  bonusOn?: boolean;
 }) {
   const offeredBy = TEXTS.offeredBy(
     [data.name, data.company, data.obor]
@@ -57,6 +60,7 @@ export function ContactCard({
           )}
         </div>
       )}
+      {canUse && <p className="mt-2 text-sm text-text-muted">{TEXTS.usedContactHint(bonusOn)}</p>}
     </article>
   );
 }

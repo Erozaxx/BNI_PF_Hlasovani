@@ -13,13 +13,15 @@
  * „dnešek“ dodává volající z todayInPrague().
  */
 
+import { DEFAULT_CHAPTER_SETTINGS, weekdayOfDate } from "../chapter/settings";
+
 export type CaseStatus = "proposed" | "scheduled" | "presented";
 
 /** Nejvýš tolik otevřených (navržených + zařazených) případů na člena (U14). */
 export const CASE_LIMIT = 5;
 /** Téma se ohlašuje 14 dní předem, aplikace to nevynucuje (U12, Z4). */
 export const NOTICE_DAYS = 14;
-/** Nabídka čtvrtků k zařazení (K17): 12 týdnů = 84 dní = přesně 12 čtvrtků. */
+/** Nabídka termínů k zařazení (K17): 12 týdnů = 84 dní = přesně 12 pravidelných dnů. */
 export const SCHEDULE_WEEKS = 12;
 /** Kolik proběhlých se ukáže na přehledu. */
 export const PRESENTED_LIMIT = 20;
@@ -86,10 +88,12 @@ export function addDays(iso: string, days: number): string {
   return `${out.getUTCFullYear()}-${mm}-${dd}`;
 }
 
-export function isThursday(iso: string): boolean {
-  const p = parseIso(iso);
-  if (!p) return false;
-  return new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay() === 4;
+/** Pravidelný den schůzky z nastavení chapteru (iter-042). Bez parametru platí výchozí den. */
+const DEFAULT_WEEKDAY = DEFAULT_CHAPTER_SETTINGS.meetingWeekday;
+
+/** Datum `iso` padá na den v týdnu `weekday` (0 = neděle). Neplatné datum = `false`. */
+export function isMeetingWeekday(iso: string, weekday: number = DEFAULT_WEEKDAY): boolean {
+  return weekdayOfDate(iso) === weekday;
 }
 
 const WEEKDAY_SHORT = ["ne", "po", "út", "st", "čt", "pá", "so"];
@@ -187,7 +191,7 @@ export function canUndoPresented(actor: Actor, c: CaseLike): boolean {
   return actor.isManagement && c.status === "presented";
 }
 
-// ── Zařazení na čtvrtek (3.5) ──
+// ── Zařazení na pravidelný den (3.5) ──
 
 /** Poslední (vyloučený) den okna: dnešek + 84 dní. */
 function windowEnd(todayPrague: string, weeks: number): string {
@@ -195,45 +199,48 @@ function windowEnd(todayPrague: string, weeks: number): string {
 }
 
 /**
- * Čtvrtek, ne dřív než dnes a v okně 12 týdnů (K17). DB to nehlídá, aby
- * přesun interní na jiný den nebo delší okno nepotřebovalo migraci.
+ * Pravidelný den schůzky (z nastavení, výchozí den bez parametru), ne dřív než dnes a v
+ * okně 12 týdnů (K17). DB to nehlídá, aby přesun interní na jiný den nebo delší
+ * okno nepotřebovalo migraci.
  */
 export function isSchedulableDate(
   date: string,
   todayPrague: string,
-  weeks: number = SCHEDULE_WEEKS
+  weeks: number = SCHEDULE_WEEKS,
+  weekday: number = DEFAULT_WEEKDAY
 ): boolean {
   if (!isValidIsoDate(date) || !isValidIsoDate(todayPrague)) return false;
-  if (!isThursday(date)) return false;
+  if (!isMeetingWeekday(date, weekday)) return false;
   if (date < todayPrague) return false;
   return date < windowEnd(todayPrague, weeks);
 }
 
-export type ThursdayState = "free" | "open-meeting" | "taken";
+export type DayState = "free" | "open-meeting" | "taken";
 
-export interface ThursdayOption {
+export interface DayOption {
   date: string;
-  state: ThursdayState;
+  state: DayState;
   shortNotice: boolean;
 }
 
 /**
- * Čtvrtky od dneška (včetně, když je dnes čtvrtek) na 12 týdnů dopředu.
+ * Pravidelné dny od dneška (včetně, když je dnes ten den) na 12 týdnů dopředu.
  * `open-meeting` má přednost před `taken`: otevřená schůzka na ten den
  * zakazuje výběr v obou případech a upozornění je pro vedení důležitější.
  */
-export function thursdayOptions(
+export function dayOptions(
   todayPrague: string,
   openMeetingDates: readonly string[],
   takenDates: readonly string[],
-  weeks: number = SCHEDULE_WEEKS
-): ThursdayOption[] {
+  weeks: number = SCHEDULE_WEEKS,
+  weekday: number = DEFAULT_WEEKDAY
+): DayOption[] {
   const open = new Set(openMeetingDates);
   const taken = new Set(takenDates);
   const end = windowEnd(todayPrague, weeks);
-  const out: ThursdayOption[] = [];
+  const out: DayOption[] = [];
   for (let d = todayPrague; d < end; d = addDays(d, 1)) {
-    if (!isThursday(d)) continue;
+    if (!isMeetingWeekday(d, weekday)) continue;
     out.push({
       date: d,
       state: open.has(d) ? "open-meeting" : taken.has(d) ? "taken" : "free",
@@ -411,9 +418,32 @@ export function summarizeDashboard(
 
 // ── Texty hlášek (sdílené akcemi a testy) ──
 
+/**
+ * iter-042 (#14, #15, #31, gate sekce 6): texty potvrzení a popisků vedení.
+ * UI tyká. Věta o bonusu jen při zapnutém semaforu (Z3), bez počtu bodů.
+ */
+export const UI_TEXTS = {
+  confirmPresented: (bonusOn: boolean) =>
+    bonusOn
+      ? "Potvrdit, že případ proběhl? Autor za něj dostane bonus do interního semaforu."
+      : "Potvrdit, že případ proběhl?",
+  confirmUnschedule: "Vrátit případ do zásobníku? Termín se uvolní a přihlášení se vrátí mezi zájemce.",
+  awaitingIntro: "Termín už byl. Potvrď, že případ proběhl, nebo ho vrať do zásobníku.",
+  pickDay: "Vyber termín",
+  optionOpenMeeting: "(schůzka s hosty)",
+  optionTaken: "(už má jiný případ)",
+  scheduleHint: "Případ se ukáže v Na řadě u vybraného dne a ze zájemců se stanou přihlášení.",
+  collision: "Na tento den je v aplikaci otevřená schůzka. Přesuň případ, nebo zkontroluj datum schůzky.",
+  removeButton: "Smazat případ",
+  removeConfirmScheduled: "Smazat zařazený případ? Přihlášení účastníci o něj přijdou.",
+  removeConfirmProposed: "Smazat případ? Smaže se i zájem ostatních.",
+  removed: "Případ je smazaný.",
+  removeFailed: "Případ se nepodařilo smazat.",
+} as const;
+
 export const MESSAGES = {
   limitSelf:
-    "Máš už 5 otevřených případů. Počkej, až některý proběhne, nebo jeden stáhni.",
+    "Máš už 5 otevřených případů. Počkej, až některý proběhne, nebo jeden smaž.",
   limitOther: (name: string) => `${name} má už 5 otevřených případů.`,
   notFound: "Případ už neexistuje.",
   // iter-037 (T-003b, gate sekce 5): téma neaktivního člena je skryté i pro vedení.
@@ -421,13 +451,13 @@ export const MESSAGES = {
   // iter-037 (security L-3): vedení nezapisuje případ za neaktivního člena.
   memberInactive: "Člen je neaktivní, případ za něj zapsat nejde.",
   cannotEdit: "Případ už nejde upravit.",
-  cannotRemove: "Případ už nejde stáhnout.",
+  cannotRemove: "Případ už nejde smazat.",
   ownInterest: "Vlastní případ nejde označit zájmem.",
   presentedInterest: "Případ už proběhl, zájem nejde měnit.",
   forOtherByManagementOnly: "Případ za jiného člena zapíše jen vedení.",
-  takenDate: "Na tenhle čtvrtek už je případ.",
-  openMeetingDate: "Na tenhle čtvrtek je otevřená schůzka.",
-  badDate: "Vyber čtvrtek v nabídce.",
+  takenDate: "Na tenhle den už je případ.",
+  openMeetingDate: "Na tenhle den je otevřená schůzka.",
+  badDate: "Vyber termín v nabídce.",
   notProposed: "Případ už není v zásobníku.",
   notScheduled: "Případ už není zařazený.",
   cannotConfirm: "Proběhlo jde potvrdit až v den interní.",
@@ -435,7 +465,7 @@ export const MESSAGES = {
   ownCase: "Vlastní případ potvrdí jiný člen vedení.",
   notPresented: "Případ ještě neproběhl.",
   undoLimit: (name: string) =>
-    `${name} má už 5 otevřených případů, potvrzení vrátit nejde. Nejdřív některý stáhněte nebo potvrďte, že proběhl.`,
+    `${name} má už 5 otevřených případů, potvrzení vrátit nejde. Nejdřív některý smažte nebo potvrďte, že proběhl.`,
   invalidInput: "Neplatný vstup.",
   denied: "Na tuhle akci nemáš oprávnění.",
   generic: "Akci se nepodařilo provést.",

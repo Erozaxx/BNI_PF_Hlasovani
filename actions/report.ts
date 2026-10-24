@@ -6,7 +6,7 @@ import { getMeetingById } from "@/lib/db/queries/meetings";
 import type { ActionResult } from "@/lib/types";
 
 /**
- * Manually trigger a report for a specific meeting.
+ * Manually send a report for a specific meeting.
  * Requires admin or moderator role.
  */
 export async function triggerReportAction(
@@ -16,19 +16,19 @@ export async function triggerReportAction(
   if (!auth.success) return auth;
 
   if (!meetingId) {
-    return { success: false, error: "meetingId je povinne." };
+    return { success: false, error: "ID schůzky chybí." };
   }
 
   try {
     const meeting = await getMeetingById(meetingId);
     if (!meeting) {
-      return { success: false, error: "Schuzka nebyla nalezena." };
+      return { success: false, error: "Schůzka nebyla nalezena." };
     }
 
     if (meeting.status !== "closed") {
       return {
         success: false,
-        error: "Report lze generovat pouze pro uzavrenou schuzku.",
+        error: "Report jde poslat jen u uzavřené schůzky.",
       };
     }
 
@@ -37,7 +37,7 @@ export async function triggerReportAction(
     if (result.error) {
       return {
         success: false,
-        error: `Odeslani reportu selhalo: ${result.error}`,
+        error: `Report se nepodařilo odeslat: ${result.error}`,
       };
     }
 
@@ -49,7 +49,7 @@ export async function triggerReportAction(
     console.error("triggerReportAction error:", error);
     return {
       success: false,
-      error: "Nepodarilo se odeslat report.",
+      error: "Report se nepodařilo odeslat.",
     };
   }
 }

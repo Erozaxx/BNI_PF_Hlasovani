@@ -42,13 +42,31 @@ import { summarizeChapter } from "../lib/semafor/summary";
 import {
   BONUS_CAP,
   BONUS_POINTS,
+  bonusSources,
   bonusWindow,
   computeBonus,
+  filterBonusEvents,
+  hasBonusSource,
   inBonusWindow,
   internalScore,
 } from "../lib/semafor/bonus";
+import { DEFAULT_CHAPTER_SETTINGS } from "../lib/chapter/settings";
 import { validateImportMonth, parseMonthParam, importMonthOptions, previousMonthStart } from "../lib/semafor/months";
 import {
+  AREAS_LEGEND_TEXT,
+  areaValueText,
+  fmtNum,
+  helpAttendanceManagerUnexcused,
+  helpAttendanceMemberUnexcused,
+  helpSemaforLeadership,
+  helpSemaforMember,
+  matchNeedsAttention,
+  myBonusLaterText,
+  myIntroText,
+  overviewLegendText,
+  scoreLegendText,
+  sixMonthsText,
+  uploadedMonthText,
   HELP_ATTENDANCE_MANAGER_UNEXCUSED,
   HELP_ATTENDANCE_MEMBER_UNEXCUSED,
   HELP_SEMAFOR_LEADERSHIP,
@@ -1235,9 +1253,10 @@ const tests: TestCase[] = [
       assert.ok(read("app/(app)/layout.tsx").includes('<NavLink href="/semafor">Semafor</NavLink>'));
       assert.ok(read("components/layout/MobileNav.tsx").includes('href="/semafor"'));
       const member = read("components/help/sections/MemberHelp.tsx");
-      assert.ok(member.includes("HELP_SEMAFOR_MEMBER") && member.includes("HELP_ATTENDANCE_MEMBER_UNEXCUSED"));
+      // iter-042 (C7): nápověda bere texty z funkcí s nastavením (konstanty jsou jen výchozí stav).
+      assert.ok(member.includes("semaforMemberFaq(bonus)") && member.includes("helpAttendanceMemberUnexcused(settings.meetingTime)"));
       const mod = read("components/help/sections/ModeratorHelp.tsx");
-      assert.ok(mod.includes("HELP_SEMAFOR_LEADERSHIP") && mod.includes("HELP_ATTENDANCE_MANAGER_UNEXCUSED") && mod.includes("semaforImport"));
+      assert.ok(mod.includes("helpSemaforLeadership(sources)") && mod.includes("helpAttendanceManagerUnexcused(settings.meetingTime)") && mod.includes("semaforImport"));
       const help = read("app/(app)/help/page.tsx");
       assert.ok(help.includes('can(session, "semafor.view_all")') && help.includes('can(session, "semafor.import")'));
       const labels = read("app/(app)/status/EventTable.tsx");
@@ -1394,6 +1413,164 @@ const tests: TestCase[] = [
       assert.equal(/email/i.test(dto), false, "DTO náhledu bez e-mailu");
       assert.equal(/email/i.test(stripComments(read("lib/semafor/events.ts"))), false, "události bez e-mailu");
       assert.equal(/email/i.test(stripComments(read("lib/semafor/errors.ts"))), false);
+    },
+  },
+  {
+    name: "40. iter-042 (BK2, Z3): bonus jen ze zapnutých částí; texty bonusu podle zdrojů; obě vypnuté = skóre je skóre z BNI",
+    run: () => {
+      const on = { ...DEFAULT_CHAPTER_SETTINGS };
+      assert.deepEqual(bonusSources(on), { mastermind: true, burza: true });
+      assert.deepEqual(bonusSources({ ...on, burzaEnabled: false }), { mastermind: true, burza: false });
+      assert.deepEqual(bonusSources({ ...on, semaforEnabled: false }), { mastermind: false, burza: false }, "bez semaforu žádný bonus");
+      assert.equal(hasBonusSource(bonusSources({ ...on, mastermindEnabled: false, burzaEnabled: false })), false);
+      const events: BonusEvent[] = [
+        { memberId: "m1", category: "mastermind", date: "2026-09-10" },
+        { memberId: "m1", category: "burza", date: "2026-09-11" },
+        { memberId: "m1", category: "burza", date: "2026-09-12" },
+      ];
+      assert.equal(filterBonusEvents(events, { mastermind: true, burza: true }).length, 3);
+      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: true }).map((e) => e.category), ["burza", "burza"]);
+      assert.equal(filterBonusEvents(events, { mastermind: false, burza: false }).length, 0);
+      const record = { month: "2026-09-01", memberId: "m1", totalScore: 66 } as ScoreRecord;
+      const full = buildMonthView(record, events);
+      assert.equal(full.bonus.bonus, 17);
+      const burzaOnly = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: true }));
+      assert.equal(burzaOnly.bonus.bonus, 10);
+      const none = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: false }));
+      assert.equal(none.bonus.bonus, 0);
+      assert.equal(none.internal, none.total, "obě části vypnuté: skóre = BNI");
+      assert.equal(none.internalColor, none.bniColor);
+      // listBonusEvents je jediná cesta a filtruje podle nastavení
+      const q = stripComments(read("lib/db/queries/semafor.ts"));
+      const list = q.slice(q.indexOf("export async function listBonusEvents"), q.indexOf("export async function listMyBonusEvents"));
+      assert.ok(list.includes("sources: BonusSources") && list.includes("filterBonusEvents(events, opts.sources)"));
+      assert.ok(!q.includes("chapter-settings"), "dotazy semaforu nečtou nastavení samy (holý Node)");
+      // každý volající předá zdroje z nastavení
+      assert.ok(/sources\)/.test(stripComments(read("app/(app)/semafor/page.tsx"))));
+      assert.ok(read("app/(app)/semafor/prehled/page.tsx").includes("listBonusEvents({ after: w.after, to: w.to, sources })"));
+      for (const f of ["app/(app)/semafor/page.tsx", "app/(app)/semafor/prehled/page.tsx"]) {
+        assert.ok(read(f).includes("bonusSources(await getChapterSettings())"), f);
+      }
+      // karta, legendy a úvod
+      const all = { mastermind: true, burza: true };
+      assert.equal(
+        scoreLegendText(all),
+        "Skóre je skóre z BNI plus tvůj bonus za Master mind a Burzu pomoci. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30. Řádek BNI ukazuje skóre bez bonusu."
+      );
+      assert.ok(scoreLegendText({ mastermind: false, burza: true }).startsWith("Skóre je skóre z BNI plus tvůj bonus za Burzu pomoci. "));
+      assert.equal(
+        scoreLegendText({ mastermind: false, burza: false }),
+        "Skóre je skóre z BNI. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30."
+      );
+      assert.equal(
+        overviewLegendText(all),
+        "Skóre a Barva jsou s bonusem, BNI je skóre bez bonusu, Bonus jsou body za Master mind a Burzu pomoci. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30."
+      );
+      assert.equal(overviewLegendText({ mastermind: false, burza: false }), "Zelená od 70, žlutá od 50, červená od 30, šedá pod 30.");
+      assert.ok(overviewLegendText({ mastermind: true, burza: false }).includes("Bonus jsou body za Master mind. "));
+      assert.equal(myIntroText(all), SEMAFOR_TEXTS.myIntro);
+      assert.ok(!/bonus|Burz|Master/.test(myIntroText({ mastermind: false, burza: false })));
+      assert.equal(
+        myBonusLaterText("2026-09-30", "2026-10-01", { mastermind: true, burza: false }),
+        "Master mind po 30. 9. 2026 se započtou s daty za říjen 2026."
+      );
+      // prahy ze COLOR_THRESHOLDS, ne natvrdo
+      assert.ok(scoreLegendText(all).includes(`od ${COLOR_THRESHOLDS.green},`) && scoreLegendText(all).includes(`pod ${COLOR_THRESHOLDS.red}.`));
+      const texts = stripComments(read("lib/semafor/texts.ts"));
+      assert.ok(texts.includes("COLOR_THRESHOLDS"));
+    },
+  },
+  {
+    name: "41. iter-042 (K3, Z2, Z6): Hosté a Sponzoři za 6 měsíců, legenda oblastí bez „ze 100“",
+    run: () => {
+      assert.equal(sixMonthsText(fmtNum(3)), "3 za 6 měsíců");
+      assert.equal(sixMonthsText(fmtNum(2.5)), "2,5 za 6 měsíců");
+      const area = (key: "visitors" | "sponsors", value: number | null) => ({ key, score: 10, value });
+      assert.equal(areaValueText(area("visitors", 3)), "3 za 6 měsíců");
+      assert.equal(areaValueText(area("sponsors", 1)), "1 za 6 měsíců");
+      assert.equal(areaValueText(area("sponsors", null)), null, "bez hodnoty se ukáže jen pomlčka u skóre");
+      assert.equal(areaValueText({ key: "ceu", score: 5, value: 1.5 }), "1,5 za týden");
+      assert.ok(AREAS_LEGEND_TEXT.includes("Body všech oblastí dohromady dávají skóre z BNI."));
+      assert.ok(!/ze 100/.test(AREAS_LEGEND_TEXT), "ze 100 je jen součet");
+      assert.ok(AREAS_LEGEND_TEXT.includes("Hosté: hosté, které jsi přivedl(a), za 6 měsíců."));
+      assert.ok(AREAS_LEGEND_TEXT.includes("Sponzoři: noví členové, které jsi do chapteru přivedl(a), za 6 měsíců."));
+      assert.ok(AREAS_LEGEND_TEXT.includes("TYFCB: obchody uzavřené díky doporučení, v Kč."));
+      assert.ok(read("components/semafor/MyScoreCard.tsx").includes("AREAS_LEGEND_TEXT"));
+    },
+  },
+  {
+    name: "42. iter-042 (#8, #16, #17, #18): import, přehled a náhled importu",
+    run: () => {
+      assert.equal(SEMAFOR_TEXTS.importFile, "Soubor .xlsx z BNI (list se skóre členů)");
+      assert.deepEqual([...SEMAFOR_TEXTS.importSteps], [
+        "Vyber měsíc, za který soubor je. Soubor sám měsíc nezná.",
+        "Vyber soubor .xlsx z BNI s listem skóre členů.",
+        "Zobrazit náhled zatím nic neuloží.",
+        "Zkontroluj párování jmen a klikni na Uložit.",
+      ]);
+      assert.equal(SEMAFOR_TEXTS.importSaveNote, "Členům ze souboru se hodnoty za vybraný měsíc přepíšou, ostatním zůstanou.");
+      assert.equal(SEMAFOR_TEXTS.myNone, "Zatím není nahraný žádný měsíc. Data nahrává vedení z BNI.");
+      assert.equal(SEMAFOR_TEXTS.myNoneImport, "Zatím není nahraný žádný měsíc. Nahraj ho v záložce Import.");
+      assert.equal(SEMAFOR_TEXTS.importMonthsTitle, "Nahrané měsíce");
+      assert.equal(
+        SEMAFOR_TEXTS.aliasesIntro,
+        "Tato jména ze souboru aplikace příště spáruje sama. Po Zapomenout párování potvrdíš znovu ručně."
+      );
+      assert.equal(SEMAFOR_TEXTS.importPreviewHint, "Zkontroluj řádky označené ověř nebo vyber. Přeskočený řádek se neuloží.");
+      assert.equal(uploadedMonthText("2026-09-01", 12, "2026-10-03", "Člen A"), "září 2026: 12 členů, nahráno 3. 10. 2026, Člen A");
+      assert.equal(uploadedMonthText("2026-09-01", 1, null, null), "září 2026: 1 člen");
+      // štítky „ověř“ a „vyber“ se zvýrazní, ostatní ne
+      for (const kind of ["partial", "loose", "swapped", "ambiguous", "none", "duplicate"] as const) {
+        assert.equal(matchNeedsAttention(kind), true, kind);
+      }
+      for (const kind of ["email", "exact", "alias"] as const) assert.equal(matchNeedsAttention(kind), false, kind);
+      const form = read("components/semafor/ImportSemaforForm.tsx");
+      assert.ok(form.includes("text-warning") && form.includes("matchNeedsAttention(row.kind)"));
+      assert.ok(form.includes("SEMAFOR_TEXTS.importSaveNote") && form.includes("SEMAFOR_TEXTS.importPreviewHint"));
+      const imp = read("app/(app)/semafor/import/page.tsx");
+      assert.ok(imp.includes("SEMAFOR_TEXTS.importSteps") && imp.includes("uploadedMonthText(") && imp.includes("SEMAFOR_TEXTS.aliasesIntro"));
+      const overview = read("app/(app)/semafor/prehled/page.tsx");
+      assert.ok(overview.includes("canImport ? SEMAFOR_TEXTS.myNoneImport : SEMAFOR_TEXTS.myNone"));
+      assert.ok(overview.includes("overviewLegendText(sources)"));
+    },
+  },
+  {
+    name: "43. iter-042 (B7/5, Z10): vypnutý semafor: stránky featureOff po session, akce requireFeature za guardem, nápověda jako funkce s časem a zdroji",
+    run: () => {
+      for (const f of ["app/(app)/semafor/page.tsx", "app/(app)/semafor/prehled/page.tsx", "app/(app)/semafor/import/page.tsx"]) {
+        const src = stripComments(read(f));
+        const session = src.indexOf("await requirePageSession(");
+        const off = src.indexOf('await featureOff("semafor")');
+        assert.ok(session > 0 && off > session, `${f}: featureOff hned po session`);
+        assert.ok(src.includes("<FeatureOff"), f);
+      }
+      const act = stripComments(read("actions/semafor.ts"));
+      const chunks = act.split(/export async function /).slice(1);
+      assert.equal(chunks.length, 5);
+      for (const c of chunks) {
+        const guard = c.indexOf('await requirePermission("semafor.import")');
+        const feature = c.indexOf('await requireFeature("semafor")');
+        assert.ok(guard >= 0 && feature > guard, `${c.slice(0, 30)}: requireFeature za guardem`);
+      }
+      // Z5: čas z nastavení, ne natvrdo
+      assert.ok(helpAttendanceMemberUnexcused("08:15").includes("do 8:15 se neomluvíte"));
+      assert.ok(helpAttendanceManagerUnexcused("08:15").includes("Jde to od 8:15"));
+      assert.equal(helpAttendanceMemberUnexcused(), HELP_ATTENDANCE_MEMBER_UNEXCUSED);
+      assert.equal(helpAttendanceManagerUnexcused(), HELP_ATTENDANCE_MANAGER_UNEXCUSED);
+      const texts = stripComments(read("lib/semafor/texts.ts"));
+      assert.ok(!/7:30|čtvrt/i.test(texts), "texts.ts bez natvrdo času a dne");
+      // Z3: nápověda podle zdrojů
+      assert.deepEqual(helpSemaforMember(), [...HELP_SEMAFOR_MEMBER]);
+      assert.equal(helpSemaforMember().length, 5);
+      const none = helpSemaforMember({ mastermind: false, burza: false });
+      assert.equal(none.length, 4);
+      assert.ok(!none.join(" ").includes("bonus") && !none.join(" ").includes("Master mind"));
+      assert.ok(helpSemaforMember({ mastermind: true, burza: false }).join(" ").includes("7 bodů za odprezentovaný Master mind"));
+      assert.ok(!helpSemaforMember({ mastermind: true, burza: false }).join(" ").includes("Burz"));
+      assert.equal(helpSemaforLeadership().length, 5);
+      assert.equal(helpSemaforLeadership({ mastermind: false, burza: true }).length, 4);
+      assert.ok(!helpSemaforLeadership({ mastermind: false, burza: true }).map((h) => h.text).join(" ").includes("Master mind"));
+      assert.ok(helpSemaforMember().every((t) => !t.includes(EM_DASH)));
     },
   },
 ];

@@ -12,9 +12,13 @@ import { InterviewDueSection } from "@/components/interviews/InterviewDueSection
 import { DashboardMastermind } from "@/components/mastermind/DashboardMastermind";
 import { DashboardBurza } from "@/components/burza/DashboardBurza";
 import { DashboardAttendance } from "@/components/attendance/DashboardAttendance";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 
 export default async function DashboardPage() {
   const session = await requirePageSession();
+  // iter-042 (B2): vypnutý Master mind nebo Burza z dashboardu zmizí.
+  const settings = await getChapterSettings();
   const meetings = await getMeetings();
   const guests = await getGuests();
 
@@ -42,7 +46,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="text-text-main font-medium">
-                Schůzka: {upcomingMeeting.date}
+                Schůzka: {formatWeekdayFull(upcomingMeeting.date)}
               </p>
               <Badge variant="category" className="mt-1">
                 {statusLabel[upcomingMeeting.status]}
@@ -58,10 +62,12 @@ export default async function DashboardPage() {
       ) : null}
 
       {/* Master mind (iter-033, arch 8.1): samostatny radek pod kartou schuzky */}
-      <DashboardMastermind memberId={session.memberId} isManagement={canMastermind} />
+      {settings.mastermindEnabled && (
+        <DashboardMastermind memberId={session.memberId} isManagement={canMastermind} />
+      )}
 
       {/* Burza pomoci (iter-035, Z4): jen výzva vlastníkovi se starým řádkem */}
-      <DashboardBurza memberId={session.memberId} />
+      {settings.burzaEnabled && <DashboardBurza memberId={session.memberId} />}
 
       {/* Docházka (iter-038, arch 12.3): absence za plovoucích 6 měsíců, od 3 oranžově */}
       <DashboardAttendance memberId={session.memberId} />
@@ -86,7 +92,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Pohovory k zalozeni (5/10 mesicu) — mod/admin only, arch section 7.2 */}
+      {/* Pohovory k zalozeni (5/10 mesicu) - mod/admin only, arch section 7.2 */}
       {canInterviews && <InterviewDueSection />}
 
       {/* Recent guests */}
@@ -96,8 +102,8 @@ export default async function DashboardPage() {
             Poslední hosté
           </h2>
           <Link href="/guests">
-            <Button variant="link" size="sm">
-              Zobrazit vse
+            <Button variant="link" size="sm" className="min-h-[44px]">
+              Zobrazit vše
             </Button>
           </Link>
         </div>
@@ -109,11 +115,11 @@ export default async function DashboardPage() {
                 <Card variant="interactive">
                   <h3 className="font-medium text-text-main">{g.name}</h3>
                   <Badge variant="category" className="mt-2">
-                    {g.categoryName ?? "[bez kategorie]"}
+                    {g.categoryName ?? "Bez kategorie"}
                   </Badge>
                   {lastMeetingDates.get(g.id) && (
                     <p className="text-xs text-text-muted mt-2">
-                      Posl. schůzka: {lastMeetingDates.get(g.id)}
+                      Posl. schůzka: {formatWeekdayFull(lastMeetingDates.get(g.id) ?? "")}
                     </p>
                   )}
                   {g.description && (
@@ -128,7 +134,7 @@ export default async function DashboardPage() {
         ) : (
           <Card>
             <EmptyState
-              title="Zatim zadni hoste"
+              title="Zatím žádní hosté"
               description="Hosté se zobrazí po jejich přidání do systému."
             />
           </Card>

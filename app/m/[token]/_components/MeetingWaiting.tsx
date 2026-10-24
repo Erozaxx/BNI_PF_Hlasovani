@@ -1,3 +1,5 @@
+import { formatWeekdayFull } from "@/lib/attendance/rules";
+
 /**
  * Shown when the magic link token is valid but voting has not started yet
  * (meeting is in draft or active state). Instructs the member to use the
@@ -28,7 +30,7 @@ export function MeetingWaiting({
         )}
         <div className="bg-info-light border border-info rounded-lg px-4 py-3 text-left space-y-1">
           <p className="text-sm font-medium text-info-dark">
-            Schůzka: {meetingDate}
+            Schůzka: {formatWeekdayFull(meetingDate)}
           </p>
           {location && (
             <p className="text-sm text-info-dark">Místo: {location}</p>
@@ -36,7 +38,7 @@ export function MeetingWaiting({
         </div>
         <p className="text-text-muted text-sm">
           Hlasování ještě nebylo spuštěno. Jakmile organizátor schůzky zahájí
-          hlasování, použijte tento odkaz znovu.
+          hlasování, použij tento odkaz znovu.
         </p>
       </div>
     </div>

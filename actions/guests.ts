@@ -35,11 +35,11 @@ export async function createGuestAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Jmeno hosta je povinne." };
+    return { success: false, error: "Jméno hosta je povinné." };
   }
 
   if (!categoryId) {
-    return { success: false, error: "Kategorie je povinna." };
+    return { success: false, error: "Kategorie je povinná." };
   }
 
   try {
@@ -69,7 +69,7 @@ export async function createGuestAction(
     return { success: true, data: { id: guest.id } };
   } catch (error) {
     console.error("createGuestAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit hosta." };
+    return { success: false, error: "Hosta se nepodařilo vytvořit." };
   }
 }
 
@@ -87,7 +87,7 @@ export async function updateGuestAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Jmeno hosta je povinne." };
+    return { success: false, error: "Jméno hosta je povinné." };
   }
 
   try {
@@ -107,7 +107,7 @@ export async function updateGuestAction(
     return { success: true };
   } catch (error) {
     console.error("updateGuestAction error:", error);
-    return { success: false, error: "Nepodarilo se aktualizovat hosta." };
+    return { success: false, error: "Hosta se nepodařilo upravit." };
   }
 }
 
@@ -126,7 +126,7 @@ export async function deleteGuestAction(id: string): Promise<ActionResult> {
     return { success: true };
   } catch (error) {
     console.error("deleteGuestAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat hosta." };
+    return { success: false, error: "Hosta se nepodařilo smazat." };
   }
 }
 
@@ -141,7 +141,7 @@ export async function updateGuestCategoryAction(
   if (!auth.success) return auth;
 
   if (!categoryId) {
-    return { success: false, error: "Kategorie je povinna." };
+    return { success: false, error: "Kategorie je povinná." };
   }
 
   try {
@@ -156,17 +156,17 @@ export async function updateGuestCategoryAction(
     return { success: true };
   } catch (error) {
     console.error("updateGuestCategoryAction error:", error);
-    return { success: false, error: "Nepodarilo se zmenit kategorii." };
+    return { success: false, error: "Kategorii se nepodařilo změnit." };
   }
 }
 
 const promoteGuestSchema = z.object({
-  guestId: z.string().uuid("Neplatne ID hosta."),
+  guestId: z.string().uuid("Neplatné ID hosta."),
 });
 
 /**
  * Discriminated union result for promoteGuestToMemberAction (arch
- * arch_iter-022_T-001.md §7, updated by arch_iter-022_T-003.md §2.2 —
+ * arch_iter-022_T-001.md §7, updated by arch_iter-022_T-003.md §2.2 -
  * MAJOR-1 repair confirmation). T-006 (UI) reads `repaired` to pick the
  * right success toast; it never receives a message string from here for the
  * success case -- toast copy (incl. D-4's "member has no login link yet"
@@ -231,7 +231,7 @@ export async function promoteGuestToMemberAction(
 
   const parsed = promoteGuestSchema.safeParse({ guestId });
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0]?.message ?? "Neplatny vstup.";
+    const firstError = parsed.error.errors[0]?.message ?? "Neplatný vstup.";
     return { success: false, error: firstError };
   }
 
@@ -247,7 +247,7 @@ export async function promoteGuestToMemberAction(
       return {
         success: false,
         error:
-          "Host je na schuzce s prave bezicim hlasovanim. Pockejte na uzavreni hlasovani a akci opakujte.",
+          "Host je na schůzce, kde právě běží hlasování. Počkej, až se hlasování uzavře, a zkus to znovu.",
       };
     }
 
@@ -267,7 +267,7 @@ export async function promoteGuestToMemberAction(
         if (!sameName) {
           return {
             success: false,
-            error: `Clen s emailem ${existingByEmail.email} uz existuje pod jinym jmenem. Zkontrolujte email hosta, nebo clena zalozte rucne.`,
+            error: `Člen s e-mailem ${existingByEmail.email} už existuje pod jiným jménem. Zkontroluj e-mail hosta, nebo člena založ ručně.`,
           };
         }
 
@@ -298,7 +298,7 @@ export async function promoteGuestToMemberAction(
       if (existingByName) {
         return {
           success: false,
-          error: `Clen se jmenem "${guestName}" uz existuje. Host nema email, takze nelze rozlisit, jestli jde o tehoz cloveka nebo o jmenovce. Pokud je to jmenovec, zalozte clena rucne v sekci Clenove (stejne jmeno je povolene) a hosta pak smazte. Pokud uz clen vznikl drivejsim povysenim, nechte hosta smazat adminem.`,
+          error: `Člen se jménem "${guestName}" už existuje. Host nemá e-mail, takže nejde rozlišit, jestli jde o téhož člověka, nebo o jmenovce. Pokud je to jmenovec, založ člena ručně v sekci Členové (stejné jméno je povolené) a hosta pak smaž. Pokud člen vznikl dřívějším povýšením, nech hosta smazat adminem.`,
         };
       }
 
@@ -323,7 +323,7 @@ export async function promoteGuestToMemberAction(
       return {
         success: false,
         error:
-          "Clen byl vytvoren, ale hosta se nepodarilo smazat. Opakujte akci - dokonci smazani hosta.",
+          "Člen je vytvořený, ale hosta se nepodařilo smazat. Zkus akci znovu, dokončí smazání hosta.",
       };
     }
 
@@ -357,13 +357,13 @@ export async function promoteGuestToMemberAction(
       return {
         success: false,
         error:
-          "Clen s timto emailem uz existuje. Host zustal beze zmeny, zkontrolujte email hosta.",
+          "Člen s tímhle e-mailem už existuje. Host zůstal beze změny, zkontroluj jeho e-mail.",
       };
     }
     console.error("promoteGuestToMemberAction error:", error);
     return {
       success: false,
-      error: "Nepodarilo se vytvorit clena. Host zustal beze zmeny, akci opakujte.",
+      error: "Člena se nepodařilo vytvořit. Host zůstal beze změny, zkus to znovu.",
     };
   }
 }

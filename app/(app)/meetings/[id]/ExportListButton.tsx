@@ -19,7 +19,7 @@ export function ExportListButton({ meetingId }: ExportListButtonProps) {
       const response = await fetch(`/api/meetings/${meetingId}/export-list`);
 
       if (!response.ok) {
-        let message = "Export selhal. Zkuste to znovu.";
+        let message = "Export selhal. Zkus to znovu.";
         try {
           const body = await response.json();
           if (body?.error) message = body.error;
@@ -51,7 +51,7 @@ export function ExportListButton({ meetingId }: ExportListButtonProps) {
       setStatus("idle");
     } catch {
       setStatus("error");
-      setErrorMessage("Export selhal. Zkontrolujte pripojeni a zkuste to znovu.");
+      setErrorMessage("Export selhal. Zkontroluj připojení a zkus to znovu.");
     }
   }
 
@@ -70,6 +70,7 @@ export function ExportListButton({ meetingId }: ExportListButtonProps) {
           loading={status === "loading"}
           disabled={status === "loading"}
           onClick={handleExport}
+          className="min-h-[44px]"
         >
           Exportovat seznam (.xlsx)
         </Button>
@@ -79,8 +80,9 @@ export function ExportListButton({ meetingId }: ExportListButtonProps) {
             variant="link"
             size="sm"
             onClick={handleReset}
+            className="min-h-[44px]"
           >
-            Zavrit
+            Zavřít
           </Button>
         )}
       </div>

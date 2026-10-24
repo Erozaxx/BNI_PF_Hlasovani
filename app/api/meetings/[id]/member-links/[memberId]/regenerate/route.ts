@@ -35,23 +35,23 @@ export async function POST(
   // 2. Load meeting
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
-    return err(404, "Meeting not found");
+    return err(404, "Schůzka nebyla nalezena.");
   }
 
   // iter-037 (T-003b, gate sekce 5): neaktivnímu členovi odkaz přegenerovat nejde.
   const memberData = await getMemberById(memberId);
   if (!memberData) {
-    return err(404, "Member not found");
+    return err(404, "Člen nebyl nalezen.");
   }
   if (!isMemberActive(memberData, pragueToday())) {
     return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
   }
 
-  // 3. Regenerate token (UPDATE existing row — no INSERT, preserves UNIQUE)
+  // 3. Regenerate token (UPDATE existing row - no INSERT, preserves UNIQUE)
   const rawToken = await regenerateMeetingToken(meetingId, memberId);
 
   if (rawToken === null) {
-    return err(404, "No link found for this member in this meeting");
+    return err(404, "Tenhle člen nemá u téhle schůzky žádný odkaz.");
   }
 
   const magicUrl = buildMeetingMagicUrl(rawToken);

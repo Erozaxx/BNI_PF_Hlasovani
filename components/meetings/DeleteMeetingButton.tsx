@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { deleteMeetingAction } from "@/actions/meetings";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 export function DeleteMeetingButton({
   meetingId,
@@ -19,7 +20,7 @@ export function DeleteMeetingButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      `Opravdu smazat schuzku ${meetingDate}? Budou smazany i vsechny hlasy a prirazeni hoste.`
+      `Smazat schůzku ${formatWeekdayFull(meetingDate)}? Vrátit to nepůjde. Smažou se i všechny hlasy a přiřazení hostů.`
     );
     if (!confirmed) return;
 
@@ -29,11 +30,11 @@ export function DeleteMeetingButton({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", `Schuzka ${meetingDate} byla smazana.`);
+        showToast("success", `Schůzka ${formatWeekdayFull(meetingDate)} je smazaná.`);
         router.push("/meetings");
       }
     } catch {
-      showToast("error", "Nepodarilo se smazat schuzku.");
+      showToast("error", "Schůzku se nepodařilo smazat.");
     } finally {
       setLoading(false);
     }
@@ -46,6 +47,7 @@ export function DeleteMeetingButton({
       size="sm"
       loading={loading}
       onClick={handleDelete}
+      className="min-h-[44px]"
     >
       Smazat schůzku
     </Button>
