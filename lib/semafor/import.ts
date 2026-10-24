@@ -8,8 +8,8 @@
  */
 import { createHash } from "node:crypto";
 import { SemaforFileError } from "@/lib/semafor/errors";
-import { readXlsxSheet } from "@/lib/semafor/xlsx";
-import { parseScoresSheet, VALUE_KEYS, type ParsedScoreRow, type ScoreValues } from "@/lib/semafor/scores";
+import { readFirstMatchingSheet } from "@/lib/semafor/xlsx";
+import { hasScoreColumns, parseScoresSheet, VALUE_KEYS, type ParsedScoreRow, type ScoreValues } from "@/lib/semafor/scores";
 import {
   aliasesToWrite,
   matchNames,
@@ -25,6 +25,7 @@ import {
 import { colorFromTotal, type SemaforColor } from "@/lib/semafor/color";
 import { SEMAFOR_TEXTS, errTwiceText, rowErrorMessage } from "@/lib/semafor/texts";
 
+/** Přednostní název listu; skutečný list se vybírá podle hlavičky. */
 export const SHEET_NAME = "Scores";
 
 export function sha256Hex(bytes: Uint8Array): string {
@@ -39,7 +40,8 @@ export interface AnalyzedFile {
 
 /** Zpracuje soubor od uživatele. Chyby souboru jsou `SemaforFileError`. */
 export function analyzeFile(bytes: Uint8Array): AnalyzedFile {
-  const sheet = readXlsxSheet(bytes, SHEET_NAME);
+  // List se hledá podle obsahu (hlavička); "Scores" má přednost.
+  const sheet = readFirstMatchingSheet(bytes, SHEET_NAME, hasScoreColumns);
   const parsed = parseScoresSheet(sheet.rows);
   return { sha256: sha256Hex(bytes), unknownColumns: parsed.unknownColumns, rows: parsed.rows };
 }

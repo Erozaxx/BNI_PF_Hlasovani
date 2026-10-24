@@ -39,7 +39,7 @@ export const SEMAFOR_TEXTS = {
   overviewNoValue: "–",
   importTitle: "Nahrát semafor",
   importMonth: "Měsíc",
-  importFile: "Soubor .xlsx s listem Scores",
+  importFile: "Soubor .xlsx s listem se skóre",
   importPreview: "Zobrazit náhled",
   importSave: "Uložit",
   importKeeps: "Z dřívějška zůstanou:",
@@ -101,7 +101,7 @@ export const HELP_ATTENDANCE_MEMBER_UNEXCUSED =
 export const HELP_SEMAFOR_LEADERSHIP: readonly { text: string; importOnly: boolean }[] = [
   {
     importOnly: true,
-    text: "Měsíční soubor .xlsx s listem Scores nahrajete v menu Semafor, záložka Import. Vyberte měsíc, za který soubor je, a zobrazte náhled.",
+    text: "Měsíční soubor .xlsx s listem se skóre nahrajete v menu Semafor, záložka Import. Vyberte měsíc, za který soubor je, a zobrazte náhled.",
   },
   {
     importOnly: true,
@@ -228,7 +228,7 @@ function noSheetMessage(list: readonly string[], more: number): string {
   const shown = list.slice(0, SHEETS_SHOWN).map((n) => n.slice(0, SHEET_NAME_CHARS));
   const rest = more + Math.max(0, list.length - SHEETS_SHOWN);
   const names = shown.length > 0 ? shown.join(", ") + (rest > 0 ? ` a další ${rest}` : "") : "žádné";
-  return `V souboru chybí list Scores. Listy v souboru: ${names}.`;
+  return `V souboru chybí list se sloupci semaforu. Listy v souboru: ${names}.`;
 }
 
 /** Hláška pro chybu souboru. Nikdy obsah buněk. */

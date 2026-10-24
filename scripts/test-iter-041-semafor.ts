@@ -19,6 +19,7 @@ import {
   MAX_ELEMENTS_OTHER,
   MAX_ELEMENTS_SHARED,
   MAX_ELEMENTS_SHEET,
+  MAX_SHEETS_READ,
   readXlsxSheet,
 } from "../lib/semafor/xlsx";
 import { COLUMN_SPECS, parseCellNumber, parseScoresSheet } from "../lib/semafor/scores";
@@ -170,6 +171,8 @@ interface XlsxOpts {
   sheetName?: string;
   inline?: boolean;
   extraSheets?: string[];
+  /** Obsah extra listů (stejné pořadí jako `extraSheets`); chybí-li, list má jednu buňku. */
+  extraRows?: Cell[][][];
   target?: string;
   external?: boolean;
   doctypeSheet?: boolean;
@@ -205,7 +208,7 @@ async function buildXlsx(rows: Cell[][], o: XlsxOpts = {}): Promise<Buffer> {
   zip.file("xl/workbook.xml", o.workbookRaw ?? wb);
   zip.file("xl/_rels/workbook.xml.rels", rels);
   zip.file("xl/worksheets/sheet1.xml", sheet);
-  for (let i = 1; i < names.length; i++) zip.file(`xl/worksheets/sheet${i + 1}.xml`, buildSheetXml([["x"]], { inline: true, shared: [] }));
+  for (let i = 1; i < names.length; i++) zip.file(`xl/worksheets/sheet${i + 1}.xml`, buildSheetXml(o.extraRows?.[i - 1] ?? [["x"]], { inline: true, shared: [] }));
   if (!o.inline || o.sharedRaw !== undefined) zip.file("xl/sharedStrings.xml", o.sharedRaw ?? sst);
   return zip.generateAsync({
     type: "nodebuffer",
@@ -483,6 +486,62 @@ const tests: TestCase[] = [
       assert.ok(fileErrorMessage(e).includes("Listy v souboru: Report, Chapter."));
       assert.equal(readXlsxSheet(await buildXlsx(SAMPLE, { sheetName: "SCORES" }), "Scores").rows.length, 4);
       assert.equal(readXlsxSheet(await buildXlsx(SAMPLE, { sheetName: " scores " }), "Scores").rows.length, 4);
+    },
+  },
+  {
+    name: "12c. T-009: list se vybírá podle obsahu, ne podle názvu",
+    run: async () => {
+      const legend: Cell[][] = [["Color", "Range"], ["Green", "75+"]];
+      // list s jiným názvem + legenda jako druhý list
+      const july = analyzeFile(await buildXlsx(SAMPLE, { sheetName: "Member Traffic Lights", extraSheets: ["Scoring Legend"], extraRows: [legend] }));
+      assert.equal(july.rows.length, 3);
+      assert.equal(july.rows[0].name, "Jan Testovací");
+      // legenda první, data až druhý list
+      const second = analyzeFile(await buildXlsx(legend, { sheetName: "Scoring Legend", extraSheets: ["Member Traffic Lights"], extraRows: [SAMPLE] }));
+      assert.equal(second.rows.length, 3);
+      // "Scores" má přednost, i když stojí až za jiným vhodným listem
+      const other: Cell[][] = [HEADER, dataRow("Ondra Jiný", 10)];
+      const pref = analyzeFile(await buildXlsx(other, { sheetName: "Member Traffic Lights", extraSheets: ["Scores"], extraRows: [SAMPLE] }));
+      assert.equal(pref.rows.length, 3);
+      assert.equal(pref.rows[0].name, "Jan Testovací");
+      // "Scores" bez sloupců semaforu nevyhrává
+      const noCols = analyzeFile(await buildXlsx(legend, { sheetName: "Scores", extraSheets: ["Data"], extraRows: [SAMPLE] }));
+      assert.equal(noCols.rows.length, 3);
+      // původní soubor (jediný list Scores) funguje dál
+      assert.equal(analyzeFile(await buildXlsx(SAMPLE)).rows.length, 3);
+      // hash a deduplikace se nemění: hash jsou surové bajty
+      const buf = await buildXlsx(SAMPLE, { sheetName: "Member Traffic Lights" });
+      assert.equal(analyzeFile(buf).sha256, sha256Hex(buf));
+    },
+  },
+  {
+    name: "12d. T-009: sešit bez vhodného listu = noSheet s omezeným výpisem, limit počtu čtených listů",
+    run: async () => {
+      const legend: Cell[][] = [["Color", "Range"]];
+      const many = Array.from({ length: 55 }, (_, i) => `List ${i}`);
+      const e = await expectFileError(
+        async () => analyzeFile(await buildXlsx(legend, { sheetName: "Y".repeat(90), extraSheets: many })),
+        "noSheet"
+      );
+      assert.equal(e.params.list?.length, 5);
+      assert.ok((e.params.list ?? []).every((n) => n.length <= 40));
+      assert.equal(e.params.more, 51);
+      const msg = fileErrorMessage(e);
+      assert.ok(msg.includes("chybí list se sloupci semaforu") && msg.includes("a další 51."), msg);
+      assert.ok(!msg.includes(EM_DASH));
+      // vhodný list až za limitem čtených listů se nenajde
+      const names = Array.from({ length: MAX_SHEETS_READ }, (_, i) => `Pozn ${i}`);
+      await expectFileError(
+        async () => analyzeFile(await buildXlsx(legend, { sheetName: "Prvni", extraSheets: [...names], extraRows: [...names.map(() => legend), SAMPLE] })),
+        "noSheet"
+      );
+      // těsně v limitu se najde
+      const within = Array.from({ length: MAX_SHEETS_READ - 2 }, (_, i) => `Pozn ${i}`);
+      const found = analyzeFile(await buildXlsx(legend, { sheetName: "Prvni", extraSheets: [...within, "Data"], extraRows: [...within.map(() => legend), SAMPLE] }));
+      assert.equal(found.rows.length, 3);
+      // limity XML platí pro čtený list i mimo "Scores"
+      const bigSheet = await buildXlsx(SAMPLE, { sheetName: "Member Traffic Lights", sheetRaw: `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${"<row/>".repeat(MAX_ELEMENTS_SHEET + 10)}</sheetData></worksheet>` });
+      await expectFileError(async () => analyzeFile(bigSheet), "broken");
     },
   },
   {
