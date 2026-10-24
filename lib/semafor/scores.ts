@@ -1,5 +1,5 @@
 /**
- * iter-041 (arch 5.5, 4.2): mapování hlaviček listu Scores a převod hodnot.
+ * iter-041 (arch 5.5, 4.2): mapování hlaviček listu se skóre (Scores, Member Traffic Lights) a převod hodnot.
  *
  * Čistý modul. Sloupce se hledají podle textu hlavičky (pořadí nehraje roli),
  * aliasy jsou bod rozšíření pro jiný formát od regionu. Čísla projdou jen
@@ -180,6 +180,20 @@ export function parseCellNumber(raw: string, spec: ColumnSpec): NumberParse {
   const rounded = roundTo(n, spec.scale);
   if (rounded < spec.min || rounded > spec.max) return { ok: false };
   return { ok: true, value: rounded };
+}
+
+/**
+ * Je to list se semaforem? První řádek obsahuje všechny povinné sloupce
+ * (zdvojené hlavičky nevadí, ty ohlásí `parseScoresSheet`).
+ */
+export function hasScoreColumns(sheet: readonly SheetRow[]): boolean {
+  if (sheet.length === 0) return false;
+  const found = new Set<string>();
+  for (const raw of sheet[0].cells) {
+    const key = ALIAS_TO_KEY.get(normalizeHeader(raw ?? ""));
+    if (key) found.add(key);
+  }
+  return REQUIRED_KEYS.every((k) => found.has(k));
 }
 
 function cleanLabel(s: string): string {

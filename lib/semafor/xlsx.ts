@@ -37,6 +37,8 @@ export const MAX_ELEMENTS_OTHER = 2_000;
 /** Kolik názvů listů a jak dlouhé se vrací v chybě `noSheet`. */
 export const MAX_SHEET_NAMES_SHOWN = 5;
 export const MAX_SHEET_NAME_CHARS = 40;
+/** Kolik listů se nejvýš přečte při výběru listu podle obsahu. */
+export const MAX_SHEETS_READ = 10;
 const SHEET_PATH_RE = /^xl\/worksheets\/[A-Za-z0-9_]+\.xml$/;
 
 export interface SheetRow {
@@ -104,27 +106,34 @@ function readSharedStrings(zip: ZipReader, relsRoot: XmlNode): string[] {
   return childrenLocal(root, "si").map((si) => collectText(si));
 }
 
-/**
- * Přečte list `sheetName` (bez ohledu na velikost písmen, trim) z xlsx.
- * Chybí-li, vyhodí `noSheet` se seznamem názvů listů.
- */
-export function readXlsxSheet(file: Uint8Array, sheetName: string): SheetRead {
+interface Workbook {
+  zip: ZipReader;
+  rels: XmlNode;
+  sheets: XmlNode[];
+  shared: string[] | null;
+}
+
+function openWorkbook(file: Uint8Array): Workbook {
   const zip = openZip(file);
   if (!zip.has("xl/workbook.xml") || !zip.has("xl/_rels/workbook.xml.rels")) throw broken();
   const workbook = parseOrBroken(zip, "xl/workbook.xml", MAX_ELEMENTS_OTHER);
   const rels = parseOrBroken(zip, "xl/_rels/workbook.xml.rels", MAX_ELEMENTS_OTHER);
-
   const sheetsNode = firstChildLocal(workbook, "sheets");
   const sheets = sheetsNode ? childrenLocal(sheetsNode, "sheet") : [];
-  const wanted = sheetName.trim().toLowerCase();
-  const match = sheets.find((s) => (attrLocal(s, "name") ?? "").trim().toLowerCase() === wanted);
-  if (!match) {
-    // Jen prvních pár názvů a oříznuté, zbytek jako počet (soubor může mít tisíce listů).
-    throw new SemaforFileError("noSheet", {
-      list: sheets.slice(0, MAX_SHEET_NAMES_SHOWN).map((s) => (attrLocal(s, "name") ?? "").slice(0, MAX_SHEET_NAME_CHARS)),
-      more: Math.max(0, sheets.length - MAX_SHEET_NAMES_SHOWN),
-    });
-  }
+  return { zip, rels, sheets, shared: null };
+}
+
+function noSheetError(sheets: XmlNode[]): SemaforFileError {
+  // Jen prvních pár názvů a oříznuté, zbytek jako počet (soubor může mít tisíce listů).
+  return new SemaforFileError("noSheet", {
+    list: sheets.slice(0, MAX_SHEET_NAMES_SHOWN).map((s) => (attrLocal(s, "name") ?? "").slice(0, MAX_SHEET_NAME_CHARS)),
+    more: Math.max(0, sheets.length - MAX_SHEET_NAMES_SHOWN),
+  });
+}
+
+/** Přečte jeden list. Limity zipu a XML platí pro každý čtený list zvlášť. */
+function readSheetNode(wb: Workbook, match: XmlNode): SheetRead {
+  const { zip, rels } = wb;
   const rid = attrLocal(match, "id");
   if (!rid) throw broken();
   const rel = childrenLocal(rels, "Relationship").find((r) => r.attrs.get("Id") === rid);
@@ -133,7 +142,8 @@ export function readXlsxSheet(file: Uint8Array, sheetName: string): SheetRead {
   const sheetPath = normalizeSheetTarget(attrLocal(rel, "Target") ?? "");
   if (!zip.has(sheetPath)) throw broken();
 
-  const shared = readSharedStrings(zip, rels);
+  if (wb.shared === null) wb.shared = readSharedStrings(zip, rels);
+  const shared = wb.shared;
   const sheet = parseOrBroken(zip, sheetPath, MAX_ELEMENTS_SHEET);
   const data = firstChildLocal(sheet, "sheetData");
   if (!data) throw broken();
@@ -164,6 +174,41 @@ export function readXlsxSheet(file: Uint8Array, sheetName: string): SheetRead {
     if (rows.length > MAX_ROWS) throw broken();
   }
   return { rows };
+}
+
+const sheetKey = (s: XmlNode) => (attrLocal(s, "name") ?? "").trim().toLowerCase();
+
+/**
+ * Přečte list `sheetName` (bez ohledu na velikost písmen, trim) z xlsx.
+ * Chybí-li, vyhodí `noSheet` se seznamem názvů listů.
+ */
+export function readXlsxSheet(file: Uint8Array, sheetName: string): SheetRead {
+  const wb = openWorkbook(file);
+  const wanted = sheetName.trim().toLowerCase();
+  const match = wb.sheets.find((s) => sheetKey(s) === wanted);
+  if (!match) throw noSheetError(wb.sheets);
+  return readSheetNode(wb, match);
+}
+
+/**
+ * Vybere list podle obsahu: list `preferredName` (je-li) má přednost, pak
+ * ostatní v pořadí sešitu. Bere první, který projde `accept`. Čte se nejvýš
+ * `MAX_SHEETS_READ` listů. Žádný vhodný = `noSheet`.
+ */
+export function readFirstMatchingSheet(
+  file: Uint8Array,
+  preferredName: string,
+  accept: (rows: readonly SheetRow[]) => boolean
+): SheetRead {
+  const wb = openWorkbook(file);
+  const wanted = preferredName.trim().toLowerCase();
+  const preferred = wb.sheets.filter((s) => sheetKey(s) === wanted);
+  const ordered = [...preferred, ...wb.sheets.filter((s) => !preferred.includes(s))].slice(0, MAX_SHEETS_READ);
+  for (const node of ordered) {
+    const read = readSheetNode(wb, node);
+    if (accept(read.rows)) return read;
+  }
+  throw noSheetError(wb.sheets);
 }
 
 function cellValue(c: XmlNode, shared: string[]): string {
