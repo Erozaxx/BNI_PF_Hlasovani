@@ -143,10 +143,10 @@ CREATE INDEX idx_vote_member ON vote (member_id);
 CREATE INDEX idx_vote_meeting ON vote (meeting_id);
 
 -- ============================================================
--- VOTE IMMUTABILITY — BLOCKER-003 fix
+-- VOTE IMMUTABILITY - BLOCKER-003 fix
 -- Trigger zabrani vlozeni hlasu pokud schuzka neni ve stavu
 -- 'voting' nebo pokud hlasovaci okno jiz vyprselo.
--- Aplikacni vrstva (castVote action) provadi stejny check —
+-- Aplikacni vrstva (castVote action) provadi stejny check -
 -- trigger je druha linie obrany pro pripady race condition,
 -- primeho pristupu k DB nebo bugu v aplikaci.
 -- ============================================================
@@ -170,12 +170,12 @@ CREATE TRIGGER vote_meeting_open_check
   FOR EACH ROW EXECUTE FUNCTION check_meeting_voting_open();
 
 -- ============================================================
--- iter-020 — POHOVORY SE CLENY (5/10 mesicu)
+-- iter-020 - POHOVORY SE CLENY (5/10 mesicu)
 -- Viz lib/db/migrations/iter-020-interviews.sql pro plnou migraci (idempotentni).
 -- ============================================================
 
--- INTERVIEW_QUESTION — globalni editovatelna sada otazek
--- iter-021: applies_month_5 / applies_month_10 — platnost otazky pro dany typ
+-- INTERVIEW_QUESTION - globalni editovatelna sada otazek
+-- iter-021: applies_month_5 / applies_month_10 - platnost otazky pro dany typ
 -- pohovoru. Viz lib/db/migrations/iter-021-question-scope.sql pro delta migraci.
 CREATE TABLE interview_question (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -196,7 +196,7 @@ CREATE TABLE interview_question (
 );
 CREATE INDEX idx_interview_question_active_position ON interview_question (active, position);
 
--- INTERVIEW — instance pohovoru (partial UNIQUE: max 1 zivy 5m + 1 zivy 10m na clena)
+-- INTERVIEW - instance pohovoru (partial UNIQUE: max 1 zivy 5m + 1 zivy 10m na clena)
 CREATE TABLE interview (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     member_id    UUID        NOT NULL REFERENCES member(id) ON DELETE CASCADE,
@@ -214,9 +214,9 @@ CREATE INDEX idx_interview_member ON interview (member_id);
 CREATE INDEX idx_interview_status ON interview (status);
 CREATE INDEX idx_interview_leader ON interview (leader_id);
 
--- INTERVIEW_QUESTION_SNAPSHOT — zamrazena kopie otazek pri zalozeni pohovoru
+-- INTERVIEW_QUESTION_SNAPSHOT - zamrazena kopie otazek pri zalozeni pohovoru
 -- iter-021: applies_month_5 / applies_month_10 kopirovany ze zdroje pri zalozeni,
--- dale nemenne (radek se po insertu neupdatuje). CHECK i zde — pojistka proti
+-- dale nemenne (radek se po insertu neupdatuje). CHECK i zde - pojistka proti
 -- bugu v kopirovaci logice (arch T-001 1.3).
 CREATE TABLE interview_question_snapshot (
     id                 UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,7 +235,7 @@ CREATE TABLE interview_question_snapshot (
 );
 CREATE INDEX idx_iqs_interview ON interview_question_snapshot (interview_id);
 
--- INTERVIEW_ANSWER — odpovedi vedouciho (composite FK = DB-level anti-IDOR)
+-- INTERVIEW_ANSWER - odpovedi vedouciho (composite FK = DB-level anti-IDOR)
 CREATE TABLE interview_answer (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     interview_id         UUID        NOT NULL REFERENCES interview(id) ON DELETE CASCADE,
@@ -251,7 +251,7 @@ CREATE TABLE interview_answer (
 );
 CREATE INDEX idx_interview_answer_interview ON interview_answer (interview_id);
 
--- INTERVIEW_LINK — scoped magic link pohovoru (expires_at NOT NULL, 1 radek per pohovor)
+-- INTERVIEW_LINK - scoped magic link pohovoru (expires_at NOT NULL, 1 radek per pohovor)
 CREATE TABLE interview_link (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     interview_id UUID        NOT NULL UNIQUE REFERENCES interview(id) ON DELETE CASCADE,
@@ -264,7 +264,7 @@ CREATE TABLE interview_link (
 );
 CREATE INDEX idx_interview_link_token_hash ON interview_link (token_hash);
 
--- AUTH_THROTTLE — DB-backed fixed-window rate-limit (bez Upstash)
+-- AUTH_THROTTLE - DB-backed fixed-window rate-limit (bez Upstash)
 CREATE TABLE auth_throttle (
     key          TEXT        PRIMARY KEY,
     window_start TIMESTAMPTZ NOT NULL,
@@ -277,6 +277,22 @@ CREATE TABLE IF NOT EXISTS attendance_internal_day (
     created_by      UUID        REFERENCES member(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- NASTAVENI CHAPTERU (iter-042) - zdroj pravdy pro DDL je scripts/migrate-iter-042-nastaveni.ts
+CREATE TABLE IF NOT EXISTS chapter_settings (
+    id                 SMALLINT    PRIMARY KEY DEFAULT 1,
+    mastermind_enabled BOOLEAN     NOT NULL DEFAULT TRUE,
+    burza_enabled      BOOLEAN     NOT NULL DEFAULT TRUE,
+    semafor_enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
+    meeting_weekday    SMALLINT    NOT NULL DEFAULT 4,
+    meeting_time       TIME        NOT NULL DEFAULT '07:30',
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by         UUID        REFERENCES member(id) ON DELETE SET NULL,
+    CONSTRAINT chapter_settings_singleton CHECK (id = 1),
+    CONSTRAINT chapter_settings_weekday CHECK (meeting_weekday BETWEEN 0 AND 6),
+    CONSTRAINT chapter_settings_time CHECK (meeting_time BETWEEN TIME '07:00' AND TIME '11:00')
+);
+INSERT INTO chapter_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- SEMAFOR (iter-041) - zdroj pravdy pro DDL je scripts/migrate-iter-041-semafor.ts
 CREATE TABLE IF NOT EXISTS semafor_import (

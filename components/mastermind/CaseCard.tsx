@@ -18,7 +18,8 @@ import {
   formatWeekdayDM,
   interestLabels,
   type CaseStatus,
-  type ThursdayOption,
+  type DayOption,
+  UI_TEXTS,
 } from "@/lib/mastermind/rules";
 
 export interface CaseCardData {
@@ -54,16 +55,19 @@ export function CaseCard({
   data,
   viewer,
   today,
-  thursdays,
+  days,
   collision = false,
+  bonusOn = true,
 }: {
   data: CaseCardData;
   viewer: CaseCardViewer;
   today: string;
-  /** Nabídka čtvrtků, jen pro vedení a jen u navrženého případu. */
-  thursdays?: ThursdayOption[];
+  /** Nabídka pravidelných dnů, jen pro vedení a jen u navrženého případu. */
+  days?: DayOption[];
   /** Na datum zařazeného případu je v aplikaci otevřená schůzka (jen vedení). */
   collision?: boolean;
+  /** Master mind dává bonus do semaforu (semafor zapnutý): věta v potvrzení „Proběhlo“. */
+  bonusOn?: boolean;
 }) {
   const [names, setNames] = useState(data.interested);
   const labels = interestLabels(data.status);
@@ -117,7 +121,7 @@ export function CaseCard({
 
       {collision && viewer.isManagement && (
         <p className="mt-3 rounded-lg border border-warning bg-warning-light p-2 text-sm text-warning">
-          Na tento čtvrtek je v aplikaci otevřená schůzka. Přesuň případ, nebo zkontroluj datum schůzky.
+          {UI_TEXTS.collision}
         </p>
       )}
 
@@ -146,8 +150,8 @@ export function CaseCard({
         </div>
       </details>
 
-      {viewer.isManagement && canSchedule(actor, caseLike) && thursdays && (
-        <ScheduleCasePanel caseId={data.id} options={thursdays} />
+      {viewer.isManagement && canSchedule(actor, caseLike) && days && (
+        <ScheduleCasePanel caseId={data.id} options={days} />
       )}
 
       {(canEdit(actor, caseLike, today) ||
@@ -159,6 +163,7 @@ export function CaseCard({
               caseId={data.id}
               mode="scheduled"
               canConfirm={canConfirmRule(actor, caseLike, today)}
+              bonusOn={bonusOn}
             />
           )}
           {viewer.isManagement && canUndoPresented(actor, caseLike) && (

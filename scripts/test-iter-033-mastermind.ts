@@ -44,11 +44,12 @@ import {
   interestLabels,
   isSchedulableDate,
   isShortNotice,
-  isThursday,
+  isMeetingWeekday,
   isUuid,
   noticeDays,
   summarizeDashboard,
-  thursdayOptions,
+  dayOptions,
+  UI_TEXTS,
   validateCaseInput,
   type Actor,
   type CaseLike,
@@ -153,9 +154,9 @@ const cases: TestCase[] = [
   {
     name: "0a. 2026-10-15 je čtvrtek, isThursday a addDays/daysBetween drží kalendářní dny přes změnu času",
     run: () => {
-      assert.equal(isThursday("2026-10-15"), true);
-      assert.equal(isThursday("2026-10-16"), false);
-      assert.equal(isThursday("2026-02-30"), false);
+      assert.equal(isMeetingWeekday("2026-10-15"), true);
+      assert.equal(isMeetingWeekday("2026-10-16"), false);
+      assert.equal(isMeetingWeekday("2026-02-30"), false);
       // konec letního času 25. 10. 2026: den má 25 hodin, kalendářní rozdíl zůstane celý
       assert.equal(daysBetween("2026-10-24", "2026-10-26"), 2);
       assert.equal(daysBetween("2026-10-15", "2026-10-29"), 14);
@@ -283,33 +284,33 @@ const cases: TestCase[] = [
     },
   },
 
-  // ── 7. thursdayOptions ──
+  // ── 7. dayOptions ──
   {
-    name: "7a. thursdayOptions: čtvrtek jako dnešek začne dneškem, 12 položek, jen čtvrtky",
+    name: "7a. dayOptions: čtvrtek jako dnešek začne dneškem, 12 položek, jen čtvrtky",
     run: () => {
-      const opts = thursdayOptions(TODAY, [], []);
+      const opts = dayOptions(TODAY, [], []);
       assert.equal(opts.length, 12);
       assert.equal(opts[0].date, TODAY);
-      assert.ok(opts.every((o) => isThursday(o.date)));
+      assert.ok(opts.every((o) => isMeetingWeekday(o.date)));
       assert.equal(opts[11].date, "2026-12-31");
       assert.ok(opts.every((o) => o.state === "free"));
     },
   },
   {
-    name: "7b. thursdayOptions: středa jako dnešek dá první čtvrtek zítra, vždy 12 položek",
+    name: "7b. dayOptions: středa jako dnešek dá první čtvrtek zítra, vždy 12 položek",
     run: () => {
-      const opts = thursdayOptions("2026-10-14", [], []);
+      const opts = dayOptions("2026-10-14", [], []);
       assert.equal(opts[0].date, "2026-10-15");
       assert.equal(opts.length, 12);
       for (const start of ["2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19", "2026-10-20", "2026-10-21"]) {
-        assert.equal(thursdayOptions(start, [], []).length, 12, start);
+        assert.equal(dayOptions(start, [], []).length, 12, start);
       }
     },
   },
   {
-    name: "7c. thursdayOptions: otevřená schůzka = open-meeting, případ = taken, shortNotice 13 dní ano a 14 ne",
+    name: "7c. dayOptions: otevřená schůzka = open-meeting, případ = taken, shortNotice 13 dní ano a 14 ne",
     run: () => {
-      const opts = thursdayOptions(TODAY, ["2026-10-22"], ["2026-10-29", "2026-10-22"]);
+      const opts = dayOptions(TODAY, ["2026-10-22"], ["2026-10-29", "2026-10-22"]);
       const by = Object.fromEntries(opts.map((o) => [o.date, o]));
       assert.equal(by["2026-10-22"].state, "open-meeting"); // schůzka má přednost
       assert.equal(by["2026-10-29"].state, "taken");
@@ -322,9 +323,89 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "7d. thursdayOptions přes konec letního času (25. 10. 2026) počítá kalendářní dny a nevynechá čtvrtek",
+    name: "7e. iter-042: den schůzky z nastavení (úterý): jen úterky, výchozí bez parametru zůstává čtvrtek, rules.ts bez vlastního „Thursday“",
     run: () => {
-      const opts = thursdayOptions("2026-10-22", [], []);
+      const tue = dayOptions(TODAY, [], [], undefined, 2);
+      assert.equal(tue.length, 12);
+      assert.equal(tue[0].date, "2026-10-20");
+      assert.ok(tue.every((o) => isMeetingWeekday(o.date, 2)));
+      assert.equal(isSchedulableDate("2026-10-20", TODAY, undefined, 2), true);
+      assert.equal(isSchedulableDate("2026-10-22", TODAY, undefined, 2), false);
+      assert.equal(isSchedulableDate("2026-10-22", TODAY), true, "výchozí den je čtvrtek");
+      assert.equal(dayOptions(TODAY, [], [])[0].date, TODAY);
+      const rules = readSrc("lib/mastermind/rules.ts");
+      assert.ok(!/Thursday/.test(rules), "bez vlastního isThursday ani typu Thursday");
+      assert.ok(!/čtvrt/.test(MESSAGES.takenDate + MESSAGES.openMeetingDate + MESSAGES.badDate), "hlášky bez čtvrtku");
+    },
+  },
+  {
+    name: "7f. iter-042 (#14, #15, #31): potvrzení Proběhlo a Vrátit, texty termínů, Smazat případ místo Stáhnout",
+    run: () => {
+      assert.equal(
+        UI_TEXTS.confirmPresented(true),
+        "Potvrdit, že případ proběhl? Autor za něj dostane bonus do interního semaforu."
+      );
+      assert.equal(UI_TEXTS.confirmPresented(false), "Potvrdit, že případ proběhl?");
+      assert.equal(
+        UI_TEXTS.confirmUnschedule,
+        "Vrátit případ do zásobníku? Termín se uvolní a přihlášení se vrátí mezi zájemce."
+      );
+      assert.equal(UI_TEXTS.awaitingIntro, "Termín už byl. Potvrď, že případ proběhl, nebo ho vrať do zásobníku.");
+      assert.equal(UI_TEXTS.optionOpenMeeting, "(schůzka s hosty)");
+      assert.equal(UI_TEXTS.optionTaken, "(už má jiný případ)");
+      assert.equal(UI_TEXTS.removeButton, "Smazat případ");
+      assert.equal(UI_TEXTS.removeConfirmScheduled, "Smazat zařazený případ? Přihlášení účastníci o něj přijdou.");
+      assert.equal(UI_TEXTS.removeConfirmProposed, "Smazat případ? Smaže se i zájem ostatních.");
+      // potvrzení je první příkaz handleru, před voláním akce
+      const buttons = readSrc("components/mastermind/ConfirmPresentedButtons.tsx");
+      for (const call of ["confirmPresentedAction(caseId)", "unscheduleCaseAction(caseId)"]) {
+        const at = buttons.indexOf(call);
+        const ask = buttons.lastIndexOf("window.confirm(", at);
+        assert.ok(ask > 0 && ask < at, `confirm před ${call}`);
+        assert.ok(buttons.slice(ask, at).includes("return;"), `Zrušit nic nemění: ${call}`);
+      }
+      assert.ok(buttons.includes("min-h-[44px]"));
+      const remove = readSrc("components/mastermind/RemoveCaseButton.tsx");
+      assert.ok(remove.includes("UI_TEXTS.removeButton") && !remove.includes("Stáhnout"));
+      assert.ok(remove.indexOf("window.confirm(") < remove.indexOf("removeCaseAction(caseId)"));
+      const schedule = readSrc("components/mastermind/ScheduleCasePanel.tsx");
+      assert.ok(schedule.includes("UI_TEXTS.pickDay") && !/čtvrt/i.test(schedule.replace(/\/\*[\s\S]*?\*\//g, "")));
+    },
+  },
+  {
+    name: "7g. iter-042 (B7/5): vypnutý Master mind: každá stránka volá featureOff a každá akce requireFeature hned za guardem, dashboard widget podmiňuje",
+    run: () => {
+      const pages = walk(join(ROOT, "app", "(app)", "mastermind")).filter((f) => f.endsWith("page.tsx"));
+      assert.equal(pages.length, 3);
+      for (const f of pages) {
+        const src = stripComments(readFileSync(f, "utf8"));
+        const session = src.indexOf("await requirePageSession(");
+        const off = src.indexOf('await featureOff("mastermind")');
+        assert.ok(session > 0 && off > session, `${relative(ROOT, f)}: featureOff hned po session`);
+        assert.ok(src.includes("<FeatureOff"), relative(ROOT, f));
+      }
+      const act = readSrc("actions/mastermind.ts");
+      const chunks = act.split(/export async function /).slice(1);
+      assert.equal(chunks.length, 8);
+      for (const c of chunks) {
+        const name = c.slice(0, c.indexOf("("));
+        const guard = c.search(/await (requireAuth|requirePermission)\(/);
+        const feature = c.indexOf('await requireFeature("mastermind")');
+        assert.ok(guard >= 0 && feature > guard, `${name}: requireFeature za guardem`);
+        const firstWrite = c.search(/(Guarded|createCaseWithLimit|addInterest|removeInterest)\(/);
+        assert.ok(feature < firstWrite, `${name}: nic se nezapíše před requireFeature`);
+      }
+      const dash = readSrc("app/(app)/dashboard/page.tsx");
+      assert.ok(/settings\.mastermindEnabled && \(\s*<DashboardMastermind/.test(dash), "widget Master mind podmíněný");
+      // den schůzky z nastavení: akce i stránka
+      assert.ok(act.includes("meetingWeekday") && act.includes("isSchedulableDate(date, today, undefined, meetingWeekday)"));
+      assert.ok(readSrc("app/(app)/mastermind/page.tsx").includes("settings.meetingWeekday"));
+    },
+  },
+  {
+    name: "7d. dayOptions přes konec letního času (25. 10. 2026) počítá kalendářní dny a nevynechá čtvrtek",
+    run: () => {
+      const opts = dayOptions("2026-10-22", [], []);
       assert.deepEqual(
         opts.slice(0, 3).map((o) => o.date),
         ["2026-10-22", "2026-10-29", "2026-11-05"]
@@ -758,7 +839,7 @@ const cases: TestCase[] = [
       assert.ok(!/zásobník/i.test(src.replace(/"[^"]*zásobník[^"]*"/gi, "")), "počet zásobníku se nezobrazuje");
       const dash = readSrc("app/(app)/dashboard/page.tsx");
       assert.ok(dash.includes("<DashboardMastermind"));
-      assert.ok(dash.includes("Schůzka: {upcomingMeeting.date}"), "karta schůzky beze změny");
+      assert.ok(dash.includes("Schůzka: {formatWeekdayFull(upcomingMeeting.date)}"), "karta schůzky s dnem v týdnu (iter-042 #9)");
     },
   },
   {

@@ -10,6 +10,7 @@ import { can, NO_PERMISSION_MESSAGE, type PermissionHolder } from "@/lib/auth/pe
 import { planRange, type PlanEntry, type PlanRange } from "@/lib/attendance/plan";
 import { listMeetingDates, listPlannedAbsences } from "@/lib/db/queries/attendance";
 import { listInternalDays } from "@/lib/db/queries/attendance-internal";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 
 export interface AbsencePlanData extends PlanRange {
   rows: PlanEntry[];
@@ -18,6 +19,8 @@ export interface AbsencePlanData extends PlanRange {
   internalDates: string[];
   /** iter-040: smí zakládat a rušit interní schůzky (karta dne). */
   canManageInternal: boolean;
+  /** iter-042 (B3): den pravidelné schůzky z nastavení chapteru (0 = neděle ... 6, čtvrtek 4). */
+  regularWeekday: number;
 }
 
 export async function loadAbsencePlan(
@@ -28,10 +31,11 @@ export async function loadAbsencePlan(
     throw new Error(NO_PERMISSION_MESSAGE);
   }
   const range = planRange(today);
-  const [rows, meetingDates, internalDates] = await Promise.all([
+  const [rows, meetingDates, internalDates, settings] = await Promise.all([
     listPlannedAbsences(range.from, range.to),
     listMeetingDates(range.from, range.to),
     listInternalDays(range.from, range.to),
+    getChapterSettings(),
   ]);
   return {
     ...range,
@@ -39,5 +43,6 @@ export async function loadAbsencePlan(
     meetingDates,
     internalDates,
     canManageInternal: can(session, "attendance.internal_manage"),
+    regularWeekday: settings.meetingWeekday,
   };
 }

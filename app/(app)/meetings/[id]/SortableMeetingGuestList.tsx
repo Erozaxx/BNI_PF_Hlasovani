@@ -45,7 +45,7 @@ interface SortableMeetingGuestListProps {
   reorderable: boolean;
 }
 
-/** Card body for a single guest — clickable Link to guest detail. */
+/** Card body for a single guest - clickable Link to guest detail. */
 function GuestCard({
   meetingId,
   g,
@@ -65,7 +65,7 @@ function GuestCard({
             <div>
               <p className="font-medium text-text-main">{g.guestName}</p>
               <Badge variant="category" className="mt-1">
-                {g.categoryName ?? "[bez kategorie]"}
+                {g.categoryName ?? "Bez kategorie"}
               </Badge>
             </div>
             <Button variant="link" size="sm">
@@ -109,11 +109,11 @@ function SortableGuestItem({
   return (
     <div ref={setNodeRef} style={style} className="mb-3">
       <div className="flex items-start gap-2">
-        {/* Dedicated drag handle — keeps the rest of the row clickable (Link). */}
+        {/* Dedicated drag handle - keeps the rest of the row clickable (Link). */}
         <button
           type="button"
           aria-label="Přetáhnout pro změnu pořadí"
-          className="mt-3 cursor-grab touch-none select-none px-1 text-lg text-text-muted hover:text-text-main active:cursor-grabbing"
+          className="mt-1 min-h-[44px] min-w-[44px] cursor-grab touch-none select-none px-1 text-lg text-text-muted hover:text-text-main active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
@@ -144,7 +144,7 @@ export function SortableMeetingGuestList({
   const [items, setItems] = useState<MeetingGuestRow[]>(guests);
 
   // Sync local optimistic state with server props after router.refresh()
-  // (e.g. when a guest is added/removed) — otherwise the new card would not
+  // (e.g. when a guest is added/removed) - otherwise the new card would not
   // appear until a hard reload (H-1).
   useEffect(() => {
     setItems(guests);
@@ -199,11 +199,11 @@ export function SortableMeetingGuestList({
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      showToast("success", "Poradi hostu ulozeno.");
+      showToast("success", "Pořadí hostů je uložené.");
       router.refresh();
     } catch {
       setItems(previous); // rollback
-      showToast("error", "Nepodarilo se ulozit poradi.");
+      showToast("error", "Pořadí se nepodařilo uložit.");
     }
   }
 

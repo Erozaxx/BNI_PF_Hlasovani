@@ -1,11 +1,22 @@
 import { HelpSection } from "@/components/help/HelpParts";
+import { deleteMemberScopeText, inactiveHidesText } from "@/components/help/help-texts";
+import { CHAPTER_SETTINGS_TEXTS } from "@/lib/chapter/texts";
+import { DEFAULT_CHAPTER_SETTINGS, type ChapterSettings } from "@/lib/chapter/settings";
 
 interface AdminHelpProps {
   /** Čtenář smí přidělovat admina, funkce a hesla (právo `access.manage`, jen admin). */
   canManageAccess?: boolean;
+  /** iter-042: čtenář má právo `chapter.settings` (sekce Nastavení chapteru). */
+  canManageSettings?: boolean;
+  /** iter-042: nastavení chapteru (zapnuté části). Bez něj platí výchozí stav. */
+  settings?: ChapterSettings;
 }
 
-export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
+export function AdminHelp({
+  canManageAccess = true,
+  canManageSettings = false,
+  settings = DEFAULT_CHAPTER_SETTINGS,
+}: AdminHelpProps) {
   return (
     <div className="space-y-8">
       <HelpSection
@@ -13,11 +24,11 @@ export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
         intro="Na stránce Členové jsou všichni členové chapteru. Údaje člena změníte po kliknutí na Upravit."
         steps={[
           "Nového člena přidáte v kartě „Nový člen“ tlačítkem „Přidat člena“. E-mail vyplňte, bez něj se člen nepřihlásí.",
-          "Víc členů naráz nahrajete v kartě „Import členů z XLSX“ přes „Nahrát a zobrazit preview“. Zkontrolujte náhled a klikněte na „Importovat vybrané“.",
+          "Víc členů naráz nahrajete v kartě „Import členů z XLSX“ přes „Nahrát a zobrazit náhled“. Čte se první list: sloupec B jméno (povinné), D obor, E datum vstupu (nepovinné), nejvýš 500 řádků. Zkontrolujte náhled a klikněte na „Importovat vybrané“.",
           "Na stránce člena upravíte e-mail, firmu, obor a datum vstupu tlačítkem „Upravit“ u daného údaje. Tam je i funkce, role, heslo, deaktivace, osobní odkaz a smazání.",
           "Pořadí členů změníte přetažením za „≡“.",
         ]}
-        note="„Smazat“ na stránce člena smaže člena i jeho pohovory a vrátit to nejde. Sebe ani posledního admina smazat nejde."
+        note={`„Smazat“ na stránce člena smaže člena a s ním ${deleteMemberScopeText(settings)}. Vrátit to nejde. Když člen jen odchází, použijte Deaktivovat. Sebe ani posledního admina smazat nejde.`}
         faq={[
           {
             q: "Co znamená štítek „5 měsíců“ nebo „10 měsíců“?",
@@ -45,7 +56,7 @@ export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
           "Vyberte „Do odvolání“, nebo „Do data“ a datum. Poslední neaktivní den je to datum, další den je člen zase aktivní sám.",
           "Přečtěte si souhrn a klikněte na „Deaktivovat“.",
         ]}
-        note="Neaktivní člen se nepřihlásí, nedostává odkazy k hlasování, připomínky ani pozvánky na akce a jeho karty v Burze a témata v Master mindu nejsou vidět. Hlasy, zápisy, pohovory i funkce zůstanou."
+        note={`Neaktivní člen se nepřihlásí, nedostává odkazy k hlasování, připomínky ani pozvánky na akce${inactiveHidesText(settings)}. Hlasy, zápisy, pohovory i funkce zůstanou.`}
         faq={[
           {
             q: "Jak ho vrátím dřív?",
@@ -94,7 +105,7 @@ export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
           },
           {
             q: "",
-            a: "Vlastní roli ani roli posledního admina změnit nejde. Vlastní heslo změníte v Nastavení.",
+            a: "Vlastní roli ani roli posledního admina změnit nejde. Vlastní heslo změníte v menu Účet, položka Heslo.",
           },
           {
             q: "",
@@ -109,10 +120,37 @@ export function AdminHelp({ canManageAccess = true }: AdminHelpProps) {
         note="Ranní mail chodí jen v den, kdy je v aplikaci založená schůzka."
       />
 
+      {canManageSettings && (
+        <HelpSection
+          title="Nastavení chapteru"
+          intro="V menu Admin otevřete Nastavení chapteru. Nastavení vidí a mění admin, Prezident a Viceprezident."
+          steps={[
+            "V části Části aplikace zapněte nebo vypněte Master mind, Burzu pomoci a Interní semafor.",
+            "V části Pravidelná schůzka vyberte Den a Začátek.",
+            "Klikněte na „Uložit“. Při vypnutí části nebo změně dne se aplikace nejdřív zeptá.",
+          ]}
+          note={`${CHAPTER_SETTINGS_TEXTS.featuresHint} ${CHAPTER_SETTINGS_TEXTS.meetingHint}`}
+          faq={[
+            {
+              q: "Co se změní, když vypnu Burzu pomoci nebo Master mind?",
+              a: "Část zmizí z menu, dashboardu a nápovědy a bonus za ni přestane platit v interním semaforu, takže se části členů může změnit barva. Data zůstanou a po zapnutí se vrátí.",
+            },
+            {
+              q: "Co se stane po změně dne?",
+              a: "Změní se kalendář docházky, termíny Master mindu, uzávěrka omluv a ranní spuštění hlasování. Už založené schůzky, omluvy a zařazené případy zůstanou na svých dnech. Texty na veřejných stránkách s pravidly se nemění, ty upraví vedení ručně.",
+            },
+            {
+              q: "Proč jde začátek nastavit jen od 7:00 do 11:00?",
+              a: "Ranní maily odcházejí mezi 6:00 a 7:00 a uzávěrka dne je v 17:00. Večerní schůzky by potřebovaly změnu v plánovači úloh.",
+            },
+          ]}
+        />
+      )}
+
       <HelpSection
         title="Kategorie"
         intro="Kategorie jsou obory hostů. Novou přidáte polem „Název kategorie“ a tlačítkem „Přidat“, název změníte „Přejmenovat“."
-        note="Po smazání kategorie mají její hosté „[bez kategorie]“. Vrátit to nejde."
+        note="Po smazání kategorie mají její hosté „Bez kategorie“. Vrátit to nejde."
         faq={[
           {
             q: "",

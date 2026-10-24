@@ -18,19 +18,19 @@ import { ReportPreview } from "@/components/interviews/ReportPreview";
 import { SendCompareReportForm } from "./SendCompareReportForm";
 
 const STATUS_BADGE: Record<string, { label: string; variant: BadgeVariant }> = {
-  open: { label: "Otevreny", variant: "info" },
-  submitted: { label: "Odeslany", variant: "success" },
-  cancelled: { label: "Zruseny", variant: "neutral" },
+  open: { label: "Otevřený", variant: "info" },
+  submitted: { label: "Odeslaný", variant: "success" },
+  cancelled: { label: "Zrušený", variant: "neutral" },
 };
 
 // iter-021 (arch T-001 6.2): applies === false -> struck-through muted "Neplati"
 // (question exists in the snapshot but does not apply to this side's type).
 // applies === true / null -> today's behaviour unchanged. In the paired table
 // the question text itself is never struck through (it applies to at least
-// one side, per the CHECK) — only this answer cell is.
+// one side, per the CHECK) - only this answer cell is.
 // hasAnswer-first (T-009 review MINOR-2, mirrors OnlyInSection below): an
 // existing non-empty value always wins over `applies === false`, so data is
-// never hidden — unreachable today (server-side guard in upsertInterviewAnswer
+// never hidden - unreachable today (server-side guard in upsertInterviewAnswer
 // rejects writes to a non-applicable question), but keeps this defense-in-depth
 // rule consistent with OnlyInSection and the detail page instead of only two
 // out of three places implementing it.
@@ -46,13 +46,13 @@ function AnswerCell({
     return <>{value}</>;
   }
   if (applies === false) {
-    return <span className="text-text-muted line-through opacity-60">Neplati</span>;
+    return <span className="text-text-muted line-through opacity-60">Neplatí pro tento typ pohovoru</span>;
   }
-  return <span className="text-text-muted italic">Bez odpovedi</span>;
+  return <span className="text-text-muted italic">Bez odpovědi</span>;
 }
 
 // iter-021 (arch T-001 6.2): rows here represent a question that exists only
-// on ONE side, so — unlike the paired table — the question text itself gets
+// on ONE side, so - unlike the paired table - the question text itself gets
 // struck through when it doesn't apply to that side's own type, with "Neplati
 // pro tento typ pohovoru" instead of "Bez odpovedi" (mirrors the detail page).
 // `side` always reads its OWN applies flag (T-003 NIT-1 rule), never null here
@@ -92,10 +92,10 @@ function OnlyInSection({
                   value
                 ) : doesNotApply ? (
                   <span className="text-text-muted italic">
-                    Neplati pro tento typ pohovoru
+                    Neplatí pro tento typ pohovoru
                   </span>
                 ) : (
-                  <span className="text-text-muted italic">Bez odpovedi</span>
+                  <span className="text-text-muted italic">Bez odpovědi</span>
                 )}
               </p>
             </Card>
@@ -119,7 +119,7 @@ function SideSummary({
     return (
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-2">{label}</h2>
-        <p className="text-sm text-text-muted">Zatim nezalozeno.</p>
+        <p className="text-sm text-text-muted">Zatím nezaložený.</p>
       </Card>
     );
   }
@@ -136,11 +136,11 @@ function SideSummary({
         <Badge variant={badge.variant}>{badge.label}</Badge>
       </div>
       <p className="text-sm text-text-main">
-        Vedouci: {detail?.leaderName ?? "Nepriradeno"}
+        Vedoucí: {detail?.leaderName ?? "Nepřiřazeno"}
       </p>
       {detail?.submittedAt && (
         <p className="text-sm text-text-muted">
-          Odeslano: {new Date(detail.submittedAt).toLocaleDateString("cs-CZ")}
+          Odesláno: {new Date(detail.submittedAt).toLocaleDateString("cs-CZ")}
         </p>
       )}
       <Link href={`/interviews/${side.id}`}>
@@ -154,11 +154,11 @@ function SideSummary({
 
 /**
  * 5-vs-10 compare view for a member (arch sections 4.2 / 8f, T-009). Mod/admin
- * only — page-level guard, same pattern as /interviews and /interviews/[id]
+ * only - page-level guard, same pattern as /interviews and /interviews/[id]
  * (middleware only enforces a session on /(app), the role check happens
  * here). Pairing (source_question_id primary, normalized-text fallback,
  * unmatched rows kept in their own section) is done entirely by
- * pairInterviewAnswersForCompare() from T-005 — this page only renders it.
+ * pairInterviewAnswersForCompare() from T-005 - this page only renders it.
  */
 export default async function InterviewComparePage({
   params,
@@ -208,31 +208,31 @@ export default async function InterviewComparePage({
     <div className="space-y-6 max-w-4xl">
       <Link href="/interviews">
         <Button variant="link" size="sm">
-          &larr; Zpet na pohovory
+          &larr; Zpět na pohovory
         </Button>
       </Link>
 
       <h1 className="text-2xl font-bold text-text-main">
-        {member.name} — Porovnani 5 vs 10 mesicu
+        {member.name}: porovnání 5 a 10 měsíců
       </h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SideSummary label="Pohovor 5 mesicu" side={month5} detail={detail5} />
-        <SideSummary label="Pohovor 10 mesicu" side={month10} detail={detail10} />
+        <SideSummary label="Pohovor po 5 měsících" side={month5} detail={detail5} />
+        <SideSummary label="Pohovor po 10 měsících" side={month10} detail={detail10} />
       </div>
 
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Odpovedi vedle sebe
+          Odpovědi vedle sebe
         </h2>
         {paired.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b-2 border-primary text-left">
-                  <th className="px-4 py-3 font-semibold">Otazka</th>
-                  <th className="px-4 py-3 font-semibold">Odpoved 5 m</th>
-                  <th className="px-4 py-3 font-semibold">Odpoved 10 m</th>
+                  <th className="px-4 py-3 font-semibold">Otázka</th>
+                  <th className="px-4 py-3 font-semibold">Odpověď po 5 měsících</th>
+                  <th className="px-4 py-3 font-semibold">Odpověď po 10 měsících</th>
                 </tr>
               </thead>
               <tbody>
@@ -255,24 +255,24 @@ export default async function InterviewComparePage({
           </div>
         ) : (
           <Card>
-            <p className="text-sm text-text-muted">Zadne sparovane otazky.</p>
+            <p className="text-sm text-text-muted">Žádné spárované otázky.</p>
           </Card>
         )}
       </section>
 
-      <OnlyInSection title="Jen v pohovoru 5 mesicu" rows={onlyIn5} side="5" />
-      <OnlyInSection title="Jen v pohovoru 10 mesicu" rows={onlyIn10} side="10" />
+      <OnlyInSection title="Jen v pohovoru po 5 měsících" rows={onlyIn5} side="5" />
+      <OnlyInSection title="Jen v pohovoru po 10 měsících" rows={onlyIn10} side="10" />
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Nahled reportu
+          Náhled reportu
         </h2>
         <ReportPreview html={compareHtml} />
       </Card>
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Odeslat porovnavaci report
+          Odeslat srovnávací report
         </h2>
         <SendCompareReportForm
           memberId={memberId}

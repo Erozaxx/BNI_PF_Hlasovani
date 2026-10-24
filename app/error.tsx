@@ -29,18 +29,18 @@ export default function GlobalError({
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-text-main mb-2">
-          Neco se pokazilo
+          Něco se pokazilo
         </h1>
         <p className="text-text-muted mb-6">
-          Doslo k neocekavane chybe. Zkuste to prosim znovu nebo se vratte na
-          hlavni stranku.
+          Došlo k neočekávané chybě. Zkus to prosím znovu nebo se vrať na
+          hlavní stránku.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button variant="primary" onClick={reset}>
             Zkusit znovu
           </Button>
           <Button variant="secondary" onClick={() => (window.location.href = "/dashboard")}>
-            Na hlavni stranku
+            Na hlavní stránku
           </Button>
         </div>
       </div>

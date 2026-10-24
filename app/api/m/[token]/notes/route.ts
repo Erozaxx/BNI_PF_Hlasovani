@@ -19,11 +19,11 @@ function err(status: number, message: string) {
  * POST /api/m/[token]/notes
  *
  * Add a note to a guest scoped to the current meeting.
- * meetingId is ALWAYS taken server-side from the verified token — never from the request body.
+ * meetingId is ALWAYS taken server-side from the verified token - never from the request body.
  *
  * Body: { guestId: string, text: string }
  *
- * Auth: magic token in URL — no session required.
+ * Auth: magic token in URL - no session required.
  */
 export async function POST(
   req: NextRequest,
@@ -43,7 +43,7 @@ export async function POST(
     return err(401, "Invalid token");
   }
 
-  // meetingId is server-side only — NEVER from body (MINOR-002)
+  // meetingId is server-side only - NEVER from body (MINOR-002)
   const { meetingId, memberId } = tokenResult;
 
   // 2. Parse body

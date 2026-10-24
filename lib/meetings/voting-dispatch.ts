@@ -1,41 +1,41 @@
 /**
- * runVotingDispatch — jediné místo, kde se hlasování spouští (arch iter-026
+ * runVotingDispatch - jediné místo, kde se hlasování spouští (arch iter-026
  * T-001, sekce 2.2–2.6). Volá ho tlačítko StartVotingPanel i čtvrteční cron
- * (fáze 2, close-voting/route.ts) — rozdíl je jen `mode` a `actor`.
+ * (fáze 2, close-voting/route.ts) - rozdíl je jen `mode` a `actor`.
  *
- * NENÍ čistý modul — na rozdíl od voting-window.ts a voting-plan.ts smí a
+ * NENÍ čistý modul - na rozdíl od voting-window.ts a voting-plan.ts smí a
  * musí importovat drizzle a lib/email/resend. Rozhodovací logika (kdy se co
  * děje) žije v těch dvou čistých modulech; tenhle soubor je jen DB + maily
  * podle jejich rozhodnutí, v přesném pořadí zápisů z tabulky 2.3.
  *
  * Bez db.transaction() (LL-003): osm kroků, sekvenčně, každý zápis
  * WHERE-guardovaný a idempotentní při opakování. Funkce sama nikdy
- * nevyhazuje výjimku pro žádný z pěti dokumentovaných guardů (sekce 2.6) —
+ * nevyhazuje výjimku pro žádný z pěti dokumentovaných guardů (sekce 2.6) -
  * ty se vrací jako `{ ok: false, code, error }`. Skutečná infrastrukturní
  * chyba (DB nedostupná uprostřed kroku 5–7) žádný z těch pěti kódů
  * nepopisuje správně, a proto se v takovém případě propaguje jako výjimka:
- * volající (route handler, cron) ji zachytí ve svém vlastním try/catch —
+ * volající (route handler, cron) ji zachytí ve svém vlastním try/catch -
  * stejně jako to dělá zbytek repa (LL-003 vzor: bez transakce je bezpečné
  * kdykoli přerušit a zkusit znovu, viz komentáře u jednotlivých kroků).
  *
  * iter-027 (T-005, arch 6.2): tělo z iter-026 je přejmenováno na
  * `runVotingDispatchInner`; exportovaný `runVotingDispatch` je tenký wrapper,
  * který kolem něj zapisuje historii běhu do `ops_event` (`lib/ops/`).
- * Wrapper NEMĚNÍ chování Inner — pět guardů vrací beze změny, skutečná infra
+ * Wrapper NEMĚNÍ chování Inner - pět guardů vrací beze změny, skutečná infra
  * výjimka se pořád rethrowuje. Jediné tři additivní změny UVNITŘ Inner
  * (6.3): (a) `sendMeetingMagicLinkEmail` teď vrací `resendId`, (b)
  * `DispatchOutcome.sent` ho nese dál, (c) jeden `await logOpsEvent(...)` ve
- * smyčce kroku 8, hned po `recipients.push(...)` — nikdy nevyhazuje (D2),
+ * smyčce kroku 8, hned po `recipients.push(...)` - nikdy nevyhazuje (D2),
  * takže krok 8 samotný se nemění.
  *
- * iter-028 (T-005, arch 3.3): `deliver: "now" | "defer"` je POVINNÝ — žádný
- * volající si ho neodvozuje z `mode` (13. 8. — ruční spuštění poslalo mail
+ * iter-028 (T-005, arch 3.3): `deliver: "now" | "defer"` je POVINNÝ - žádný
+ * volající si ho neodvozuje z `mode` (13. 8. - ruční spuštění poslalo mail
  * nikým nechtěně). Nový guard `not-due` (deliver:"now" mimo den schůzky
  * nebo později) se vyhodnotí hned za guardem `meeting-closed`, před prvním
  * zápisem. Krok 3 počítá uzávěrku nové schůzky přes `votingClosesAtFor`
- * (datum schůzky, ne okamžik kliknutí — D2). Krok 8 při `deliver:"defer"`
+ * (datum schůzky, ne okamžik kliknutí - D2). Krok 8 při `deliver:"defer"`
  * negeneruje token, neposílá mail, nezapisuje značku ani žádný `email.*`
- * záznam do ops_event — řádky s akcí "send" dostanou `{status:"scheduled"}`
+ * záznam do ops_event - řádky s akcí "send" dostanou `{status:"scheduled"}`
  * a doženou je až ranní cron (`lib/meetings/morning-dispatch.ts`).
  */
 import { randomUUID } from "crypto";
@@ -50,6 +50,7 @@ import {
   getConflictingMeeting,
 } from "@/lib/db/queries/meetings";
 import { getMembers } from "@/lib/db/queries/members";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import {
   getMeetingLinkRows,
@@ -79,22 +80,22 @@ export type { DispatchMode };
 
 export interface DispatchOptions {
   mode: DispatchMode;
-  // iter-028 (T-005, arch 3.3): POVINNÉ — žádný výchozí odvozený z `mode`.
+  // iter-028 (T-005, arch 3.3): POVINNÉ - žádný výchozí odvozený z `mode`.
   // "now" pošle maily hned (čtvrteční autostart, ranní dosílání, ruční
   // "Rozeslat hned"). "defer" založí odkazy a schůzku převede na 'voting',
-  // ale nepošle jediný mail — pošle je až ranní cron (arch 3.1).
+  // ale nepošle jediný mail - pošle je až ranní cron (arch 3.1).
   deliver: "now" | "defer";
   actor: string; // memberId volajícího, nebo "cron"
   now?: Date; // injektovatelné pro testy; default new Date()
   sendDelayMs?: number; // default 250 (Resend limit 5 req/s)
   // iter-027 (T-005, arch 6.2): jeden běh = jedno spuštění vstupního bodu.
-  // Nepovinné, proto se start-voting/route.ts nemusí měnit vůbec — wrapper
+  // Nepovinné, proto se start-voting/route.ts nemusí měnit vůbec - wrapper
   // si bez něj vyrobí vlastní runId. Cron (close-voting/route.ts) předává
   // svoje runId, aby fáze 2 nebyla samostatný běh (6.1).
   runId?: string;
 }
 
-/** Interní rozšíření pro runVotingDispatchInner — runId a čítač seq jsou
+/** Interní rozšíření pro runVotingDispatchInner - runId a čítač seq jsou
  * vždy dodané wrapperem, nikdy volitelné uvnitř. */
 interface InnerDispatchOptions extends DispatchOptions {
   runId: string;
@@ -103,7 +104,7 @@ interface InnerDispatchOptions extends DispatchOptions {
 
 export type DispatchOutcome =
   | { status: "sent"; resendId?: string }
-  // iter-028 (T-005, arch 3.3): deliver:"defer" — řádek s akcí "send", pro
+  // iter-028 (T-005, arch 3.3): deliver:"defer" - řádek s akcí "send", pro
   // kterého se nic neudělalo (žádný token, žádný mail, žádná značka).
   // Doženě ho ranní cron.
   | { status: "scheduled" }
@@ -174,14 +175,14 @@ function conflictMessage(other: { date: string; votingClosesAt: Date | null }): 
   const dateLabel = formatCzDate(other.date);
   if (other.votingClosesAt) {
     const closesLabel = formatCzDateTime(other.votingClosesAt);
-    return `Hlasovani nelze spustit, protoze jeste bezi hlasovani ke schuzce ${dateLabel}. Uzavre se automaticky ${closesLabel}, nebo ho uzavrete rucne.`;
+    return `Hlasování nelze spustit, protože ještě běží hlasování ke schůzce ${dateLabel}. Uzavře se automaticky ${closesLabel}, nebo ho uzavři ručně.`;
   }
-  return `Hlasovani nelze spustit, protoze jeste bezi hlasovani ke schuzce ${dateLabel}. Uzavrete ho rucne.`;
+  return `Hlasování nelze spustit, protože ještě běží hlasování ke schůzce ${dateLabel}. Uzavři ho ručně.`;
 }
 
 /**
  * Jádro sjednocené cesty spuštění hlasování. Nikdy nevyhazuje výjimku pro
- * žádný z pěti guardů (2.6) — viz hlavičkový komentář souboru pro chybu
+ * žádný z pěti guardů (2.6) - viz hlavičkový komentář souboru pro chybu
  * mimo tento rámec. iter-027: přejmenováno z `runVotingDispatch`, volá ho
  * jen wrapper níže.
  */
@@ -196,27 +197,27 @@ async function runVotingDispatchInner(
   // Krok 1: SELECT schůzky
   const meetingRow = await getMeetingById(meetingId);
   if (!meetingRow) {
-    return { ok: false, code: "not-found", error: "Schuzka nebyla nalezena." };
+    return { ok: false, code: "not-found", error: "Schůzka nebyla nalezena." };
   }
 
-  // Krok 2: Guardy — vyhodnocují se v tomto pořadí, hlásí se první, který padne (2.6)
+  // Krok 2: Guardy - vyhodnocují se v tomto pořadí, hlásí se první, který padne (2.6)
   if (meetingRow.status === "closed") {
     return {
       ok: false,
       code: "meeting-closed",
-      error: "Hlasovani nelze spustit, schuzka je jiz uzavrena.",
+      error: "Hlasování nelze spustit, schůzka je už uzavřená.",
     };
   }
 
   // iter-028 (T-005, arch 3.3, 3.1): guard not-due, HNED za meeting-closed,
-  // PŘED prvním zápisem — odkazy smí odejít hned jen v den schůzky nebo
+  // PŘED prvním zápisem - odkazy smí odejít hned jen v den schůzky nebo
   // později, nikdy dřív. Nezávisí na `mode`: platí stejně pro "start" i
   // "resend", protože obojí může dostat deliver:"now" (ruční "Rozeslat hned").
   if (opts.deliver === "now" && !isDeliveryDue(meetingRow.date, now)) {
     return {
       ok: false,
       code: "not-due",
-      error: "Odkazy nelze poslat hned, den schuzky jeste nenastal.",
+      error: "Odkazy nelze poslat hned, den schůzky ještě nenastal.",
     };
   }
 
@@ -228,7 +229,7 @@ async function runVotingDispatchInner(
       code: "conflict",
       error: other
         ? conflictMessage(other)
-        : "Hlasovani nelze spustit, jiz existuje aktivni nebo hlasovaci schuzka.",
+        : "Hlasování nelze spustit, už existuje aktivní nebo hlasovací schůzka.",
     };
   }
 
@@ -237,7 +238,7 @@ async function runVotingDispatchInner(
     return {
       ok: false,
       code: "no-guests",
-      error: "Hlasovani nelze spustit, schuzka nema zadneho hosta.",
+      error: "Hlasování nelze spustit, schůzka nemá žádného hosta.",
     };
   }
 
@@ -252,21 +253,27 @@ async function runVotingDispatchInner(
     return {
       ok: false,
       code: "no-recipients",
-      error: "Hlasovani nelze spustit, zadny clen nema e-mailovou adresu.",
+      error: "Hlasování nelze spustit, žádný člen nemá e-mailovou adresu.",
     };
   }
 
-  // Krok 3: votingClosesAt — u běžícího hlasování se ČTE z DB, nikdy se
+  // Krok 3: votingClosesAt - u běžícího hlasování se ČTE z DB, nikdy se
   // nepřepočítává (jediné místo, kde by chybná implementace posunula
-  // uzávěrku živého hlasování — arch 2.3, pseudokód doslova). U NOVÉHO
+  // uzávěrku živého hlasování - arch 2.3, pseudokód doslova). U NOVÉHO
   // hlasování se počítá od data schůzky (iter-028, arch 3.2, D2), ne od
-  // okamžiku kliknutí — jinak by spuštění předem (např. úterý pro čtvrteční
+  // okamžiku kliknutí - jinak by spuštění předem (např. úterý pro čtvrteční
   // schůzku) skončilo uzávěrkou, kterou by čtvrteční cron zavřel dřív, než
   // by stihl odeslat jediný odkaz.
+  // iter-042 (BK3): u nového hlasování je uzávěrka 23:59 den před dalším
+  // pravidelným dnem schůzky z nastavení chapteru (pro čtvrtek středa 23:59).
   const votingClosesAt =
     meetingRow.status === "voting" && meetingRow.votingClosesAt !== null
       ? meetingRow.votingClosesAt
-      : votingClosesAtFor(meetingRow.date, now);
+      : votingClosesAtFor(
+          meetingRow.date,
+          now,
+          (await getChapterSettings()).meetingWeekday
+        );
   const linkExpiresAt = votingLinkExpiry(votingClosesAt);
 
   // Krok 4: SELECT členů + existujících odkazů, čistá funkce planVotingDispatch
@@ -290,15 +297,15 @@ async function runVotingDispatchInner(
   const statusBefore = meetingRow.status;
 
   // Krok 5: INSERT chybějících meeting_member_link (ON CONFLICT DO NOTHING
-  // uvnitř generateMeetingToken). Idempotentní — při opakování odkazy už
+  // uvnitř generateMeetingToken). Idempotentní - při opakování odkazy už
   // existují, tenhle krok je no-op.
   for (const memberId of plan.linksToCreate) {
     await generateMeetingToken(meetingId, memberId);
   }
 
-  // Krok 6: UPDATE meeting status — WHERE guard drží draft/active -> voting,
+  // Krok 6: UPDATE meeting status - WHERE guard drží draft/active -> voting,
   // schůzka ve stavu voting se nikdy nepřepíše (uzávěrka se opakovaným
-  // kliknutím neprodlouží — to je záměr, ne vedlejší efekt).
+  // kliknutím neprodlouží - to je záměr, ne vedlejší efekt).
   const transitionRows = await db
     .update(meeting)
     .set({ status: "voting", votingOpenAt: now, votingClosesAt })
@@ -307,7 +314,7 @@ async function runVotingDispatchInner(
   const transitioned = transitionRows.length > 0;
 
   // Krok 6 (výjimka, R11): schůzka uvízlá ve voting s votingClosesAt IS NULL
-  // — opravný UPDATE s guardem IS NULL, nemůže sáhnout na zdravé hlasování.
+  // - opravný UPDATE s guardem IS NULL, nemůže sáhnout na zdravé hlasování.
   if (!transitioned && statusBefore === "voting" && meetingRow.votingClosesAt === null) {
     await db
       .update(meeting)
@@ -321,7 +328,7 @@ async function runVotingDispatchInner(
       );
   }
 
-  // Krok 7: expirace odkazů — všechny odkazy schůzky, stejná hodnota při
+  // Krok 7: expirace odkazů - všechny odkazy schůzky, stejná hodnota při
   // opakování (idempotentní).
   await db
     .update(meetingMemberLink)
@@ -330,12 +337,12 @@ async function runVotingDispatchInner(
 
   // Krok 8: pro každého příjemce regenerovat token, poslat mail, zapsat
   // značku AŽ PO úspěšném odeslání. Regeneruje se i pro odkaz založený v
-  // kroku 5 — generateMeetingToken vrací syrový token i při ON CONFLICT DO
+  // kroku 5 - generateMeetingToken vrací syrový token i při ON CONFLICT DO
   // NOTHING, takže by neodpovídal uloženému hashi (R7).
   //
   // iter-028 (T-005, arch 3.3): při deliver:"defer" se pro ŽÁDNÝ řádek
   // (skip i send) neposílá mail, negeneruje token, nezapisuje značka ani
-  // žádný `email.*` záznam do ops_event — jen jeden souhrnný
+  // žádný `email.*` záznam do ops_event - jen jeden souhrnný
   // `dispatch.finished` napíše wrapper (dispatchOutcomeEvent). Řádky
   // s akcí "send" dostanou `{status:"scheduled"}`, doženou je až ranní cron.
   const isDefer = opts.deliver === "defer";
@@ -356,7 +363,7 @@ async function runVotingDispatchInner(
       // jen nepočítá), proto `skip "inactive"` nemá vlastní záznam.
       if (!isDefer && row.action.reason !== "inactive") {
         // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
-        // po recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok
+        // po recipients.push - logOpsEvent nikdy nevyhazuje (D2), takže krok
         // 8 samotný se nemění.
         await logOpsEvent(
           recipientEvent(recipient, {
@@ -396,7 +403,7 @@ async function runVotingDispatchInner(
       try {
         const rawToken = await regenerateMeetingToken(meetingId, row.memberId);
         if (!rawToken) {
-          throw new Error("regenerate token failed — no link row found");
+          throw new Error("regenerate token failed - no link row found");
         }
         const magicUrl = buildMeetingMagicUrl(rawToken);
         const emailResult = await sendMeetingMagicLinkEmail(
@@ -430,7 +437,7 @@ async function runVotingDispatchInner(
     recipients.push(recipient);
 
     // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned po
-    // recipients.push — logOpsEvent nikdy nevyhazuje (D2), takže krok 8
+    // recipients.push - logOpsEvent nikdy nevyhazuje (D2), takže krok 8
     // samotný se nemění. Kdyby proces umřel uprostřed rozesílání, log skončí
     // přesně tam, kde skončilo odesílání, ne s prázdnou dávkou.
     await logOpsEvent(
@@ -481,16 +488,16 @@ async function runVotingDispatchInner(
 }
 
 /**
- * runVotingDispatch — wrapper kolem runVotingDispatchInner (iter-027, T-005,
+ * runVotingDispatch - wrapper kolem runVotingDispatchInner (iter-027, T-005,
  * arch 6.2). Obaluje jádro zápisem do ops_event, nemění jeho chování: pět
  * guardů z Inner projde beze změny, skutečná infra výjimka se pořád
- * rethrowuje (řádek `throw e` níže) — volající (route handler, cron) ji
+ * rethrowuje (řádek `throw e` níže) - volající (route handler, cron) ji
  * chytá stejně jako dřív.
  *
- * `meeting_id` (cizí klíč) se do `dispatch.started` NIKDY neposílá — v tomhle
+ * `meeting_id` (cizí klíč) se do `dispatch.started` NIKDY neposílá - v tomhle
  * bodě je `meetingId` jen parametr z URL, ne ověřený řádek (krok 1 uvnitř
  * Inner ho teprve ověří). Do terminálního záznamu se dostane jen když
- * `result.ok || result.code !== "not-found"` — jinak jde neověřené id do
+ * `result.ok || result.code !== "not-found"` - jinak jde neověřené id do
  * `detail.requestedMeetingId` (MAJOR-1, review T-002). Logika je v
  * dispatchOutcomeEvent (lib/ops/dispatch-events.ts).
  */
@@ -510,8 +517,8 @@ export async function runVotingDispatch(
     kind: "dispatch.started",
     severity: "info",
     actor: opts.actor,
-    meetingId: undefined, // neověřené — viz komentář funkce
-    message: `Spusteni hlasovani zahajeno (mode=${opts.mode}, deliver=${opts.deliver}).`,
+    meetingId: undefined, // neověřené - viz komentář funkce
+    message: `Spuštění hlasování zahájeno (mode=${opts.mode}, deliver=${opts.deliver}).`,
     detail: { requestedMeetingId: meetingId },
   });
 
@@ -520,7 +527,7 @@ export async function runVotingDispatch(
     result = await runVotingDispatchInner(meetingId, { ...opts, runId, nextSeq });
   } catch (e) {
     // V catch nevíme, jestli se Inner ke kroku 1 (ověření existence schůzky)
-    // vůbec dostal — meetingId proto zůstává neověřené i tady.
+    // vůbec dostal - meetingId proto zůstává neověřené i tady.
     const msg = e instanceof Error ? e.message : String(e);
     await logOpsEvent({
       runId,
@@ -538,7 +545,7 @@ export async function runVotingDispatch(
   }
 
   // iter-027 (T-005r, review MAJOR-1): dispatchOutcomeEvent(...) se nevolá
-  // přímo jako argument logOpsEvent — safeDispatchOutcomeEvent ji obaluje
+  // přímo jako argument logOpsEvent - safeDispatchOutcomeEvent ji obaluje
   // vlastním try/catch (lib/ops/dispatch-events.ts), takže z tohohle místa
   // nemůže ven proniknout výjimka. Vrátí `null` misto vyhození; logOpsEvent
   // se pak volá jen s reálným vstupem. `result` se dál nemění.

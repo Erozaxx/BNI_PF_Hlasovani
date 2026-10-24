@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { HelpUsedToggle } from "@/components/burza/HelpUsedToggle";
-import { canRecordHelp, formatMonthYear } from "@/lib/burza/rules";
+import { TEXTS, canRecordHelp, formatMonthYear } from "@/lib/burza/rules";
 
 export interface OfferCardData {
   memberId: string;
@@ -25,12 +25,15 @@ export function OfferCard({
   viewerId,
   viewerIsManagement,
   recordedHelpId,
+  bonusOn = true,
 }: {
   data: OfferCardData;
   viewerId: string;
   viewerIsManagement: boolean;
   /** `id` záznamu pomoci zapsaného tento měsíc přihlášeným na tuhle kartu. */
   recordedHelpId: string | null;
+  /** Burza dává bonus do semaforu (semafor i Burza zapnuté): rozhoduje o větě pod přepínačem. */
+  bonusOn?: boolean;
 }) {
   const subtitle = [data.company, data.obor].filter((v): v is string => !!v && v.trim().length > 0).join(" · ");
   const canUse = canRecordHelp(viewerId, data.memberId);
@@ -75,6 +78,7 @@ export function OfferCard({
           )}
         </div>
       )}
+      {canUse && <p className="mt-2 text-sm text-text-muted">{TEXTS.usedHelpHint(bonusOn)}</p>}
     </article>
   );
 }

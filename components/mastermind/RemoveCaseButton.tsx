@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { removeCaseAction } from "@/actions/mastermind";
+import { UI_TEXTS } from "@/lib/mastermind/rules";
 
-/** „Stáhnout“ případ: autor jen navržený, vedení i zařazený. Zájmy se smažou s ním. */
+/** „Smazat případ“ (dřív „Stáhnout“, K6): autor jen navržený, vedení i zařazený. Zájmy se smažou s ním. */
 export function RemoveCaseButton({
   caseId,
   scheduled,
@@ -21,8 +22,8 @@ export function RemoveCaseButton({
   async function handleRemove() {
     const confirmed = window.confirm(
       scheduled
-        ? "Opravdu stáhnout zařazený případ? Přihlášení účastníci o něm přijdou."
-        : "Opravdu stáhnout případ? Zájem ostatních se smaže."
+        ? UI_TEXTS.removeConfirmScheduled
+        : UI_TEXTS.removeConfirmProposed
     );
     if (!confirmed) return;
     setLoading(true);
@@ -33,10 +34,10 @@ export function RemoveCaseButton({
         router.refresh();
         return;
       }
-      showToast("success", "Případ je stažený.");
+      showToast("success", UI_TEXTS.removed);
       router.refresh();
     } catch {
-      showToast("error", "Případ se nepodařilo stáhnout.");
+      showToast("error", UI_TEXTS.removeFailed);
     } finally {
       setLoading(false);
     }
@@ -51,7 +52,7 @@ export function RemoveCaseButton({
       onClick={handleRemove}
       className="min-h-[44px]"
     >
-      Stáhnout
+      {UI_TEXTS.removeButton}
     </Button>
   );
 }

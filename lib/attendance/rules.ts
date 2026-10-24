@@ -17,6 +17,8 @@ import {
   isValidDateString,
   pragueToday,
 } from "@/lib/members/activity";
+import { DEFAULT_CHAPTER_SETTINGS } from "@/lib/chapter/settings";
+import { meetingTimeLabel } from "@/lib/attendance/texts";
 
 /**
  * iter-041 (arch 7.3): stavy záznamu, které se počítají jako absence. Jediné
@@ -33,10 +35,14 @@ export function isAbsenceStatus(status: string | null | undefined): status is Ab
 /** Zdroje záznamu docházky (`attendance_record.source`); `palms` = doplnění z PALMS (iter-041). */
 export const RECORD_SOURCES = ["manager", "auto", "palms"] as const;
 
-/** Začátek schůzky (pražský čas), stejný pro každý den (K4). Zdroj: `/pravidla/absence`. */
-export const ATTENDANCE_START = "07:30";
+/**
+ * Výchozí začátek schůzky (pražský čas). iter-042 (B4): skutečný začátek je v
+ * nastavení chapteru (`getChapterSettings().meetingTime`), funkce níž ho berou
+ * jako parametr a bez něj použijí tuhle výchozí hodnotu.
+ */
+export const ATTENDANCE_START = DEFAULT_CHAPTER_SETTINGS.meetingTime;
 
-/** Nejdál smí být ohlášená nepřítomnost: dnes + 365 dní (K3). */
+/** Nejdál smí být omluva: dnes + 365 dní (K3). */
 export const MAX_ADVANCE_DAYS = 365;
 
 /** Limit absencí za okno (pravidla: čtvrtou může řešit výbor). */
@@ -51,10 +57,19 @@ export const SUBSTITUTE_NAME_MEMORY_LIMIT = 20;
 export const NAME_MIN = 2;
 export const NAME_MAX = 80;
 
+/**
+ * Úvod stránky člena (iter-042 #10, Z5): čas uzávěrky z nastavení, bez
+ * natvrdo napsané hodiny.
+ */
+export function memberIntroText(time: string): string {
+  return `Když na schůzku nemůžeš, omluv se tady, nejpozději do ${meetingTimeLabel(time)} v den schůzky. Omluva bez náhradníka se počítá jako absence, s náhradníkem ne. Bez záznamu počítáme, že přijdeš.`;
+}
+
 /** Texty člena, doslova z gate sekce 5. Test hlídá znění i absenci U+2014. */
 export const MEMBER_TEXTS = {
   title: "Docházka",
-  intro: "Když na schůzku nemůžeš, dej vědět tady. Bez záznamu počítáme, že přijdeš.",
+  /** Úvod pro výchozí začátek schůzky; se skutečným časem z nastavení `memberIntroText(čas)`. */
+  intro: memberIntroText(ATTENDANCE_START),
   optionPresent: "Přijdu",
   optionAbsent: "Nepřijdu, bez náhradníka",
   optionSubstitute: "Nepřijdu, pošlu náhradníka",
@@ -62,19 +77,19 @@ export const MEMBER_TEXTS = {
   save: "Uložit",
   recentNames: "Dřív:",
   legend:
-    "Modrý den je běžná schůzka s hosty, zelený den interní schůzka. ● nepřijdu, ◐ pošlu náhradníka.",
-  legendPast: "✓ přítomen, N náhradník, A absence",
+    "Světle modrý den je pravidelná schůzka, tmavě modrý schůzka s hosty, zelený interní schůzka. ● omluva bez náhradníka, ◐ omluva s náhradníkem.",
+  legendPast: "Po schůzce: ✓ přišel(a), N přišel náhradník, A absence.",
   closedPanel: "Na tenhle den už změnu zapíše jen správce docházky.",
-  listTitle: "Ohlášené nepřítomnosti",
+  listTitle: "Tvoje omluvy",
   listEmpty: "–",
   cancel: "Zrušit",
   change: "Změnit",
   savedNamesTitle: "Uložená jména náhradníků",
   toastSaved: "Uloženo.",
-  toastCancelled: "Nepřítomnost zrušena.",
+  toastCancelled: "Omluva zrušena.",
   toastNameForgotten: "Jméno smazáno ze seznamu.",
   errClosed: "Na tenhle den už změnu zapíše jen správce docházky.",
-  errTooFar: "Nepřítomnost jde ohlásit nejvýš rok dopředu.",
+  errTooFar: "Omluvit se jde nejvýš rok dopředu.",
   errNameEmpty: "Napiš jméno náhradníka.",
   errNameShort: "Jméno náhradníka je moc krátké.",
   errNameLong: "Jméno náhradníka je moc dlouhé.",
@@ -87,7 +102,7 @@ export const MEMBER_TEXTS = {
 export const DASHBOARD_TEXTS = {
   title: "Docházka",
   none: "Za posledních 6 měsíců nemáš žádnou absenci.",
-  action: "Ohlásit nepřítomnost",
+  action: "Omluvit se",
   showDays: "Zobrazit dny",
   rulesLink: "Jak se absence počítají",
   sinceFirstRecorded: "Počítáme od první zapsané schůzky.",
@@ -149,9 +164,9 @@ export function pragueInstant(date: string, time: string): Date {
   return new Date(local - off2);
 }
 
-/** Uzávěrka člena: začátek schůzky v daný den. */
-export function memberDeadline(date: string): Date {
-  return pragueInstant(date, ATTENDANCE_START);
+/** Uzávěrka člena: začátek schůzky v daný den (`time` z nastavení chapteru). */
+export function memberDeadline(date: string, time: string = ATTENDANCE_START): Date {
+  return pragueInstant(date, time);
 }
 
 /** Přičte měsíce, den se zkrátí na konec cílového měsíce (31. 8. − 6 měsíců = 28. 2.). */
@@ -163,19 +178,23 @@ export function addMonthsClamped(date: string, months: number): string {
   return toDateString(ny, nm, Math.min(d, daysInMonth(ny, nm)));
 }
 
-// ── Člen mění svou nepřítomnost ──────────────────────────────
+// ── Člen mění svou omluvu ────────────────────────────────────
 
 export type AbsenceEditDecision =
   | { ok: true }
   | { ok: false; reason: "invalid" | "closed" | "too-far"; message: string };
 
 /**
- * Smí člen v okamžiku `now` změnit svou nepřítomnost na den `date`? Od dneška do
- * dnes + 365 dní a jen do 7:30 v ten den (arch 3.2, test 1). SQL protějšek je
+ * Smí člen v okamžiku `now` změnit svou omluvu na den `date`? Od dneška do
+ * dnes + 365 dní a jen do začátku schůzky v ten den (arch 3.2, test 1). SQL protějšek je
  * `absenceEditGuardSql` v lib/db/queries/attendance.ts, tohle je jen
  * srozumitelná hláška a test; správnost drží SQL.
  */
-export function decideMemberAbsenceEdit(now: Date, date: string): AbsenceEditDecision {
+export function decideMemberAbsenceEdit(
+  now: Date,
+  date: string,
+  time: string = ATTENDANCE_START
+): AbsenceEditDecision {
   if (typeof date !== "string" || !isValidDateString(date)) {
     return { ok: false, reason: "invalid", message: "Neplatné datum." };
   }
@@ -183,14 +202,14 @@ export function decideMemberAbsenceEdit(now: Date, date: string): AbsenceEditDec
   if (date > addDaysToDateString(today, MAX_ADVANCE_DAYS)) {
     return { ok: false, reason: "too-far", message: MEMBER_TEXTS.errTooFar };
   }
-  if (now.getTime() >= memberDeadline(date).getTime()) {
+  if (now.getTime() >= memberDeadline(date, time).getTime()) {
     return { ok: false, reason: "closed", message: MEMBER_TEXTS.errClosed };
   }
   return { ok: true };
 }
 
-export function memberMayEditAbsence(now: Date, date: string): boolean {
-  return decideMemberAbsenceEdit(now, date).ok;
+export function memberMayEditAbsence(now: Date, date: string, time: string = ATTENDANCE_START): boolean {
+  return decideMemberAbsenceEdit(now, date, time).ok;
 }
 
 // ── Jméno náhradníka ─────────────────────────────────────────
@@ -296,6 +315,7 @@ export function weekdayIndex(date: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
+/** @deprecated Nahrazeno `isRegularDay` (den z nastavení chapteru). Zůstává jako reference pro testy 038 a 042. */
 export function isThursday(date: string): boolean {
   return weekdayIndex(date) === 4;
 }
@@ -323,6 +343,14 @@ export function monthTitle(year: number, month: number): string {
 
 /** Hlavička sloupců mřížky, pondělí první. */
 export const GRID_WEEKDAYS = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] as const;
+
+/**
+ * iter-042 (B3): sloupec mřížky (0 = pondělí) pro den v týdnu z nastavení
+ * chapteru (0 = neděle ... 6 = sobota, jako `getUTCDay`). Čtvrtek (4) = sloupec 3.
+ */
+export function gridColumnOfWeekday(weekday: number): number {
+  return (((weekday + 6) % 7) + 7) % 7;
+}
 
 /** Týdny měsíce (pondělí první), prázdné buňky `null`. */
 export function monthGrid(year: number, month: number): (string | null)[][] {
@@ -359,7 +387,10 @@ export function shiftMonth(year: number, month: number, delta: number): { year: 
   return { year: Math.floor(total / 12), month: ((total % 12) + 12) % 12 + 1 };
 }
 
-/** Nejbližší čtvrtek od `from` včetně. */
+/**
+ * Nejbližší čtvrtek od `from` včetně.
+ * @deprecated Nahrazeno `nextRegularDay` (den z nastavení chapteru). Zůstává jako reference pro testy 038, 039 a 042.
+ */
 export function nextThursday(from: string): string {
   const diff = (4 - weekdayIndex(from) + 7) % 7;
   return addDaysToDateString(from, diff);
@@ -395,18 +426,29 @@ export function pastResultGlyph(result: PastResult): string {
   return result === "present" ? "✓" : result === "substitute" ? "N" : "A";
 }
 
-/** `aria-label` dne: „čtvrtek 12. listopadu, nepřijdeš, bez náhradníka“. */
+/**
+ * `aria-label` dne: „čtvrtek 12. listopadu, nepřijdeš, bez náhradníka“. Barva dne
+ * je jen jeden signál, popisek říká totéž slovy (iter-042 B3, gate Z4):
+ * „schůzka s hosty“, „interní schůzka“, „pravidelná schůzka“.
+ */
 export function dayAriaLabel(
   date: string,
-  opts: { mark: AbsenceMark; result: PastResult | null; hasMeeting: boolean; hasInternal?: boolean }
+  opts: {
+    mark: AbsenceMark;
+    result: PastResult | null;
+    hasMeeting: boolean;
+    hasInternal?: boolean;
+    isRegular?: boolean;
+  }
 ): string {
   const { m, d } = parseDate(date);
   const parts = [`${WEEKDAY_LONG[weekdayIndex(date)]} ${d}. ${MONTH_GENITIVE[m - 1]}`];
   if (opts.result) parts.push(pastResultText(opts.result));
   else if (opts.mark === "absent") parts.push("nepřijdeš, bez náhradníka");
   else if (opts.mark === "substitute") parts.push("nepřijdeš, pošleš náhradníka");
-  if (opts.hasMeeting) parts.push("schůzka v aplikaci");
+  if (opts.hasMeeting) parts.push("schůzka s hosty");
   else if (opts.hasInternal) parts.push("interní schůzka");
+  else if (opts.isRegular) parts.push("pravidelná schůzka");
   return parts.join(", ");
 }
 
@@ -419,7 +461,7 @@ export interface AbsenceCardView {
   warn: boolean;
   /** Věta o počtu. */
   text: string;
-  /** Ohlášená budoucí nepřítomnost, nebo `null`. */
+  /** Nejbližší omluva, nebo `null`. */
   nextText: string | null;
   /** „Počítáme od …“, dokud okno sahá před první uzavřený den. */
   sinceText: string | null;
@@ -451,7 +493,7 @@ export function absenceCountParts(count: number): { before: string; strong: stri
 
 /**
  * Pohled karty. `firstClosedDay` = nejstarší uzavřený den (`null` = žádný).
- * `next` = nejbližší ohlášená nepřítomnost od dneška (včetně).
+ * `next` = nejbližší omluva od dneška (včetně).
  */
 export function buildAbsenceCardView(input: {
   count: number;

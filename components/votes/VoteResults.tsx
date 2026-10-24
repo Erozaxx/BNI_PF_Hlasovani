@@ -31,8 +31,8 @@ export function VoteResults({ results, meetingStatus }: VoteResultsProps) {
     return (
       <p className="text-sm text-text-muted">
         {meetingStatus === "voting"
-          ? "Zatim zadne hlasy."
-          : "Nebyly odevzdany zadne hlasy."}
+          ? "Zatím žádné hlasy."
+          : "Nebyly odevzdané žádné hlasy."}
       </p>
     );
   }
@@ -51,7 +51,7 @@ export function VoteResults({ results, meetingStatus }: VoteResultsProps) {
           <span className="font-semibold">{summary.up}</span> pro
         </span>
         <span className="text-text-main">
-          <span className="font-semibold">{summary.neutral}</span> neutralni
+          <span className="font-semibold">{summary.neutral}</span> neutrální
         </span>
         <span className="text-text-main">
           <span className="font-semibold">{summary.down}</span> proti
@@ -78,7 +78,7 @@ export function VoteResults({ results, meetingStatus }: VoteResultsProps) {
               </div>
               {r.reason && (
                 <p className="text-sm text-text-muted mt-1">
-                  Duvod: {r.reason}
+                  Důvod: {r.reason}
                 </p>
               )}
             </Card>

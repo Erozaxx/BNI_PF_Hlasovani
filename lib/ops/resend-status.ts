@@ -1,13 +1,13 @@
 /**
- * iter-027 (T-006) — stav doručení z Resendu (arch iter-027 T-001, sekce
+ * iter-027 (T-006) - stav doručení z Resendu (arch iter-027 T-001, sekce
  * 8.1, 8.2, D6). Dvě funkce se dvěma naprosto různými kontrakty:
  *
  * - `mapResendStatus` je ČISTÁ. Nemá žádný import, nesahá na síť, nikdy
  *   nevyhazuje pro žádný vstup (i `null`/`{}` vrátí `unknown`, test 21).
  *   Testovatelná bez sítě (scripts/test-ops-events.ts, případy 19–21).
  * - `fetchResendStatus` je nečistá, ale taky nikdy nevyhazuje. Holý `fetch`
- *   (D6 — ne `resend` SDK, viz hlavička souboru níže), `RESEND_API_KEY` se
- *   čte AŽ při volání (ne při importu modulu — proto nedědí nález N-1
+ *   (D6 - ne `resend` SDK, viz hlavička souboru níže), `RESEND_API_KEY` se
+ *   čte AŽ při volání (ne při importu modulu - proto nedědí nález N-1
  *   `lib/email/resend.ts:7`, tenhle soubor ten modul vůbec neimportuje).
  *
  * Proč ne `resend` SDK (8.2, N-1): `lib/email/resend.ts:7` konstruuje
@@ -16,7 +16,7 @@
  * na kód iter-026 (scope OUT T-006).
  */
 
-/** Terminální stavy (8.1 bod 3) — jen ty se ukládají zpátky do `ops_event`. */
+/** Terminální stavy (8.1 bod 3) - jen ty se ukládají zpátky do `ops_event`. */
 const TERMINAL_STATES = ["delivered", "bounced", "complained", "failed"] as const;
 
 export type DeliveryState =
@@ -41,7 +41,7 @@ export interface DeliveryStatus {
 
 const STATE_META: Record<DeliveryState, { label: string; severity: DeliveryStatus["severity"] }> = {
   delivered: { label: "Doručeno", severity: "info" },
-  bounced: { label: "Odmítnuto (bounced)", severity: "error" },
+  bounced: { label: "Odmítnuto", severity: "error" },
   complained: { label: "Označeno jako spam", severity: "error" },
   failed: { label: "Chyba u poskytovatele", severity: "error" },
   queued: { label: "Ve frontě u poskytovatele", severity: "warn" },
@@ -67,7 +67,7 @@ function isKnownState(value: unknown): value is DeliveryState {
 }
 
 /**
- * ČISTÁ. Mapuje odpověď `GET /emails/{id}` (16, bod 2 — tvar `last_event`,
+ * ČISTÁ. Mapuje odpověď `GET /emails/{id}` (16, bod 2 - tvar `last_event`,
  * `message_id`, ověřeno 21. 8. proti Resend API) na náš stav. Neznámý nebo
  * chybějící tvar (`null`, `{}`, cizí `last_event`) se mapuje na `unknown`,
  * nikdy nevyhodí (test 21).
@@ -102,7 +102,7 @@ export function mapResendStatus(payload: unknown): DeliveryStatus {
 const FETCH_TIMEOUT_MS = 3000;
 
 /**
- * Nečistá. Jedno HTTP volání, NIKDY nevyhazuje (8.2) — chybějící klíč,
+ * Nečistá. Jedno HTTP volání, NIKDY nevyhazuje (8.2) - chybějící klíč,
  * síťová chyba, timeout (`AbortSignal.timeout`, 3 s), non-2xx odpověď i
  * neparsovatelné tělo skončí stejně jako neznámý stav Resendu: `unknown`.
  * Volající (app/api/status/delivery/route.ts) na tom staví degradaci "jeden
@@ -122,7 +122,7 @@ export async function fetchResendStatus(emailId: string): Promise<DeliveryStatus
     });
 
     if (!res.ok) {
-      // vc. 429 (R2) — degraduje na "Nezjisteno" + tlacitko "Overit znovu",
+      // vc. 429 (R2) - degraduje na "Nezjištěno" + tlačítko "Ověřit znovu",
       // nikdy nevyhazuje dal.
       return unknownStatus();
     }

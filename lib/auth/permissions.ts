@@ -64,6 +64,10 @@ export const PERMISSIONS = [
   // admin a značka `admin-delegable`, tedy Prezident a Viceprezident).
   "semafor.view_all",
   "semafor.import",
+  // iter-042 (gate BK1): Nastavení chapteru (/admin/nastaveni). Mimo
+  // `NON_DELEGABLE`, takže ho přes značku dostane Prezident a Viceprezident.
+  // Není v sadě moderátora ani Člena výboru.
+  "chapter.settings",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

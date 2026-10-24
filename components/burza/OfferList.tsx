@@ -15,6 +15,7 @@ export function OfferList({
   viewerIsManagement,
   recordedByHelper,
   burzaEmpty,
+  bonusOn = true,
 }: {
   offers: OfferCardData[];
   /** V burze nejsou žádné řádky (ani vlastní). */
@@ -22,6 +23,8 @@ export function OfferList({
   viewerId: string;
   viewerIsManagement: boolean;
   recordedByHelper: Record<string, string>;
+  /** Burza dává bonus do semaforu, viz `OfferCard`. */
+  bonusOn?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState("");
@@ -62,6 +65,7 @@ export function OfferList({
               viewerId={viewerId}
               viewerIsManagement={viewerIsManagement}
               recordedHelpId={recordedByHelper[o.memberId] ?? null}
+              bonusOn={bonusOn}
             />
           ))}
         </div>

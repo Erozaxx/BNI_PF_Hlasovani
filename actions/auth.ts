@@ -88,7 +88,7 @@ export async function loginAction(
     member && hasAccess && member.passwordHash ? member.passwordHash : DUMMY_PASSWORD_HASH;
   const passwordValid = await compare(password, usableHash);
 
-  // Generic error — no user enumeration
+  // Generic error - no user enumeration
   if (!member || !hasAccess || !member.passwordHash || !passwordValid) {
     return { success: false, error: INVALID_CREDENTIALS };
   }
@@ -137,15 +137,15 @@ export async function changePasswordAction(
   confirmPassword: string
 ): Promise<ActionResult> {
   if (!newPassword || !confirmPassword) {
-    return { success: false, error: "Vsechna pole jsou povinna." };
+    return { success: false, error: "Vyplň všechna pole." };
   }
 
   if (newPassword.length < 8) {
-    return { success: false, error: "Nove heslo musi mit alespon 8 znaku." };
+    return { success: false, error: "Nové heslo musí mít aspoň 8 znaků." };
   }
 
   if (newPassword !== confirmPassword) {
-    return { success: false, error: "Nova hesla se neshoduji." };
+    return { success: false, error: "Nová hesla se neshodují." };
   }
 
   const auth = await requirePasswordSession();
@@ -157,28 +157,28 @@ export async function changePasswordAction(
   try {
     const member = await getMemberById(session.memberId);
     if (!member) {
-      return { success: false, error: "Uzivatel nenalezen." };
+      return { success: false, error: "Uživatel nenalezen." };
     }
 
     // If member already has a password, verify current password first
     if (member.passwordHash) {
       if (!currentPassword) {
-        return { success: false, error: "Zadejte aktualni heslo." };
+        return { success: false, error: "Zadej aktuální heslo." };
       }
       const currentValid = await compare(currentPassword, member.passwordHash);
       if (!currentValid) {
-        return { success: false, error: "Aktualni heslo je nespravne." };
+        return { success: false, error: "Aktuální heslo nesedí." };
       }
       const sameAsCurrent = await compare(newPassword, member.passwordHash);
       if (sameAsCurrent) {
-        return { success: false, error: "Nove heslo musi byt jine nez soucasne." };
+        return { success: false, error: "Nové heslo musí být jiné než současné." };
       }
     }
 
     const newHash = await hash(newPassword, 12);
     const updated = await setOwnPassword(session.memberId, newHash);
     if (!updated) {
-      return { success: false, error: "Nemate opravneni pro tuto akci." };
+      return { success: false, error: "Na tohle nemáš oprávnění." };
     }
 
     await createSession(
@@ -195,12 +195,12 @@ export async function changePasswordAction(
   } catch (err) {
     const cls = err instanceof Error ? err.name : typeof err;
     console.error(`[changePasswordAction] failed memberId=${session.memberId}: ${cls}`);
-    return { success: false, error: "Nepodarilo se zmenit heslo. Zkuste to znovu." };
+    return { success: false, error: "Heslo se nepodařilo změnit. Zkus to znovu." };
   }
 }
 
 /**
- * Logout action — destroys the session and redirects to /login.
+ * Logout action - destroys the session and redirects to /login.
  */
 export async function logoutAction(): Promise<never> {
   await destroySession();

@@ -315,6 +315,12 @@ export function MemberAccessControls({
 
       {mode !== "result" && (
         <div className="flex flex-col gap-4">
+          <p className="text-xs text-text-muted">
+            Funkce je pozice ve vedení chapteru. Člen výboru má práva moderátora, Prezident a
+            Viceprezident práva admina, jen nepřidělují admina, funkce a hesla. Role Moderátor a
+            Admin se nastavují zvlášť a práva se sčítají. Odkaz z mailu dává vždy jen práva
+            člena, vedení se přihlašuje heslem.
+          </p>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium" htmlFor={`function-${memberId}`}>
               Funkce
@@ -407,12 +413,6 @@ export function MemberAccessControls({
               )
             )}
           </div>
-
-          <p className="text-xs text-text-muted">
-            Člen výboru má práva moderátora, Prezident a Viceprezident práva admina. Role
-            Moderátor a Admin fungují jako dosud, práva se sčítají. Odkaz z mailu dává vždy jen
-            práva člena, vedení se přihlašuje heslem.
-          </p>
 
           {mode === "idle" && canReset && (
             <div>

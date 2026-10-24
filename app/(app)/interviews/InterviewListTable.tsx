@@ -99,7 +99,7 @@ export function InterviewListTable({
         <Card>
           <EmptyState
             title="Zatím žádné pohovory"
-            description="Založte první pohovor pomocí formuláře výše."
+            description="Založ první pohovor ve formuláři výše."
           />
         </Card>
       ) : (
@@ -309,7 +309,7 @@ function LeaderCell({
     if (linkWasSent) {
       const ok = window.confirm(
         `Vedoucímu ${row.leaderName ?? "původnímu vedoucímu"} už odešel odkaz na vyplnění. ` +
-          `Po změně přestane platit a ${newName} dostane nový, až mu ho pošlete z detailu. ` +
+          `Po změně přestane platit a ${newName} dostane nový, až mu ho pošleš z detailu. ` +
           "Změnit vedoucího?"
       );
       if (!ok) {
@@ -326,7 +326,7 @@ function LeaderCell({
       if (result.success) {
         let text = `Vedoucí změněn na ${newName}.`;
         if (linkWasSent) {
-          text += " Odkaz mu pošlete z detailu, filtr Odkaz „Chybí“ ukáže, komu ještě chybí.";
+          text += " Odkaz mu pošli z detailu, filtr Odkaz „Chybí“ ukáže, komu ještě chybí.";
         }
         // M5: hláška jen když řádek po změně (nový vedoucí, odkaz po
         // revokaci neplatný) opravdu přestane odpovídat aktivním filtrům.

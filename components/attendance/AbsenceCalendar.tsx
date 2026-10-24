@@ -17,7 +17,7 @@ import {
   absenceMark,
   dayAriaLabel,
   decideMemberAbsenceEdit,
-  isThursday,
+  gridColumnOfWeekday,
   monthGrid,
   monthOf,
   monthTitle,
@@ -26,11 +26,13 @@ import {
   type PastResult,
 } from "@/lib/attendance/rules";
 import { dayCellClass, dayNumberClass, dayTone } from "@/lib/attendance/internal";
+import { isRegularDay } from "@/lib/chapter/settings";
 
 /**
- * iter-038 (T-003a, arch 7.1, 7.2): kalendář nepřítomnosti člena. Čtvrtky jsou
- * zvýrazněné, den se založenou schůzkou podtržený, ● nepřijdu, ◐ pošlu
- * náhradníka, v minulosti ✓ N A z uzavřené docházky. Mřížka 7 sloupců po 44 px
+ * iter-038 (T-003a, arch 7.1, 7.2): kalendář omluv člena. Pravidelný den
+ * schůzky (z nastavení chapteru) je světle modrý, schůzka s hosty tmavě modrá i
+ * po schůzce, interní zelená, den se založenou schůzkou podtržený, ● omluva bez
+ * náhradníka, ◐ omluva s náhradníkem, v minulosti ✓ N A z uzavřené docházky. Mřížka 7 sloupců po 44 px
  * se vejde na 390 px. Stav drží komponenta lokálně: akce nevolají
  * `revalidatePath("/dochazka")` a žádné `router.refresh()` (LL-017).
  */
@@ -51,8 +53,12 @@ export interface AbsenceCalendarProps {
   initialAbsences: { date: string; substituteName: string | null }[];
   results: { date: string; status: PastResult }[];
   initialNames: { id: string; name: string }[];
-  /** Vybraný den při otevření (nejbližší čtvrtek). */
+  /** Vybraný den při otevření (nejbližší pravidelný den, nebo den s omluvou). */
   initialSelected: string;
+  /** iter-042 (B3): den pravidelné schůzky z nastavení, 0 = neděle ... 6 = sobota (čtvrtek = 4). */
+  regularWeekday: number;
+  /** iter-042 (B4): začátek schůzky z nastavení, `HH:MM`; uzávěrka omluv. */
+  meetingTime: string;
 }
 
 type AbsenceMap = Record<string, string | null>;
@@ -75,6 +81,8 @@ export function AbsenceCalendar({
   results,
   initialNames,
   initialSelected,
+  regularWeekday,
+  meetingTime,
 }: AbsenceCalendarProps) {
   const { showToast } = useToast();
   const [now, setNow] = useState(() => new Date(serverNow));
@@ -85,7 +93,7 @@ export function AbsenceCalendar({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Uzávěrka 7:30 se může přehoupnout, zatímco je stránka otevřená.
+  // Uzávěrka (začátek schůzky) se může přehoupnout, zatímco je stránka otevřená.
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
@@ -181,7 +189,7 @@ export function AbsenceCalendar({
     }
   }
 
-  const decision = decideMemberAbsenceEdit(now, selected);
+  const decision = decideMemberAbsenceEdit(now, selected, meetingTime);
   const hasAbsence = Object.prototype.hasOwnProperty.call(absences, selected);
   const upcoming = Object.keys(absences)
     .filter((d) => d >= today)
@@ -219,8 +227,8 @@ export function AbsenceCalendar({
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-text-muted">
-          {GRID_WEEKDAYS.map((w) => (
-            <div key={w} className={w === "Čt" ? "text-navy" : ""}>
+          {GRID_WEEKDAYS.map((w, i) => (
+            <div key={w} className={i === gridColumnOfWeekday(regularWeekday) ? "text-navy" : ""}>
               {w}
             </div>
           ))}
@@ -235,8 +243,12 @@ export function AbsenceCalendar({
                 const result = resultByDate[date] ?? null;
                 const has = Object.prototype.hasOwnProperty.call(absences, date);
                 const mark = absenceMark(absences[date], has);
-                const thursday = isThursday(date);
-                const tone = dayTone({ hasMeeting: meetings.has(date), hasInternal: internals.has(date) });
+                const regular = isRegularDay(date, { meetingWeekday: regularWeekday });
+                const tone = dayTone({
+                  hasMeeting: meetings.has(date),
+                  hasInternal: internals.has(date),
+                  isRegularDay: regular,
+                });
                 const isSelected = date === selected;
                 const glyph = result
                   ? pastResultGlyph(result)
@@ -255,9 +267,10 @@ export function AbsenceCalendar({
                       result,
                       hasMeeting: tone === "meeting",
                       hasInternal: tone === "internal",
+                      isRegular: tone === "regular",
                     })}
                     aria-pressed={isSelected}
-                    className={dayCellClass(tone, thursday, past, isSelected)}
+                    className={dayCellClass(tone, past, isSelected)}
                   >
                     <span className={dayNumberClass(tone)}>
                       {Number(date.slice(8))}
@@ -316,7 +329,7 @@ export function AbsenceCalendar({
         ) : (
           <ul className="divide-y divide-border">
             {upcoming.map((d) => {
-              const editable = decideMemberAbsenceEdit(now, d).ok;
+              const editable = decideMemberAbsenceEdit(now, d, meetingTime).ok;
               return (
                 <li key={d} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="text-sm text-text-main">{absenceLine(d, absences[d])}</span>

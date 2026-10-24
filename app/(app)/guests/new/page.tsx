@@ -13,7 +13,7 @@ export default async function NewGuestPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-text-main">Novy host</h1>
+      <h1 className="text-2xl font-bold text-text-main">Nový host</h1>
       <GuestForm
         categories={categories}
         activeMeeting={activeMeeting ?? undefined}

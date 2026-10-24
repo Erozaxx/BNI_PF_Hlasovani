@@ -17,18 +17,16 @@ interface ImportGuestsButtonProps {
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-// Prezentacni orez dlouhych seznamu (sekce 5.6). Odpoved API zustava
-// uplna, orez je jen kosmeticky, aby uspesny import nevyplivl stranku
+// Prezentační ořez dlouhých seznamů (sekce 5.6). Odpověď API zůstává
+// úplná, ořez je jen kosmetický, aby úspěšný import nevyplivl stránku
 // textu.
 const MAX_VISIBLE_LIST_ITEMS = 20;
 
-// Konvence komponenty: staticke popisky bez diakritiky ("Radek",
-// "napojeno na", "chybi jmeno" apod.). Jmena a emaily z xlsx a z DB se
-// vypisuji DOSLOVA, tak jak prisly — nikdy se nesklapeji na bez-diakritiku
-// tvar (gate P4). Report ma sloužit k identifikaci konkretniho cloveka,
-// komoleni jmen by tenhle ucel podkopalo.
+// Jména a e-maily z xlsx a z DB se vypisují DOSLOVA, tak jak přišly, nikdy
+// se nepřevádějí na tvar bez diakritiky (gate P4). Report slouží
+// k identifikaci konkrétního člověka, komolení jmen by ten účel podkopalo.
 function formatEmailForDisplay(email: string | null): string {
-  return email ?? "bez emailu";
+  return email ?? "bez e-mailu";
 }
 
 function splitForDisplay<T>(
@@ -40,44 +38,44 @@ function splitForDisplay<T>(
 
 function buildSummaryLines(result: GuestImportResult): string[] {
   const parts: string[] = [];
-  if (result.created > 0) parts.push(`${result.created} novych hostu`);
-  if (result.existing > 0) parts.push(`${result.existing} slouceni s existujicim`);
-  if (result.duplicates > 0) parts.push(`${result.duplicates} duplicitni radek`);
-  if (result.skipped > 0) parts.push(`${result.skipped} preskocen`);
+  if (result.created > 0) parts.push(`${result.created} nových hostů`);
+  if (result.existing > 0) parts.push(`${result.existing} sloučeno s existujícím`);
+  if (result.duplicates > 0) parts.push(`${result.duplicates} duplicitních řádků`);
+  if (result.skipped > 0) parts.push(`${result.skipped} přeskočeno`);
 
   const firstLine =
     parts.length > 0
-      ? `Import dokoncen: ${parts.join(", ")} (z ${result.totalRows} radku).`
-      : `Import dokoncen: zadne radky ke zpracovani (z ${result.totalRows} radku).`;
+      ? `Import hotový: ${parts.join(", ")} (z ${result.totalRows} řádků).`
+      : `Import hotový: žádné řádky ke zpracování (z ${result.totalRows} řádků).`;
 
   const secondLine =
     result.alreadyLinked > 0
-      ? `Na schuzku prirazeno ${result.linkedToMeeting} hostu, ${result.alreadyLinked} uz na schuzce byli.`
-      : `Na schuzku prirazeno ${result.linkedToMeeting} hostu.`;
+      ? `Na schůzku přiřazeno ${result.linkedToMeeting} hostů, ${result.alreadyLinked} už na schůzce bylo.`
+      : `Na schůzku přiřazeno ${result.linkedToMeeting} hostů.`;
 
   return [firstLine, secondLine];
 }
 
 function createdRowText(row: GuestImportCreatedRow): string {
-  return `Radek ${row.rowNumber} — ${row.name} (${formatEmailForDisplay(row.email)}) → nova karta hosta`;
+  return `Řádek ${row.rowNumber}: ${row.name} (${formatEmailForDisplay(row.email)}) → nová karta hosta`;
 }
 
 function mergedRowText(row: GuestImportMergedRow): string {
   if (row.reason === "existing-guest") {
     const emailPart = `(${formatEmailForDisplay(row.email)})`;
     // Gate P3: shoda podle samotneho jmena (oba bez emailu) je jediny typ
-    // slouceni, ktery muze byt falesny — v textu se to musi poznat.
+    // slouceni, ktery muze byt falesny - v textu se to musi poznat.
     const matchedWithoutEmail = row.matchedEmail === null;
     const suffix = matchedWithoutEmail
-      ? " (bez emailu, slouceno podle jmena)"
+      ? " (bez e-mailu, sloučeno podle jména)"
       : "";
-    return `Radek ${row.rowNumber} — ${row.name} ${emailPart} → napojeno na existujiciho hosta „${row.matchedName}"${suffix}`;
+    return `Řádek ${row.rowNumber}: ${row.name} ${emailPart} → napojeno na existujícího hosta „${row.matchedName}"${suffix}`;
   }
-  return `Radek ${row.rowNumber} — ${row.name} (${formatEmailForDisplay(row.email)}) → duplicita radku ${row.firstRowNumber} „${row.firstName}", prirazen jednou`;
+  return `Řádek ${row.rowNumber}: ${row.name} (${formatEmailForDisplay(row.email)}) → duplicita řádku ${row.firstRowNumber} „${row.firstName}", přiřazen jednou`;
 }
 
 function skippedRowText(row: GuestImportSkippedRow): string {
-  return `Radek ${row.rowNumber} — chybi jmeno, radek nelze ulozit`;
+  return `Řádek ${row.rowNumber}: chybí jméno, řádek nejde uložit`;
 }
 
 export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
@@ -98,7 +96,7 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
     // Client-side size validation
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setStatus("error");
-      setErrorMessage(`Soubor je prilis velky. Maximalni velikost je ${MAX_FILE_SIZE_MB} MB.`);
+      setErrorMessage(`Soubor je příliš velký. Maximální velikost je ${MAX_FILE_SIZE_MB} MB.`);
       // Reset input so same file can be re-selected after fix
       e.target.value = "";
       return;
@@ -118,7 +116,7 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
       });
 
       if (!response.ok) {
-        let message = "Import selhal. Zkuste to znovu.";
+        let message = "Import selhal. Zkus to znovu.";
         try {
           const body = await response.json();
           if (body?.error) message = body.error;
@@ -136,7 +134,7 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
       router.refresh();
     } catch {
       setStatus("error");
-      setErrorMessage("Import selhal. Zkontrolujte pripojeni a zkuste to znovu.");
+      setErrorMessage("Import selhal. Zkontroluj připojení a zkus to znovu.");
     } finally {
       // Reset input so the same file can be selected again if needed
       e.target.value = "";
@@ -169,6 +167,7 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
           loading={status === "uploading"}
           disabled={status === "uploading"}
           onClick={handleButtonClick}
+          className="min-h-[44px]"
         >
           Importovat hosty (.xlsx)
         </Button>
@@ -178,8 +177,9 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
             variant="link"
             size="sm"
             onClick={handleReset}
+            className="min-h-[44px]"
           >
-            Zavrit
+            Zavřít
           </Button>
         )}
       </div>
@@ -204,48 +204,48 @@ export function ImportGuestsButton({ meetingId }: ImportGuestsButtonProps) {
 
           {result.truncated && (
             <p className="text-sm text-amber-700">
-              Soubor obsahuje vic nez 500 radku. Zpracovano bylo prvnich 500, zbytek byl ignorovan.
+              Soubor obsahuje víc než 500 řádků. Zpracovalo se prvních 500, zbytek se ignoroval.
             </p>
           )}
 
           {result.createdRows.length > 0 && (
             <div className="text-sm text-slate-600">
-              <p className="font-medium">Nove zalozeni hoste:</p>
+              <p className="font-medium">Nově založení hosté:</p>
               <ul className="list-disc pl-5">
                 {createdDisplay.visible.map((row) => (
                   <li key={row.rowNumber}>{createdRowText(row)}</li>
                 ))}
               </ul>
               {createdDisplay.remaining > 0 && (
-                <p>… a dalsich {createdDisplay.remaining} radku.</p>
+                <p>… a dalších {createdDisplay.remaining} řádků.</p>
               )}
             </div>
           )}
 
           {result.merged.length > 0 && (
             <div className="text-sm text-slate-600">
-              <p className="font-medium">Slouceno s existujicimi zaznamy:</p>
+              <p className="font-medium">Sloučeno s existujícími záznamy:</p>
               <ul className="list-disc pl-5">
                 {mergedDisplay.visible.map((row) => (
                   <li key={`${row.reason}-${row.rowNumber}`}>{mergedRowText(row)}</li>
                 ))}
               </ul>
               {mergedDisplay.remaining > 0 && (
-                <p>… a dalsich {mergedDisplay.remaining} radku.</p>
+                <p>… a dalších {mergedDisplay.remaining} řádků.</p>
               )}
             </div>
           )}
 
           {result.skippedRows.length > 0 && (
             <div className="text-sm text-amber-700">
-              <p className="font-medium">Preskocene radky:</p>
+              <p className="font-medium">Přeskočené řádky:</p>
               <ul className="list-disc pl-5">
                 {skippedDisplay.visible.map((row) => (
                   <li key={row.rowNumber}>{skippedRowText(row)}</li>
                 ))}
               </ul>
               {skippedDisplay.remaining > 0 && (
-                <p>… a dalsich {skippedDisplay.remaining} radku.</p>
+                <p>… a dalších {skippedDisplay.remaining} řádků.</p>
               )}
             </div>
           )}

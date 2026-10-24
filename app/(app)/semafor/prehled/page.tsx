@@ -4,10 +4,13 @@ import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { can } from "@/lib/auth/permissions";
 import { getLatestMonth, listBonusEvents, listMonths, listOverviewRows } from "@/lib/db/queries/semafor";
-import { bonusWindow } from "@/lib/semafor/bonus";
+import { bonusSources, bonusWindow, hasBonusSource } from "@/lib/semafor/bonus";
 import { parseMonthParam, monthParam } from "@/lib/semafor/months";
 import { buildOverview, parseSort } from "@/lib/semafor/overview";
-import { SEMAFOR_TEXTS, monthLabel } from "@/lib/semafor/texts";
+import { SEMAFOR_TEXTS, monthLabel, overviewLegendText } from "@/lib/semafor/texts";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { Card } from "@/components/ui/Card";
 import { SemaforTabs } from "@/components/semafor/SemaforTabs";
 import { OverviewTable } from "@/components/semafor/OverviewTable";
@@ -17,6 +20,9 @@ import { OverviewTable } from "@/components/semafor/OverviewTable";
  * `semafor.view_all` (admin, Prezident, Viceprezident, Člen výboru, jen při
  * přihlášení heslem). `?m=YYYY-MM` se validuje, jinak se bere poslední nahraný
  * měsíc. Řazení `?s=score|name`.
+ *
+ * iter-042: vypnutý semafor ukáže `FeatureOff` (Z10), legenda pod nadpisem
+ * (#16), prázdný stav podle práva importu, bonus jen ze zapnutých částí.
  */
 export default async function SemaforOverviewPage({
   searchParams,
@@ -24,6 +30,8 @@ export default async function SemaforOverviewPage({
   searchParams?: { m?: string | string[]; s?: string | string[] };
 }) {
   const session = await requirePageSession({ permission: "semafor.view_all", denyTo: "/dashboard" });
+  if (await featureOff("semafor")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
+  const sources = bonusSources(await getChapterSettings());
   const canImport = can(session, "semafor.import");
 
   const [months, latest] = await Promise.all([listMonths(), getLatestMonth()]);
@@ -35,16 +43,18 @@ export default async function SemaforOverviewPage({
   if (!month) {
     content = (
       <Card>
-        <p className="text-sm text-text-muted">{SEMAFOR_TEXTS.myNone}</p>
+        <p className="text-sm text-text-muted">
+          {canImport ? SEMAFOR_TEXTS.myNoneImport : SEMAFOR_TEXTS.myNone}
+        </p>
       </Card>
     );
   } else {
     const w = bonusWindow(month);
-    const [rows, events] = await Promise.all([listOverviewRows(month), listBonusEvents({ after: w.after, to: w.to })]);
+    const [rows, events] = await Promise.all([listOverviewRows(month), listBonusEvents({ after: w.after, to: w.to, sources })]);
     const items = buildOverview(month, rows, events, sort);
     content = (
       <Card>
-        <OverviewTable month={month} items={items} canDelete={canImport} />
+        <OverviewTable month={month} items={items} canDelete={canImport} showBonus={hasBonusSource(sources)} />
       </Card>
     );
   }
@@ -52,7 +62,10 @@ export default async function SemaforOverviewPage({
   return (
     <div className="max-w-5xl space-y-6">
       <SemaforTabs active="overview" canViewAll canImport={canImport} />
-      <h1 className="text-2xl font-bold text-text-main">{SEMAFOR_TEXTS.overviewTitle}</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-text-main">{SEMAFOR_TEXTS.overviewTitle}</h1>
+        <p className="mt-2 text-sm text-text-muted">{overviewLegendText(sources)}</p>
+      </div>
 
       {month && (
         <div className="flex flex-wrap items-end gap-3">

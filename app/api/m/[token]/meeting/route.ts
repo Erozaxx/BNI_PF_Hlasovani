@@ -13,7 +13,7 @@ import {
   member,
 } from "@/lib/db/schema";
 
-// Opt out of Next.js Data Cache — DB state changes must be reflected immediately
+// Opt out of Next.js Data Cache - DB state changes must be reflected immediately
 export const dynamic = "force-dynamic";
 
 function getDb() {
@@ -30,10 +30,11 @@ function err(status: number, message: string) {
  * Returns meeting data for the authenticated member:
  * - phase (active|voting|closed)
  * - meetingDate, location
+ * - votingClosesAt (ISO, jen čtení uloženého konce hlasování, iter-042 Z1)
  * - memberName
  * - guests with notes and myVote
  *
- * Auth: magic token in URL — no session required.
+ * Auth: magic token in URL - no session required.
  */
 export async function GET(
   _req: NextRequest,
@@ -62,6 +63,7 @@ export async function GET(
       date: meeting.date,
       status: meeting.status,
       location: meeting.location,
+      votingClosesAt: meeting.votingClosesAt,
     })
     .from(meeting)
     .where(eq(meeting.id, meetingId))
@@ -73,7 +75,7 @@ export async function GET(
 
   const meetingData = meetingRows[0];
 
-  // 3. If meeting is in draft or active state, voting has not started yet —
+  // 3. If meeting is in draft or active state, voting has not started yet -
   //    return early with a minimal payload so the client can show a waiting screen.
   if (meetingData.status === "draft" || meetingData.status === "active") {
     const memberRowsEarly = await getDb()
@@ -138,7 +140,7 @@ export async function GET(
     .from(vote)
     .where(and(eq(vote.memberId, memberId), eq(vote.meetingId, meetingId)));
 
-  // 6b. Load all votes for this meeting (for aggregate summary + named detail — visible in voting + closed)
+  // 6b. Load all votes for this meeting (for aggregate summary + named detail - visible in voting + closed)
   const allVoteRows = await getDb()
     .select({
       guestId: vote.guestId,
@@ -222,6 +224,9 @@ export async function GET(
     phase: meetingData.status,
     meetingDate: meetingData.date,
     location: meetingData.location ?? null,
+    votingClosesAt: meetingData.votingClosesAt
+      ? meetingData.votingClosesAt.toISOString()
+      : null,
     memberName,
     guests,
   });

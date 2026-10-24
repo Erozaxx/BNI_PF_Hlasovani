@@ -5,7 +5,8 @@ import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { NO_PERMISSION_MESSAGE, canAny } from "@/lib/auth/permissions";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { MAX_ADVANCE_DAYS } from "@/lib/attendance/rules";
-import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
+import { UNEXCUSED_TEXTS, unexcusedTooEarlyText } from "@/lib/attendance/texts";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import {
   SHEET_TEXTS,
   decideAttendanceWriteMode,
@@ -131,8 +132,9 @@ export async function POST(
     let closed = false;
     let inactive = false;
     let conflict = false;
-    // iter-041: odmítnutí kvůli času (7:30) nebo souběhu omluvy a „Chyběl(a) bez omluvy“.
+    // iter-041: odmítnutí kvůli času (začátek schůzky) nebo souběhu omluvy a „Chyběl(a) bez omluvy“.
     let blocked: string | null = null;
+    const { meetingTime } = await getChapterSettings();
 
     if (body.op === "presence") {
       const res = await writePresenceGuarded({
@@ -143,11 +145,12 @@ export async function POST(
         expectedVersion: body.expectedVersion,
         actorId: session.memberId,
         mode,
+        meetingTime,
       });
       if (res.result === "ok") audited = res.audited;
       else if (res.result === "day-closed") closed = true;
       else if (res.result === "inactive") inactive = true;
-      else if (res.result === "too-early") blocked = UNEXCUSED_TEXTS.tooEarly;
+      else if (res.result === "too-early") blocked = unexcusedTooEarlyText(meetingTime);
       else if (res.result === "excused-conflict") blocked = UNEXCUSED_TEXTS.excusedConflict;
       else conflict = true;
     } else {

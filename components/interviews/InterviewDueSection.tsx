@@ -4,11 +4,11 @@ import { Badge } from "@/components/ui/Badge";
 import { compareMemberNames } from "@/lib/interviews/list-filters";
 
 /**
- * "Pohovory k zalozeni" widget (arch section 7.2, T-006d) — admin/moderator
+ * "Pohovory k založení" widget (arch section 7.2, T-006d), admin/moderator
  * only, computed-on-read (no cron, per závazné rozhodnutí 3). Purely
  * informational: it lists members whose 5- or 10-month interview is due or
  * coming up, plus the "unverified joined_at" heuristic (arch 7.1). It does
- * NOT offer a "founding" action — creating the interview itself is T-007.
+ * NOT offer a "founding" action - creating the interview itself is T-007.
  *
  * Caller is responsible for only rendering this for admin/moderator sessions.
  */
@@ -32,7 +32,7 @@ export async function InterviewDueSection() {
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-text-main">
-          Pohovory k zalozeni (5 / 10 mesicu)
+          Pohovory k založení (5 a 10 měsíců)
         </h2>
         {due.length > 0 && <Badge variant="danger">{due.length}</Badge>}
       </div>
@@ -54,7 +54,7 @@ export async function InterviewDueSection() {
 function daysLabel(days: number): string {
   if (days === 1) return "den";
   if (days >= 2 && days <= 4) return "dny";
-  return "dni";
+  return "dní";
 }
 
 function DueRow({
@@ -75,21 +75,21 @@ function DueRow({
       <div className="flex flex-wrap gap-2 items-center text-sm">
         {entry.due5 && entry.due5SinceDays !== null && (
           <Badge variant="danger">
-            5 mesicu — sviti {entry.due5SinceDays}{" "}
+            5 měsíců: na řadě {entry.due5SinceDays}{" "}
             {daysLabel(entry.due5SinceDays)}
           </Badge>
         )}
         {entry.due10 && entry.due10SinceDays !== null && (
           <Badge variant="danger">
-            10 mesicu — sviti {entry.due10SinceDays}{" "}
+            10 měsíců: na řadě {entry.due10SinceDays}{" "}
             {daysLabel(entry.due10SinceDays)}
           </Badge>
         )}
         {!entry.due5 && entry.upcoming5 && (
-          <Badge variant="info">5 mesicu — blizi se</Badge>
+          <Badge variant="info">5 měsíců: blíží se</Badge>
         )}
         {!entry.due10 && entry.upcoming10 && (
-          <Badge variant="info">10 mesicu — blizi se</Badge>
+          <Badge variant="info">10 měsíců: blíží se</Badge>
         )}
       </div>
     </li>

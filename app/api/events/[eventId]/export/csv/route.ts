@@ -48,11 +48,11 @@ export async function GET(
   const voteSet = new Set(votes.map((v) => `${v.participantId}:${v.optionId}`));
 
   // Build CSV
-  // Header: Ucastnik, Email, Clenstvi, <option1>, <option2>, ...
+  // Header: Účastník, E-mail, Členství, <option1>, <option2>, ...
   const headerRow = [
-    "Ucastnik",
-    "Email",
-    "Clenstvi",
+    "Účastník",
+    "E-mail",
+    "Členství",
     ...options.map((o) => o.label),
   ]
     .map(csvEscape)
@@ -61,7 +61,7 @@ export async function GET(
   const dataRows = participants.map((p) => {
     const name = p.memberName ?? p.externalName ?? "";
     const email = p.memberEmail ?? p.externalEmail ?? "";
-    const membership = p.memberId ? "Clen BNI" : "Externi";
+    const membership = p.memberId ? "Člen BNI" : "Externí";
     const optionCols = options.map((o) =>
       voteSet.has(`${p.id}:${o.id}`) ? "1" : "0"
     );

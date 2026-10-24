@@ -72,7 +72,7 @@ export default async function AdminMembersPage() {
           <Card>
             <EmptyState
               title="Zatím žádní členové"
-              description="Přidejte prvního člena pomocí formuláře výše."
+              description="Přidej prvního člena ve formuláři výše."
             />
           </Card>
         )}

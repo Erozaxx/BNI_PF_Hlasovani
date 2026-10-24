@@ -64,11 +64,11 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
     // Client-side validation
     let hasError = false;
     if (!name.trim()) {
-      setNameError("Jmeno hosta je povinne.");
+      setNameError("Jméno hosta je povinné.");
       hasError = true;
     }
     if (!categoryId) {
-      setCategoryError("Kategorie je povinna.");
+      setCategoryError("Kategorie je povinná.");
       hasError = true;
     }
     if (hasError) return;
@@ -89,7 +89,7 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", isEdit ? "Host byl upraven." : "Host byl pridan.");
+        showToast("success", isEdit ? "Host je upravený." : "Host je přidaný.");
         if (!isEdit && result.data && "id" in result.data) {
           router.push(`/guests/${result.data.id}`);
         } else {
@@ -98,8 +98,8 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
         router.refresh();
       }
     } catch {
-      setError("Doslo k neocekavane chybe.");
-      showToast("error", "Doslo k neocekavane chybe.");
+      setError("Něco se pokazilo. Zkus to znovu.");
+      showToast("error", "Něco se pokazilo. Zkus to znovu.");
     } finally {
       setLoading(false);
     }
@@ -142,21 +142,18 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
       <div>
         <div className="flex items-center gap-1 mb-1">
           <span className="text-sm font-medium text-text-main">Kategorie *</span>
-          <span
-            title="Kategorie vychází z číselníku CZ-NACE. Doporučujeme přiřadit standardní kategorii ze seznamu."
-            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-text-muted/20 text-text-muted text-xs cursor-help select-none"
-          >
-            ?
-          </span>
         </div>
         <CreatableSelect
           options={categoryOptions}
           value={categoryId}
           onChange={setCategoryId}
           onCreateOption={handleCreateCategory}
-          placeholder="Vyberte nebo napište kategorii"
+          placeholder="Vyber nebo napiš kategorii"
           error={categoryError}
         />
+        <p className="mt-1 text-xs text-text-muted">
+          Kategorie vychází z číselníku CZ-NACE. Vyber ze seznamu, novou zakládej, jen když obor chybí.
+        </p>
       </div>
 
       <Textarea
@@ -164,7 +161,7 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
         name="description"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Kratky popis hosta, jeho obor..."
+        placeholder="Krátký popis hosta, jeho obor..."
       />
 
       {!isEdit && activeMeeting && (
@@ -180,15 +177,21 @@ export function GuestForm({ categories, guest, activeMeeting }: GuestFormProps) 
       )}
 
       <div className="flex gap-3">
-        <Button type="submit" variant="primary" loading={loading}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={loading}
+          className="min-h-[44px]"
+        >
           {isEdit ? "Uložit změny" : "Přidat hosta"}
         </Button>
         <Button
           type="button"
           variant="secondary"
           onClick={() => router.back()}
+          className="min-h-[44px]"
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </form>

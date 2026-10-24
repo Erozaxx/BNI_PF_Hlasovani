@@ -30,18 +30,18 @@ export async function parseXlsxAction(
 
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return { success: false, error: "Soubor nebyl prilo'zen." };
+    return { success: false, error: "Soubor nebyl přiložen." };
   }
 
   if (!file.name.endsWith(".xlsx")) {
-    return { success: false, error: "Pouze soubory .xlsx jsou podporovany." };
+    return { success: false, error: "Podporované jsou jen soubory .xlsx." };
   }
 
   let buffer: ArrayBuffer;
   try {
     buffer = await file.arrayBuffer();
   } catch {
-    return { success: false, error: "Nepodarilo se precist soubor." };
+    return { success: false, error: "Soubor se nepodařilo přečíst." };
   }
 
   const parseResult = parseXlsxFileWithDuplicates(buffer);
@@ -54,7 +54,7 @@ export async function parseXlsxAction(
   try {
     dbMembers = await getMembersForImport();
   } catch {
-    return { success: false, error: "Nepodarilo se nacist cleny z databaze." };
+    return { success: false, error: "Členy se nepodařilo načíst z databáze." };
   }
 
   // Build a lookup map: normalized name → member
@@ -78,7 +78,7 @@ export async function parseXlsxAction(
         xlsxRole: xlsxRow.role,
         xlsxJoinedAt: xlsxRow.joinedAt,
         status: "skipped",
-        reason: "Duplicitni jmeno v souboru",
+        reason: "Duplicitní jméno v souboru",
       });
       skippedCount++;
       continue;
@@ -138,7 +138,7 @@ export async function parseXlsxAction(
 /**
  * Perform the actual import of confirmed rows.
  * Only processes rows with status 'new' or 'update'.
- * managementRole is NEVER set — import creates regular members only.
+ * managementRole is NEVER set - import creates regular members only.
  */
 export async function importMembersAction(
   rows: ImportPreviewRow[]
@@ -147,7 +147,7 @@ export async function importMembersAction(
   if (!auth.success) return auth;
 
   if (!Array.isArray(rows) || rows.length === 0) {
-    return { success: false, error: "Zadne radky k importu." };
+    return { success: false, error: "Žádné řádky k importu." };
   }
 
   const rowsToProcess = rows.filter(
@@ -155,7 +155,7 @@ export async function importMembersAction(
   );
 
   if (rowsToProcess.length === 0) {
-    return { success: false, error: "Zadne radky ke zpracovani (pouze new/update)." };
+    return { success: false, error: "Žádné řádky ke zpracování. Importují se jen nové a aktualizované." };
   }
 
   let createdCount = 0;
@@ -171,15 +171,15 @@ export async function importMembersAction(
           name: row.xlsxName.trim(),
           obor: row.xlsxObor ?? null,
           // joined_at: XLSX value if present (MAJOR-3), otherwise omitted so
-          // the column's own DB default (CURRENT_DATE) applies — import must
+          // the column's own DB default (CURRENT_DATE) applies - import must
           // never be blocked by a missing entry date.
           joinedAt: row.xlsxJoinedAt ?? null,
-          // managementRole is intentionally omitted — import creates regular members only
+          // managementRole is intentionally omitted - import creates regular members only
         });
         createdCount++;
       } else if (row.status === "update") {
         if (!row.existingMemberId) {
-          errors.push(`Clen "${row.xlsxName}": chybi existingMemberId.`);
+          errors.push(`Člen „${row.xlsxName}“: chybí vazba na stávajícího člena.`);
           errorCount++;
           continue;
         }
@@ -187,7 +187,7 @@ export async function importMembersAction(
         // Server-side validation: verify the member still exists in DB
         const dbMember = await getMemberById(row.existingMemberId);
         if (!dbMember) {
-          errors.push(`Clen "${row.xlsxName}": v DB nenalezen (id: ${row.existingMemberId}).`);
+          errors.push(`Člen „${row.xlsxName}“: v databázi nebyl nalezen.`);
           errorCount++;
           continue;
         }
@@ -195,14 +195,14 @@ export async function importMembersAction(
         // iter-037 (M-1): údaje člena s rolí admin mění jen admin (SQL to hlídá
         // znovu přes `actorId`).
         if (!mayChangeMember(isAdminSession(auth.session), dbMember.managementRole)) {
-          errors.push(`Clen "${row.xlsxName}": ${ADMIN_ONLY_MESSAGE}`);
+          errors.push(`Člen „${row.xlsxName}“: ${ADMIN_ONLY_MESSAGE}`);
           errorCount++;
           continue;
         }
 
         await updateMemberObor(row.existingMemberId, row.xlsxObor ?? null, auth.session.memberId);
         // joined_at: only touched when the XLSX row actually has a value
-        // (MAJOR-3) — an update row never clears an existing entry date just
+        // (MAJOR-3) - an update row never clears an existing entry date just
         // because the column was left blank in the file.
         if (row.xlsxJoinedAt) {
           await updateMemberJoinedAt(
@@ -215,7 +215,7 @@ export async function importMembersAction(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push(`Clen "${row.xlsxName}": ${message}`);
+      errors.push(`Člen „${row.xlsxName}“: ${message}`);
       errorCount++;
     }
   }

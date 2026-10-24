@@ -8,11 +8,17 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CreateMeetingForm } from "./CreateMeetingForm";
 import { statusLabel } from "@/lib/meetings/statusLabel";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
+import { nextRegularDay } from "@/lib/chapter/settings";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
+import { todayInPrague } from "@/lib/meetings/voting-window";
 
 export default async function MeetingsPage() {
   const session = await requirePageSession();
   const meetings = await getMeetings();
   const isManagement = can(session, "meetings.manage");
+  // iter-042 (Z11): nová schůzka má předvyplněný nejbližší pravidelný den.
+  const defaultDate = isManagement ? nextRegularDay(todayInPrague(), await getChapterSettings()) : "";
 
   const statusBadge = (status: string) => {
     const label = statusLabel[status] ?? status;
@@ -39,7 +45,7 @@ export default async function MeetingsPage() {
           <h2 className="text-sm font-semibold text-text-muted mb-3">
             Nová schůzka
           </h2>
-          <CreateMeetingForm />
+          <CreateMeetingForm defaultDate={defaultDate} />
         </Card>
       )}
 
@@ -51,7 +57,7 @@ export default async function MeetingsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <p className="font-medium text-text-main">
-                      Schůzka {m.date}
+                      Schůzka {formatWeekdayFull(m.date)}
                     </p>
                     <div className="mt-1">{statusBadge(m.status)}</div>
                   </div>
@@ -66,8 +72,8 @@ export default async function MeetingsPage() {
       ) : (
         <Card>
           <EmptyState
-            title="Zatim zadne schuzky"
-            description="Vytvorte prvni schuzku pomoci formulare vyse."
+            title="Zatím žádné schůzky."
+            description="Vytvoř první ve formuláři výše."
           />
         </Card>
       )}

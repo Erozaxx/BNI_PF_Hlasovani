@@ -13,6 +13,7 @@ import { DeleteGuestButton } from "@/components/guests/DeleteGuestButton";
 import { PromoteGuestButton } from "@/components/guests/PromoteGuestButton";
 import { NoteList } from "@/components/notes/NoteList";
 import { NoteForm } from "@/components/notes/NoteForm";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 export default async function GuestDetailPage({
   params,
@@ -43,7 +44,7 @@ export default async function GuestDetailPage({
     <div className="space-y-6 max-w-3xl">
       <Link href={backUrl}>
         <Button variant="link" size="sm">
-          &larr; Zpet
+          &larr; Zpět
         </Button>
       </Link>
 
@@ -55,7 +56,7 @@ export default async function GuestDetailPage({
             <p className="text-base text-text-muted">{guest.company}</p>
           )}
           <Badge variant="category" className="mt-2">
-            {guest.categoryName ?? "[bez kategorie]"}
+            {guest.categoryName ?? "Bez kategorie"}
           </Badge>
           {guest.email && (
             <p className="text-sm text-text-muted mt-1">
@@ -66,7 +67,7 @@ export default async function GuestDetailPage({
           )}
           {lastMeetingDate && (
             <p className="text-sm text-text-muted mt-1">
-              Naposledy na schůzce: {lastMeetingDate}
+              Naposledy na schůzce: {formatWeekdayFull(lastMeetingDate)}
             </p>
           )}
         </div>
@@ -110,7 +111,7 @@ export default async function GuestDetailPage({
       {/* Notes */}
       <Card>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Poznamky
+          Poznámky
         </h2>
         <NoteForm guestId={guest.id} />
         <div className="mt-4">
@@ -120,7 +121,7 @@ export default async function GuestDetailPage({
 
       {/* Metadata */}
       <p className="text-xs text-text-muted">
-        Pridano:{" "}
+        Přidáno:{" "}
         {new Date(guest.createdAt).toLocaleDateString("cs-CZ", {
           day: "numeric",
           month: "long",

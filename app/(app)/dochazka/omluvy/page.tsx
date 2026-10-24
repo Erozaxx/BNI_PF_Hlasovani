@@ -35,6 +35,7 @@ export default async function AbsencePlanPage({
     datesWithAbsences: plan.rows.map((r) => r.date),
     from: plan.from,
     to: plan.to,
+    settings: { meetingWeekday: plan.regularWeekday },
   });
 
   return (
@@ -51,6 +52,7 @@ export default async function AbsencePlanPage({
         canManageInternal={plan.canManageInternal}
         rows={plan.rows}
         initialSelected={initialSelected}
+        regularWeekday={plan.regularWeekday}
       />
     </div>
   );

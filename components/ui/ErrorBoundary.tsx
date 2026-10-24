@@ -52,10 +52,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-text-main mb-1">
-            Neco se pokazilo
+            Něco se pokazilo
           </h3>
           <p className="text-sm text-text-muted max-w-sm mb-4">
-            Doslo k neocekavane chybe. Zkuste to prosim znovu.
+            Došlo k neočekávané chybě. Zkus to prosím znovu.
           </p>
           <Button variant="primary" size="sm" onClick={this.handleReset}>
             Zkusit znovu

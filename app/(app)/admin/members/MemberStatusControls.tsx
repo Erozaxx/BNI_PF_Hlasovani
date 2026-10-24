@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import { deactivationHidesText } from "@/components/help/help-texts";
 import {
   deactivateMemberAction,
   reactivateMemberAction,
@@ -30,12 +31,20 @@ interface MemberStatusControlsProps {
   deactivatedInfo: string | null;
   todayPrague: string;
   isSelf: boolean;
+  /** Zapnuté části chapteru (iter-042), podle nich text jmenuje, co se skryje. */
+  burzaEnabled: boolean;
+  mastermindEnabled: boolean;
 }
 
 type Mode = "idle" | "form" | "confirm" | "edit";
 
-const SUMMARY =
-  "Člen se hned odhlásí a nepřihlásí se odkazem ani heslem. Nedostane odkazy k hlasování, připomínky ani pozvánky na akce a nepočítá se mezi hlasující. Jeho karty v Burze a témata v Master mindu nebudou vidět, naplánované téma se vrátí do zásobníku. Data i funkce zůstanou.";
+function summaryText(burza: boolean, mastermind: boolean): string {
+  return (
+    "Člen se hned odhlásí a nepřihlásí se odkazem ani heslem. Nedostane odkazy k hlasování, připomínky ani pozvánky na akce a nepočítá se mezi hlasující." +
+    deactivationHidesText({ burza, mastermind }) +
+    " Data i funkce zůstanou."
+  );
+}
 
 export function MemberStatusControls({
   memberId,
@@ -44,6 +53,8 @@ export function MemberStatusControls({
   deactivatedInfo,
   todayPrague,
   isSelf,
+  burzaEnabled,
+  mastermindEnabled,
 }: MemberStatusControlsProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -102,7 +113,7 @@ export function MemberStatusControls({
         setMode("idle");
         showToast(
           "success",
-          unscheduled > 0
+          unscheduled > 0 && mastermindEnabled
             ? "Člen je neaktivní. Naplánované téma v Master mindu se vrátilo do zásobníku."
             : "Člen je neaktivní."
         );
@@ -231,7 +242,7 @@ export function MemberStatusControls({
 
       {!isInactive && mode === "confirm" && (
         <div className="rounded-lg border border-border bg-background p-3 text-sm space-y-3">
-          <p>{SUMMARY}</p>
+          <p>{summaryText(burzaEnabled, mastermindEnabled)}</p>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="danger"

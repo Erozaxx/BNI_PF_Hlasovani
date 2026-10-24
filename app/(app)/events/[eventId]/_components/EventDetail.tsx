@@ -39,16 +39,16 @@ interface EventDetailProps {
 }
 
 const STATUS_LABELS: Record<EventStatus, string> = {
-  draft: "Priprava",
-  active: "Aktivni",
-  closed: "Uzavrena",
-  done: "Konana",
+  draft: "Příprava",
+  active: "Aktivní",
+  closed: "Uzavřená",
+  done: "Konaná",
 };
 
 const VOTING_TYPE_LABELS: Record<string, string> = {
-  pick_one: "Vyberte jednu moznost",
-  multiple: "Vyberte vice moznosti",
-  max_x: "Max. N moznosti",
+  pick_one: "Jedna možnost",
+  multiple: "Více možností",
+  max_x: "Nejvýš N možností",
 };
 
 const WHO_CAN_LABELS: Record<string, string> = {
@@ -90,7 +90,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
   }
 
   function handleActivate() {
-    if (!confirm("Spustit akci? Účastníci získají přístup k hlasování.")) return;
+    if (!confirm("Spustit akci? Účastníci dostanou přístup k hlasování.")) return;
     clearMessages();
     startTransition(async () => {
       const result = await activateEventAction(event.id);
@@ -100,8 +100,8 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
         const skippedInactive = result.data?.skippedInactive ?? 0;
         setSuccessMsg(
           skippedInactive > 0
-            ? `Akce byla spustena. Přeskočeno, neaktivní: ${skippedInactive}`
-            : "Akce byla spustena."
+            ? `Akce byla spuštěna. Přeskočeno, neaktivní: ${skippedInactive}`
+            : "Akce byla spuštěna."
         );
         router.refresh();
       }
@@ -109,21 +109,21 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
   }
 
   function handleClose() {
-    if (!confirm("Uzavřít akci? Tato akce je nevratná.")) return;
+    if (!confirm("Uzavřít akci? Vrátit to nepůjde.")) return;
     clearMessages();
     startTransition(async () => {
       const result = await closeEventAction(event.id);
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Akce byla uzavrena.");
+        setSuccessMsg("Akce byla uzavřena.");
         router.refresh();
       }
     });
   }
 
   function handleMarkDone() {
-    if (!confirm(`Označit akci „${event.title}" jako konanou? Přístupové odkazy budou zneplatněny.`)) return;
+    if (!confirm(`Označit akci „${event.title}“ jako konanou? Odkazy pro účastníky přestanou platit.`)) return;
     clearMessages();
     startTransition(async () => {
       const result = await markEventDoneAction(event.id);
@@ -139,7 +139,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
   function handleDelete() {
     if (
       !confirm(
-        `Opravdu smazat akci „${event.title}"? Tato akce je nevratna.`
+        `Smazat akci „${event.title}“? Vrátit to nepůjde.`
       )
     )
       return;
@@ -156,7 +156,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
 
   function handleEditSave() {
     if (!editTitle.trim()) {
-      setError("Nazev akce je povinny.");
+      setError("Název akce je povinný.");
       return;
     }
     clearMessages();
@@ -169,7 +169,7 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Zmeny ulozeny.");
+        setSuccessMsg("Změny jsou uložené.");
         setEditing(false);
         router.refresh();
       }
@@ -245,14 +245,19 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
                 >
                   Uzavřít akci
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled
-                  title="Nejdrive uzavri akci"
-                >
-                  Smazat
-                </Button>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="min-h-[44px]"
+                    disabled
+                  >
+                    Smazat
+                  </Button>
+                  <span className="text-xs text-text-muted">
+                    Smazat jde až po uzavření akce.
+                  </span>
+                </div>
               </>
             )}
 
@@ -286,21 +291,23 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
               <Button
                 variant="primary"
                 size="sm"
+                className="min-h-[44px]"
                 onClick={handleEditSave}
                 loading={isPending}
               >
-                Ulozit
+                Uložit
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
+                className="min-h-[44px]"
                 onClick={() => {
                   setEditing(false);
                   clearMessages();
                 }}
                 disabled={isPending}
               >
-                Zrusit
+                Zrušit
               </Button>
             </div>
           </div>
@@ -314,37 +321,42 @@ export function EventDetail({ event, isAdmin }: EventDetailProps) {
         {/* Config info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border text-sm text-text-muted">
           <div>
-            <span className="font-medium text-text-main">Typ hlasovani:</span>{" "}
-            {VOTING_TYPE_LABELS[event.votingType] ?? event.votingType}
-            {event.votingType === "max_x" && event.votingMaxX !== null && (
-              <span> (max {event.votingMaxX})</span>
-            )}
+            <span className="font-medium text-text-main">Typ hlasování:</span>{" "}
+            {event.votingType === "max_x" && event.votingMaxX !== null
+              ? `Nejvýš ${event.votingMaxX} ${
+                  event.votingMaxX === 1
+                    ? "možnost"
+                    : event.votingMaxX <= 4
+                      ? "možnosti"
+                      : "možností"
+                }`
+              : (VOTING_TYPE_LABELS[event.votingType] ?? event.votingType)}
           </div>
           <div>
             <span className="font-medium text-text-main">Kdo hlasuje:</span>{" "}
             {WHO_CAN_LABELS[event.whoCanVote] ?? event.whoCanVote}
           </div>
           <div>
-            <span className="font-medium text-text-main">Vlastni moznosti:</span>{" "}
-            {event.customOptionsAllowed ? "Povoleno" : "Zakazano"}
+            <span className="font-medium text-text-main">Vlastní možnosti:</span>{" "}
+            {event.customOptionsAllowed ? "Povoleno" : "Zakázáno"}
           </div>
           {event.customOptionsAllowed && (
             <div>
               <span className="font-medium text-text-main">
-                Kdo prida moznosti:
+                Kdo přidá možnosti:
               </span>{" "}
               {WHO_CAN_LABELS[event.whoCanAddOptions] ?? event.whoCanAddOptions}
             </div>
           )}
           {event.activatedAt && (
             <div>
-              <span className="font-medium text-text-main">Spustena:</span>{" "}
+              <span className="font-medium text-text-main">Spuštěna:</span>{" "}
               {new Date(event.activatedAt).toLocaleDateString("cs-CZ")}
             </div>
           )}
           {event.closedAt && (
             <div>
-              <span className="font-medium text-text-main">Uzavrena:</span>{" "}
+              <span className="font-medium text-text-main">Uzavřena:</span>{" "}
               {new Date(event.closedAt).toLocaleDateString("cs-CZ")}
             </div>
           )}

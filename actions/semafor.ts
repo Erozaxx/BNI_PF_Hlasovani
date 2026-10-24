@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth/guards";
+import { requireFeature } from "@/lib/chapter/feature-guard";
 import { isValidDateString, pragueToday } from "@/lib/members/activity";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import type { OpsEventInput } from "@/lib/ops/types";
@@ -113,6 +114,8 @@ export interface PreviewData {
 export async function previewSemaforImportAction(formData: FormData): Promise<ActionResult<PreviewData>> {
   const auth = await requirePermission("semafor.import");
   if (!auth.success) return auth;
+  const off = await requireFeature("semafor");
+  if (off) return off;
 
   const month = formData.get("month");
   if (!validateImportMonth(month, pragueToday())) return { success: false, error: SEMAFOR_TEXTS.errMonth };
@@ -168,6 +171,8 @@ export interface CommitData {
 export async function commitSemaforImportAction(formData: FormData): Promise<ActionResult<CommitData>> {
   const auth = await requirePermission("semafor.import");
   if (!auth.success) return auth;
+  const off = await requireFeature("semafor");
+  if (off) return off;
   const actor = auth.session;
 
   const month = formData.get("month");
@@ -238,6 +243,8 @@ export async function commitSemaforImportAction(formData: FormData): Promise<Act
 export async function deleteSemaforMonthAction(month: string): Promise<ActionResult<{ rows: number }>> {
   const auth = await requirePermission("semafor.import");
   if (!auth.success) return auth;
+  const off = await requireFeature("semafor");
+  if (off) return off;
   const actor = auth.session;
 
   const parsed = monthSchema.safeParse(month);
@@ -259,6 +266,8 @@ export async function deleteSemaforMonthAction(month: string): Promise<ActionRes
 export async function deleteSemaforRowAction(month: string, memberId: string): Promise<ActionResult> {
   const auth = await requirePermission("semafor.import");
   if (!auth.success) return auth;
+  const off = await requireFeature("semafor");
+  if (off) return off;
   const actor = auth.session;
 
   const m = monthSchema.safeParse(month);
@@ -281,6 +290,8 @@ export async function deleteSemaforRowAction(month: string, memberId: string): P
 export async function removeSemaforAliasAction(nameKey: string): Promise<ActionResult> {
   const auth = await requirePermission("semafor.import");
   if (!auth.success) return auth;
+  const off = await requireFeature("semafor");
+  if (off) return off;
   const actor = auth.session;
 
   const parsed = z.string().min(2).max(120).safeParse(nameKey);

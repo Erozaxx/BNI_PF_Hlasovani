@@ -5,20 +5,20 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { scheduleCaseAction } from "@/actions/mastermind";
-import { formatDM, formatWeekdayDM, type ThursdayOption } from "@/lib/mastermind/rules";
+import { UI_TEXTS, formatDM, formatWeekdayDM, type DayOption } from "@/lib/mastermind/rules";
 
 /**
  * Panel „Zařadit na“ (jen vedení, jen u navrženého případu, 7.3, Z1, Z3, Z4).
- * Položka výběru je jen datum („čt 22. 10.“), zakázané čtvrtky mají
- * „(otevřená)“ nebo „(obsazeno)“. Poznámka o lhůtě je vedle výběru, ne v textu
- * položky, a nic nezakazuje.
+ * Položka výběru je jen datum („čt 22. 10.“), zakázané dny mají „(schůzka s
+ * hosty)“ nebo „(už má jiný případ)“. Den schůzky je z nastavení chapteru.
+ * Poznámka o lhůtě je vedle výběru, ne v textu položky, a nic nezakazuje.
  */
 export function ScheduleCasePanel({
   caseId,
   options,
 }: {
   caseId: string;
-  options: ThursdayOption[];
+  options: DayOption[];
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -51,6 +51,7 @@ export function ScheduleCasePanel({
       <label htmlFor={`schedule-${caseId}`} className="block text-sm font-medium text-text-main">
         Zařadit na
       </label>
+      <p className="text-sm text-text-muted">{UI_TEXTS.scheduleHint}</p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           id={`schedule-${caseId}`}
@@ -58,11 +59,15 @@ export function ScheduleCasePanel({
           onChange={(e) => setDate(e.target.value)}
           className="h-11 w-full sm:w-auto rounded-lg border border-border bg-white px-3 text-base text-text-main focus:outline-none focus:border-primary focus:shadow-focus"
         >
-          <option value="">Vyber čtvrtek</option>
+          <option value="">{UI_TEXTS.pickDay}</option>
           {options.map((o) => (
             <option key={o.date} value={o.date} disabled={o.state !== "free"}>
               {formatWeekdayDM(o.date)}
-              {o.state === "open-meeting" ? " (otevřená)" : o.state === "taken" ? " (obsazeno)" : ""}
+              {o.state === "open-meeting"
+                ? ` ${UI_TEXTS.optionOpenMeeting}`
+                : o.state === "taken"
+                  ? ` ${UI_TEXTS.optionTaken}`
+                  : ""}
             </option>
           ))}
         </select>

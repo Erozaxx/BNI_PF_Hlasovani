@@ -12,7 +12,7 @@ interface ArchiveQuestionButtonProps {
 }
 
 /**
- * Toggle a question between active and archived (soft delete — arch 4.1).
+ * Toggle a question between active and archived (soft delete - arch 4.1).
  * Archiving is reversible (no confirm needed on reactivate); archiving itself
  * asks for confirmation because it removes the question from all future
  * interview snapshots (existing snapshots are untouched copies).
@@ -28,7 +28,7 @@ export function ArchiveQuestionButton({
   async function handleToggle() {
     if (active) {
       const confirmed = window.confirm(
-        "Archivovat tuto otazku? Nebude nabizena v nove zalozenych pohovorech. Jiz zalozene pohovory zustanou beze zmeny."
+        "Archivovat tuhle otázku? Nebude se nabízet v nově založených pohovorech. Už založené pohovory zůstanou beze změny."
       );
       if (!confirmed) return;
     }
@@ -41,7 +41,7 @@ export function ArchiveQuestionButton({
       } else {
         showToast(
           "success",
-          active ? "Otazka byla archivovana." : "Otazka byla obnovena."
+          active ? "Otázka je archivovaná." : "Otázka je obnovená."
         );
         router.refresh();
       }
@@ -49,8 +49,8 @@ export function ArchiveQuestionButton({
       showToast(
         "error",
         active
-          ? "Nepodarilo se archivovat otazku."
-          : "Nepodarilo se obnovit otazku."
+          ? "Otázku se nepodařilo archivovat."
+          : "Otázku se nepodařilo obnovit."
       );
     } finally {
       setLoading(false);
@@ -62,6 +62,7 @@ export function ArchiveQuestionButton({
       type="button"
       variant={active ? "danger" : "secondary"}
       size="sm"
+      className="min-h-[44px]"
       loading={loading}
       onClick={handleToggle}
     >

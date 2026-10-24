@@ -320,7 +320,7 @@ export type DueFilters = Record<DueFilterField, string | null>;
 export type DueFilterOptions = Record<DueFilterField, FilterOption[]>;
 
 const CHIP_OPTIONS: FilterOption[] = [
-  { value: "sviti", label: "Svítí" },
+  { value: "sviti", label: "Na řadě" },
   { value: "blizi", label: "Blíží se" },
   { value: "nic", label: "Nic" },
 ];

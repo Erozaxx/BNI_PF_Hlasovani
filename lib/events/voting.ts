@@ -19,7 +19,7 @@ function getDb() {
  *   Toggle: INSERT ON CONFLICT DO NOTHING (add) or DELETE (remove).
  *   action = 'add' | 'remove'
  *   UNIQUE (participant_id, option_id) constraint prevents duplicates.
- *   No transaction needed — single statement is atomic.
+ *   No transaction needed - single statement is atomic.
  *
  * max_x:
  *   Transaction: COUNT existing votes → if count < maxX → INSERT ON CONFLICT DO NOTHING.
@@ -73,7 +73,7 @@ export async function castVote(
               )
             );
         } else {
-          // Insert — ON CONFLICT DO NOTHING (idempotent)
+          // Insert - ON CONFLICT DO NOTHING (idempotent)
           await db
             .insert(eventVote)
             .values({ eventId, participantId, optionId })
@@ -85,7 +85,7 @@ export async function castVote(
       case "max_x": {
         const maxX = options?.maxX;
         if (maxX === undefined || maxX === null) {
-          return { success: false, error: "max_x limit not provided" };
+          return { success: false, error: "Akce nemá nastavený počet možností." };
         }
 
         if (action === "remove") {
@@ -127,19 +127,19 @@ export async function castVote(
 
       default: {
         const _exhaustive: never = votingType;
-        return { success: false, error: `Unknown voting type: ${_exhaustive}` };
+        return { success: false, error: `Neznámý typ hlasování: ${_exhaustive}` };
       }
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
+    const msg = err instanceof Error ? err.message : "Neznámá chyba";
     if (msg.startsWith("VOTE_LIMIT_EXCEEDED:")) {
       const limit = msg.split(":")[1];
       return {
         success: false,
-        error: `Dosahli jste limitu ${limit} hlasu pro tuto akci.`,
+        error: `Dosáhli jste limitu ${limit} hlasů pro tuto akci.`,
       };
     }
     console.error("castVote error:", err);
-    return { success: false, error: "Hlasovani se nepodarilo. Zkuste to znovu." };
+    return { success: false, error: "Hlasování se nepodařilo. Zkuste to znovu." };
   }
 }

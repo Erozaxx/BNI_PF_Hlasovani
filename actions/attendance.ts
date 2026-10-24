@@ -13,6 +13,7 @@ import {
   setMyAbsenceGuarded,
   type SubstituteNameRow,
 } from "@/lib/db/queries/attendance";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { getMemberById } from "@/lib/db/queries/members";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import type { OpsEventInput } from "@/lib/ops/types";
@@ -57,9 +58,10 @@ export interface SetAbsenceData {
 }
 
 /**
- * Člen nastaví svou nepřítomnost na den: `none` = přijdu (smaže ohlášení),
+ * Člen nastaví svou omluvu na den: `none` = přijdu (smaže omluvu),
  * `absence` = bez náhradníka, `substitute` = s náhradníkem a jménem. Od dneška
- * do dnes + 365 dní, jen do 7:30 v ten den. Po uzávěrce zapíše změnu správce.
+ * do dnes + 365 dní, jen do začátku schůzky v ten den (čas z nastavení
+ * chapteru). Po uzávěrce zapíše změnu správce.
  */
 export async function setMyAbsenceAction(
   date: string,
@@ -76,8 +78,11 @@ export async function setMyAbsenceAction(
     return { success: false, error: "Neplatný vstup." };
   }
 
+  // Začátek schůzky z nastavení chapteru (iter-042 B4); při chybě čtení výchozí hodnota.
+  const { meetingTime } = await getChapterSettings();
+
   // Srozumitelná hláška předem; správnost drží SQL pojistka níž.
-  const decision = decideMemberAbsenceEdit(new Date(), parsedDate.data);
+  const decision = decideMemberAbsenceEdit(new Date(), parsedDate.data, meetingTime);
   if (!decision.ok) return { success: false, error: decision.message };
 
   let cleanName: string | null = null;
@@ -93,10 +98,11 @@ export async function setMyAbsenceAction(
       date: parsedDate.data,
       kind: parsedKind.data,
       name: cleanName,
+      meetingTime,
     });
     if (!result.ok) {
-      // Pojistka v SQL neprošla (uplynulo 7:30 mezi kontrolou a zápisem, neaktivní člen).
-      const again = decideMemberAbsenceEdit(new Date(), parsedDate.data);
+      // Pojistka v SQL neprošla (uplynul začátek schůzky mezi kontrolou a zápisem, neaktivní člen).
+      const again = decideMemberAbsenceEdit(new Date(), parsedDate.data, meetingTime);
       return { success: false, error: again.ok ? GENERIC_ERROR : again.message };
     }
     // Jen dashboard (karta „Příště chybíš“). /dochazka nechává stav klientovi (LL-017).

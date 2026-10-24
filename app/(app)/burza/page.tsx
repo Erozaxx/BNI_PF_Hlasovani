@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { can } from "@/lib/auth/permissions";
 import {
   getMembersWithoutOffer,
@@ -8,6 +10,8 @@ import {
 } from "@/lib/db/queries/burza";
 import { TEXTS, sortOffers } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
+import { bonusSources } from "@/lib/semafor/bonus";
 import { MyOfferBox } from "@/components/burza/MyOfferBox";
 import { BurzaTabs } from "@/components/burza/BurzaTabs";
 import { OfferList } from "@/components/burza/OfferList";
@@ -19,7 +23,9 @@ import { OfferList } from "@/components/burza/OfferList";
  */
 export default async function BurzaPage() {
   const session = await requirePageSession();
+  if (await featureOff("burza")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const isManagement = can(session, "burza.manage");
+  const bonusOn = bonusSources(await getChapterSettings()).burza;
   const today = todayInPrague();
 
   const [offers, helpState, withoutOffer] = await Promise.all([
@@ -55,6 +61,7 @@ export default async function BurzaPage() {
         viewerId={session.memberId}
         viewerIsManagement={isManagement}
         recordedByHelper={helpState.recordedByHelper}
+        bonusOn={bonusOn}
       />
 
       {isManagement && (

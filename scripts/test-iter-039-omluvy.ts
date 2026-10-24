@@ -89,9 +89,9 @@ const tests: TestCase[] = [
     run: () => {
       assert.equal(planEntryLine({ substituteName: "Jan Novák" }), "s náhradníkem: Jan Novák");
       assert.equal(planEntryLine({ substituteName: null }), "bez náhradníka");
-      assert.equal(planEntryMeta({ announcedOn: "2026-10-15" }, "2026-10-20"), "ohlášeno 15. 10.");
-      assert.equal(planEntryMeta({ announcedOn: "2026-01-05" }, "2026-10-20"), "ohlášeno 5. 1.");
-      assert.equal(planEntryMeta({ announcedOn: "2025-12-30" }, "2026-01-08"), "ohlášeno 30. 12. 2025");
+      assert.equal(planEntryMeta({ announcedOn: "2026-10-15" }, "2026-10-20"), "omluveno 15. 10.");
+      assert.equal(planEntryMeta({ announcedOn: "2026-01-05" }, "2026-10-20"), "omluveno 5. 1.");
+      assert.equal(planEntryMeta({ announcedOn: "2025-12-30" }, "2026-01-08"), "omluveno 30. 12. 2025");
       for (const t of [
         planEntryLine({ substituteName: "X Y" }),
         planEntryLine({ substituteName: null }),
@@ -128,6 +128,9 @@ const tests: TestCase[] = [
       assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: ["2026-10-29", "2026-10-22"] }), "2026-10-22");
       assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: [] }), nextThursday(today));
       assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: [] }), "2026-10-22");
+      // iter-042 (B4): bez omluvy nejbližší pravidelný den z nastavení (úterý 2026-10-20 je dnes, pátek 23.)
+      assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: [], settings: { meetingWeekday: 2 } }), "2026-10-20");
+      assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: [], settings: { meetingWeekday: 5 } }), "2026-10-23");
       assert.equal(pickInitialDay({ ...base, requested: null, datesWithAbsences: ["2026-10-01", "2026-09-17"] }), "2026-10-22");
     },
   },
@@ -149,8 +152,12 @@ const tests: TestCase[] = [
   {
     name: "7. planDayAria: čtvrtek se schůzkou a 3 omluvenými, den bez omluv",
     run: () => {
-      assert.equal(planDayAria("2026-10-22", 3, true), "čtvrtek 22. října, 3 omluvení, schůzka v aplikaci");
+      assert.equal(planDayAria("2026-10-22", 3, true), "čtvrtek 22. října, 3 omluvení, schůzka s hosty");
       assert.equal(planDayAria("2026-10-23", 0, false), "pátek 23. října");
+      // iter-042 (B3, Z4): barva dne má i slovní popisek
+      assert.equal(planDayAria("2026-10-22", 0, false, true), "čtvrtek 22. října, interní schůzka");
+      assert.equal(planDayAria("2026-10-22", 2, false, false, true), "čtvrtek 22. října, 2 omluvení, pravidelná schůzka");
+      assert.equal(planDayAria("2026-10-22", 0, true, true, true), "čtvrtek 22. října, schůzka s hosty", "schůzka s hosty přebíjí ostatní");
       assert.equal(planDayAria("2026-10-29", 1, false), "čtvrtek 29. října, 1 omluvený");
     },
   },
@@ -224,7 +231,7 @@ const tests: TestCase[] = [
       const ui = stripComments(raw);
       assert.ok(raw.startsWith('"use client"'));
       assert.ok(!/router\.refresh|useRouter/.test(ui));
-      assert.ok(ui.includes("min-h-[44px]") && ui.includes("grid-cols-7") && ui.includes("isThursday("));
+      assert.ok(ui.includes("min-h-[44px]") && ui.includes("grid-cols-7") && ui.includes("isRegularDay(date, { meetingWeekday: regularWeekday })") && !ui.includes("isThursday("));
       assert.ok(ui.includes("replaceState") && !ui.includes("pushState"));
       assert.ok(!/from "@\/lib\/db/.test(ui));
       assert.ok(!/logOpsEvent|console\./.test(ui));

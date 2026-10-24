@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
+import { can } from "@/lib/auth/permissions";
 import {
   getContactUsesForManagement,
   getHelpRecordsForManagement,
@@ -13,7 +16,8 @@ import { RecordHelpForm } from "@/components/burza/RecordHelpForm";
 
 /** Záznamy pomoci pro vedení (Z5): formulář zápisu podle hlášení a seznam za 12 měsíců. */
 export default async function BurzaHelpPage() {
-  await requirePageSession({ permission: "burza.manage", denyTo: "/burza" });
+  const session = await requirePageSession({ permission: "burza.manage", denyTo: "/burza" });
+  if (await featureOff("burza")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
 
   const today = todayInPrague();
   const [help, contacts, helpers, members] = await Promise.all([

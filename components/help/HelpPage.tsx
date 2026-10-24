@@ -2,6 +2,7 @@ import { HelpTabs } from "@/components/help/HelpTabs";
 import { MemberHelp } from "@/components/help/sections/MemberHelp";
 import { ModeratorHelp } from "@/components/help/sections/ModeratorHelp";
 import { AdminHelp } from "@/components/help/sections/AdminHelp";
+import { DEFAULT_CHAPTER_SETTINGS, type ChapterSettings } from "@/lib/chapter/settings";
 
 interface HelpPageProps {
   /** Záložka pro vedení (člen s rolí a heslem). iter-037: počítá stránka. */
@@ -20,6 +21,13 @@ interface HelpPageProps {
   showSemaforHelp?: boolean;
   /** iter-041: právo `semafor.import` (nahrávání souboru, první tři body nápovědy). */
   showSemaforImportHelp?: boolean;
+  /**
+   * iter-042: nastavení chapteru. Vypnutý Master mind, Burza a Semafor v nápovědě
+   * zmizí (sekce i věty o nich), den a začátek schůzky se berou odsud.
+   */
+  settings?: ChapterSettings;
+  /** iter-042: právo `chapter.settings` (sekce Nastavení chapteru v nápovědě admina). */
+  canManageSettings?: boolean;
 }
 
 export function HelpPage({
@@ -31,14 +39,17 @@ export function HelpPage({
   showInternalMeetingHelp = false,
   showSemaforHelp = false,
   showSemaforImportHelp = false,
+  settings = DEFAULT_CHAPTER_SETTINGS,
+  canManageSettings = false,
 }: HelpPageProps) {
+  const semaforHelp = showSemaforHelp && settings.semaforEnabled;
   const tabs = [
     {
       id: "member",
       label: "Pro člena",
-      content: <MemberHelp />,
+      content: <MemberHelp settings={settings} />,
     },
-    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp || showSemaforHelp
+    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp || semaforHelp
       ? [
           {
             id: "moderator",
@@ -51,6 +62,7 @@ export function HelpPage({
                 internalMeetings={showInternalMeetingHelp}
                 semafor={showSemaforHelp}
                 semaforImport={showSemaforImportHelp}
+                settings={settings}
               />
             ),
           },
@@ -61,7 +73,13 @@ export function HelpPage({
           {
             id: "admin",
             label: "Pro admina",
-            content: <AdminHelp canManageAccess={canManageAccess} />,
+            content: (
+              <AdminHelp
+                canManageAccess={canManageAccess}
+                canManageSettings={canManageSettings}
+                settings={settings}
+              />
+            ),
           },
         ]
       : []),

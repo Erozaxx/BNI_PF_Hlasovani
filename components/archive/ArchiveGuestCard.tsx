@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ArchiveGuest } from "@/lib/db/queries/archive";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 interface ArchiveGuestCardProps {
   guest: ArchiveGuest;
@@ -16,7 +17,7 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-text-main text-lg">{guest.name}</h3>
           <Badge variant="category">
-            {guest.categoryName ?? "[bez kategorie]"}
+            {guest.categoryName ?? "Bez kategorie"}
           </Badge>
         </div>
 
@@ -45,6 +46,9 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
             <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
               Hlasování
             </h4>
+            <p className="text-xs text-text-muted mb-1">
+              + pro, ~ nevím, - proti
+            </p>
             <div className="flex gap-3 text-sm">
               <span className="text-success font-medium">
                 +{voteSummary.up}
@@ -91,12 +95,7 @@ export function ArchiveGuestCard({ guest }: ArchiveGuestCardProps) {
 
 function formatDate(dateStr: string): string {
   try {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("cs-CZ", {
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    });
+    return formatWeekdayFull(dateStr);
   } catch {
     return dateStr;
   }

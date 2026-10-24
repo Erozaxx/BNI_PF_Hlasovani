@@ -18,6 +18,15 @@ export function ReportButton({ meetingId }: ReportButtonProps) {
   } | null>(null);
 
   async function handleClick() {
+    // iter-042 (#5): každé kliknutí pošle nový mail celému vedení, proto dotaz předem.
+    if (
+      !window.confirm(
+        "Poslat report e-mailem celému vedení? Každé kliknutí pošle nový mail."
+      )
+    ) {
+      return;
+    }
+
     setPending(true);
     setMessage(null);
 
@@ -25,7 +34,7 @@ export function ReportButton({ meetingId }: ReportButtonProps) {
       const result = await triggerReportAction(meetingId);
       if (result.success) {
         const data = result.data;
-        const msg = `Report odeslan na ${data?.sent ?? 0} adres.`;
+        const msg = `Report odešel na ${data?.sent ?? 0} adres.`;
         setMessage({ type: "success", text: msg });
         showToast("success", msg);
       } else {
@@ -33,8 +42,8 @@ export function ReportButton({ meetingId }: ReportButtonProps) {
         showToast("error", result.error);
       }
     } catch {
-      setMessage({ type: "error", text: "Nepodarilo se odeslat report." });
-      showToast("error", "Nepodarilo se odeslat report.");
+      setMessage({ type: "error", text: "Report se nepodařilo odeslat." });
+      showToast("error", "Report se nepodařilo odeslat.");
     } finally {
       setPending(false);
     }
@@ -47,8 +56,9 @@ export function ReportButton({ meetingId }: ReportButtonProps) {
         size="sm"
         onClick={handleClick}
         loading={pending}
+        className="min-h-[44px]"
       >
-        Generovat report
+        Poslat report vedení
       </Button>
       {message && (
         <p

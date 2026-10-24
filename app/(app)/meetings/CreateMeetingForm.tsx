@@ -7,10 +7,18 @@ import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { createMeetingAction } from "@/actions/meetings";
 
-export function CreateMeetingForm() {
+interface CreateMeetingFormProps {
+  /**
+   * iter-042 (Z11): nejbližší pravidelný den schůzky z nastavení chapteru
+   * (`YYYY-MM-DD`), předvyplní pole Datum. Bez hodnoty zůstane pole prázdné.
+   */
+  defaultDate?: string;
+}
+
+export function CreateMeetingForm({ defaultDate = "" }: CreateMeetingFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(defaultDate);
   const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -18,7 +26,7 @@ export function CreateMeetingForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!date) {
-      setError("Datum je povinne.");
+      setError("Datum je povinné.");
       return;
     }
 
@@ -33,12 +41,12 @@ export function CreateMeetingForm() {
       } else {
         setDate("");
         setLocation("");
-        showToast("success", "Schuzka byla vytvorena.");
+        showToast("success", "Schůzka je vytvořená.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se vytvorit schuzku.");
-      showToast("error", "Nepodarilo se vytvorit schuzku.");
+      setError("Schůzku se nepodařilo vytvořit.");
+      showToast("error", "Schůzku se nepodařilo vytvořit.");
     } finally {
       setLoading(false);
     }
@@ -62,12 +70,18 @@ export function CreateMeetingForm() {
             type="text"
             name="location"
             label="Místo konání"
-            placeholder="Nepovinne"
+            placeholder="Nepovinné"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
           />
         </div>
-        <Button type="submit" variant="primary" size="sm" loading={loading}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          loading={loading}
+          className="min-h-[44px]"
+        >
           Vytvořit
         </Button>
       </div>

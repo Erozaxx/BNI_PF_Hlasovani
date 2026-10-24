@@ -14,6 +14,17 @@ import {
   HELP_SEMAFOR_LEADERSHIP,
   HELP_SEMAFOR_MEMBER,
 } from "../lib/semafor/texts";
+import {
+  HELP_ATTENDANCE_TERMS,
+  HELP_BUTTON_GO_VOTE,
+  HELP_CALENDAR_LEGEND,
+  HELP_SUBJECT_EVENT_INVITE,
+  HELP_SUBJECT_REMINDER,
+  HELP_SUBJECT_VOTING_LINK,
+  HELP_VOTING_END,
+  memberDeadlineHelp,
+} from "../components/help/help-texts";
+import { MEMBER_TEXTS } from "../lib/attendance/rules";
 
 const ROOT = join(__dirname, "..");
 
@@ -144,13 +155,18 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "6. hodnoty hlasu Pro / Nevím / Proti, Master mind doplněn, oprava slova Stáhnout",
+    name: "6. hodnoty hlasu Pro / Nevím / Proti, Master mind doplněn, Smazat případ místo Stáhnout (iter-042 K6)",
     run: () => {
       assert.ok(MEMBER.includes("„Pro“, „Nevím“, nebo „Proti“"));
       assert.ok(MEMBER.includes("Co je v sekci Na řadě?"));
       assert.ok(MEMBER.includes("Rozbalte „Proběhlé“ na konci stránky."));
-      assert.ok(!MODERATOR.includes("jde jen smazat a zapsat znovu"));
-      assert.ok(MODERATOR.includes("jde jen stáhnout a zapsat znovu"));
+      assert.ok(MODERATOR.includes("jde jen smazat a zapsat znovu"));
+      assert.ok(!MODERATOR.includes("jde jen stáhnout a zapsat znovu"));
+      assert.ok(MEMBER.includes("Jak případ smažu?") && MEMBER.includes("<strong>Smazat případ</strong>"));
+      assert.ok(MEMBER.includes("Zařazený případ smaže vedení."));
+      assert.ok(!/Stáhnout|stáhnu|stáhne vedení/.test(MEMBER), "slovo Stáhnout u případu");
+      assert.ok(read("components/mastermind/RemoveCaseButton.tsx").includes("UI_TEXTS.removeButton"));
+      assert.equal(read("lib/mastermind/rules.ts").includes('removeButton: "Smazat případ"'), true);
     },
   },
   {
@@ -193,9 +209,29 @@ const tests: TestCase[] = [
         ["Vytvořit", "app/(app)/meetings/CreateMeetingForm.tsx"],
         ["Spustit hlasování", "components/meetings/StartVotingPanel.tsx"],
         ["Rozeslat hned", "components/meetings/StartVotingPanel.tsx"],
-        ["Magic linky členů", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Osobní odkazy členů", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Zkopírovat odkaz", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Poslat e-mailem", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Nový odkaz", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Zneplatnit", "app/(app)/meetings/[id]/MemberLinksManager.tsx"],
+        ["Hromadný import hostů", "app/(app)/meetings/[id]/page.tsx"],
+        ["Importovat hosty (.xlsx)", "app/(app)/meetings/[id]/ImportGuestsButton.tsx"],
+        ["Exportovat seznam (.xlsx)", "app/(app)/meetings/[id]/ExportListButton.tsx"],
+        ["Omluvit se", "lib/attendance/rules.ts"],
+        ["Zápis", "lib/attendance/sheet.ts"],
+        ["Bez zápisu", "lib/attendance/sheet.ts"],
+        ["Odkaz pro publikum", "app/(app)/timers/CreateTimerForm.tsx"],
+        ["Odkaz pro moderátora", "app/(app)/timers/CreateTimerForm.tsx"],
+        ["Nejvýš N možností", "app/(app)/events/new/_components/EventForm.tsx"],
+        ["Odeslat odkaz", "app/(app)/interviews/[id]/SendInterviewLinkForm.tsx"],
+        ["Smazat případ", "lib/mastermind/rules.ts"],
+        ["Uložená jména náhradníků", "lib/attendance/rules.ts"],
+        ["Nastavení chapteru", "lib/chapter/texts.ts"],
+        ["Části aplikace", "lib/chapter/texts.ts"],
+        ["Pravidelná schůzka", "lib/chapter/texts.ts"],
+        ["Heslo", "app/(app)/settings/page.tsx"],
         ["Uzavřít hlasování", "components/meetings/MeetingControls.tsx"],
-        ["Generovat report", "components/meetings/ReportButton.tsx"],
+        ["Poslat report vedení", "components/meetings/ReportButton.tsx"],
         ["Smazat schůzku", "components/meetings/DeleteMeetingButton.tsx"],
         ["Výsledky hlasování", "app/(app)/meetings/[id]/SortableMeetingGuestList.tsx"],
         ["Změna kategorie", "app/(app)/guests/[id]/page.tsx"],
@@ -218,7 +254,7 @@ const tests: TestCase[] = [
         ["Nový člen", "app/(app)/admin/members/page.tsx"],
         ["Import členů z XLSX", "app/(app)/admin/members/page.tsx"],
         ["Přidat člena", "app/(app)/admin/members/CreateMemberForm.tsx"],
-        ["Nahrát a zobrazit preview", "app/(app)/admin/members/ImportMembersForm.tsx"],
+        ["Nahrát a zobrazit náhled", "app/(app)/admin/members/ImportMembersForm.tsx"],
         ["Importovat vybrané", "app/(app)/admin/members/ImportMembersForm.tsx"],
         ["Název kategorie", "app/(app)/admin/categories/CreateCategoryForm.tsx"],
         ["Přejmenovat", "app/(app)/admin/categories/RenameCategoryForm.tsx"],
@@ -236,15 +272,22 @@ const tests: TestCase[] = [
   {
     name: "11. předměty mailů v nápovědě sedí na skutečné předměty a tlačítko v mailu",
     run: () => {
+      // iter-042 (K2): maily mají diakritiku a nápověda cituje skutečné předměty.
       const resend = read("lib/email/resend.ts");
       const events = read("lib/events/magic-link.ts");
-      assert.ok(resend.includes("BNI Hlasovani - Odkaz pro hlasovani"));
-      assert.ok(resend.includes("Prejit na hlasovani"));
-      assert.ok(events.includes("BNI Hlasovani - Pozvanka:"));
-      assert.ok(MEMBER.includes("„BNI Hlasovani - Odkaz pro hlasovani“"));
-      assert.ok(MEMBER.includes("„Prejit na hlasovani“"));
-      assert.ok(MEMBER.includes("„BNI Hlasovani - Pozvanka: {název akce}“"));
+      const reminder = read("lib/email/reminder-template.ts");
+      assert.ok(resend.includes("BNI Hlasování: odkaz pro hlasování"));
+      assert.ok(resend.includes("Přejít na hlasování"));
+      assert.ok(events.includes("BNI Hlasování: pozvánka:"));
+      assert.ok(reminder.includes("BNI Hlasování: nezapomeň prosím odhlasovat (schůzka"));
+      assert.equal(HELP_SUBJECT_VOTING_LINK, "BNI Hlasování: odkaz pro hlasování");
+      assert.equal(HELP_SUBJECT_EVENT_INVITE, "BNI Hlasování: pozvánka: {název akce}");
+      assert.equal(HELP_SUBJECT_REMINDER, "BNI Hlasování: nezapomeň prosím odhlasovat (schůzka {datum})");
+      assert.equal(HELP_BUTTON_GO_VOTE, "Přejít na hlasování");
+      assert.ok(MEMBER.includes("HELP_SUBJECT_VOTING_LINK") && MEMBER.includes("HELP_BUTTON_GO_VOTE"));
+      assert.ok(MEMBER.includes("HELP_SUBJECT_EVENT_INVITE") && MEMBER.includes("HELP_SUBJECT_REMINDER"));
       assert.ok(!ALL_HELP.includes("„Odkaz pro hlasování“") && !ALL_HELP.includes("„Pozvánka:"));
+      assert.ok(!/Hlasovani|Pozvanka|Prejit/.test(ALL_HELP), "předměty bez diakritiky v nápovědě");
     },
   },
   {
@@ -263,7 +306,9 @@ const tests: TestCase[] = [
       const iAtt = titleIndex(MEMBER, "Docházka");
       assert.ok(iBurza >= 0 && iAtt > iBurza, "sekce Docházka má být za Burzou pomoci");
       assert.ok(MEMBER.includes("V menu Docházka klepněte na den."));
-      assert.ok(MEMBER.includes("do 7:30 v den schůzky"));
+      assert.ok(memberDeadlineHelp().includes("do 7:30 v den schůzky"), "výchozí čas z nastavení");
+      assert.ok(memberDeadlineHelp({ meetingTime: "08:15" }).includes("do 8:15 v den schůzky"));
+      assert.ok(MEMBER.includes("memberDeadlineHelp(settings)"), "čas z nastavení, ne natvrdo");
       const rules = read("lib/attendance/rules.ts");
       assert.ok(rules.includes("Nepřijdu, bez náhradníka") && rules.includes("Nepřijdu, pošlu náhradníka"));
       assert.ok(read("app/(app)/layout.tsx").includes(">Docházka<"));
@@ -298,7 +343,10 @@ const tests: TestCase[] = [
   {
     name: "15. iter-040: nápověda k interní schůzce (člen, vedení jen s právem, věta o Master mind), konečné znění z gate",
     run: () => {
-      assert.ok(MEMBER.includes("Zelený den v kalendáři je interní schůzka. Počítá se do docházky jako běžná schůzka a omlouváte se stejně."));
+      assert.ok(MEMBER.includes("HELP_CALENDAR_LEGEND") && MEMBER.includes("Interní schůzka se počítá do docházky jako běžná a omlouváte se stejně."));
+      assert.equal(HELP_CALENDAR_LEGEND, "Světle modrý den je pravidelná schůzka, tmavě modrý schůzka s hosty, zelený interní schůzka.");
+      assert.ok(MEMBER_TEXTS.legend.startsWith(HELP_CALENDAR_LEGEND), "nápověda a kalendář mají stejnou legendu");
+      assert.ok(MEMBER.includes("HELP_ATTENDANCE_TERMS") && HELP_ATTENDANCE_TERMS.startsWith("Omluva = dáte vědět předem, že nepřijdete. Absence = výsledek po schůzce:"));
       assert.ok(MEMBER.includes("Co se stane s mou omluvou, když se interní schůzka zruší?"));
       assert.ok(MEMBER.includes("Omluva na ten den se smaže a den se do docházky nepočítá. Když na ten den později vznikne běžná schůzka, omluvte se znovu."));
       assert.ok(titleIndex(MODERATOR, "Interní schůzka") >= 0);
@@ -307,7 +355,7 @@ const tests: TestCase[] = [
       assert.ok(MODERATOR.includes("Zrušit ji můžete do 17:00 v den schůzky, dokud správce docházky nic nezapsal. Zrušením se smažou všechny omluvy členů na ten den. Členům o tom mail nepřijde."));
       assert.ok(MODERATOR.includes("Když má být místo interní běžná schůzka, založte ji ve Schůzkách a interní nerušte. Platí běžná a omluvy zůstanou. Když běžnou schůzku potom smažete, platí zase interní."));
       assert.ok(!MODERATOR.includes("Interní schůzky se v aplikaci nezakládají."), "stará věta musí zmizet");
-      assert.ok(MODERATOR.includes("Interní schůzku založíte v menu Docházka. Případ ze zásobníku zařadíte na čtvrtek"));
+      assert.ok(MODERATOR.includes("Interní schůzku založíte v menu Docházka. Případ ze zásobníku zařadíte na {day}"), "den schůzky z nastavení, ne čtvrtek natvrdo");
       assert.ok(read("app/(app)/help/page.tsx").includes('can(session, "attendance.internal_manage")'));
     },
   },
@@ -335,10 +383,11 @@ const tests: TestCase[] = [
       ];
       for (const m of must) assert.ok(texts.includes(m), m.slice(0, 40));
       assert.ok(!texts.includes(String.fromCharCode(0x2014)));
-      assert.ok(MEMBER.includes("HELP_SEMAFOR_MEMBER") && MEMBER.includes('title="Semafor"'));
-      assert.ok(MEMBER.includes("HELP_ATTENDANCE_MEMBER_UNEXCUSED"));
-      assert.ok(MODERATOR.includes('title="Semafor pro vedení"') && MODERATOR.includes("HELP_SEMAFOR_LEADERSHIP") && MODERATOR.includes("semaforImport || !h.importOnly"));
-      assert.ok(MODERATOR.includes("HELP_ATTENDANCE_MANAGER_UNEXCUSED"));
+      // iter-042: nápověda bere texty z funkcí s nastavením, konstanty jsou výchozí stav.
+      assert.ok(MEMBER.includes("semaforMemberFaq(bonus)") && MEMBER.includes('title="Semafor"'));
+      assert.ok(MEMBER.includes("helpAttendanceMemberUnexcused(settings.meetingTime)"));
+      assert.ok(MODERATOR.includes('title="Semafor pro vedení"') && MODERATOR.includes("helpSemaforLeadership(sources)") && MODERATOR.includes("semaforImport || !h.importOnly"));
+      assert.ok(MODERATOR.includes("helpAttendanceManagerUnexcused(settings.meetingTime)"));
       const page = read("app/(app)/help/page.tsx");
       assert.ok(page.includes('showSemaforHelp={can(session, "semafor.view_all")}'));
     },

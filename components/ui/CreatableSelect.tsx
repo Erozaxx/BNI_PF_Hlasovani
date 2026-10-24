@@ -17,7 +17,7 @@ export function CreatableSelect({
   value,
   onChange,
   onCreateOption,
-  placeholder = "Vyberte nebo zadejte...",
+  placeholder = "Vyber nebo zadej...",
   label,
   error,
 }: CreatableSelectProps) {

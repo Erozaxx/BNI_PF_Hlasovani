@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { can } from "@/lib/auth/permissions";
 import { getActiveMembers } from "@/lib/db/queries/members";
 import { sortMembersByName } from "@/lib/interviews/list-filters";
@@ -7,6 +9,7 @@ import { CaseForm } from "@/components/mastermind/CaseForm";
 
 export default async function NewMastermindCasePage() {
   const session = await requirePageSession();
+  if (await featureOff("mastermind")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const isManagement = can(session, "mastermind.manage");
 
   // Výběr člena, který téma přináší, vidí jen vedení (zápis za člena, který se přihlásil ústně).

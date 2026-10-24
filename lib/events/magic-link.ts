@@ -14,7 +14,7 @@ export function generateEventToken(): string {
  * Hash an event token using SHA-256 for deterministic DB lookup.
  *
  * Design decision (S-05, iter-007):
- * SHA-256 is used intentionally — NOT bcrypt. Reasoning:
+ * SHA-256 is used intentionally - NOT bcrypt. Reasoning:
  *   - Token has 256-bit entropy (randomBytes(32)), making preimage attacks infeasible.
  *   - SHA-256 is deterministic → enables indexed DB lookup (WHERE magic_token_hash = ?).
  *   - bcrypt is inappropriate for lookup keys: its random salt makes it non-deterministic,
@@ -65,24 +65,24 @@ export async function sendEventMagicLink(
 
   try {
     const { error } = await resend.emails.send({
-      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      from: `BNI Hlasování <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: [email],
-      subject: `BNI Hlasovani - Pozvanka: ${eventTitle}`,
+      subject: `BNI Hlasování: pozvánka: ${eventTitle}`,
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasování</h1>
   </div>
-  <p>Dobry den ${escapeHtml(name)},</p>
-  <p>Byli jste pozvan/a k ucastI v akci: <strong>${escapeHtml(eventTitle)}</strong></p>
-  <p>Kliknutim na tlacitko nize se dostanete na stranku pro hlasovani:</p>
+  <p>Dobrý den ${escapeHtml(name)},</p>
+  <p>Byli jste pozváni k účasti v akci: <strong>${escapeHtml(eventTitle)}</strong></p>
+  <p>Kliknutím na tlačítko níže se dostanete na stránku pro hlasování:</p>
   <div style="text-align:center;margin:24px 0;">
     <a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Zobrazit akci a hlasovat</a>
   </div>
-  <p style="color:#666;font-size:13px;">Odkaz je platny po dobu trvani akce.</p>
-  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+  <p style="color:#666;font-size:13px;">Odkaz je platný po dobu trvání akce.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento e-mail nežádali, můžete ho ignorovat.</p>
 </body>
 </html>`,
     });

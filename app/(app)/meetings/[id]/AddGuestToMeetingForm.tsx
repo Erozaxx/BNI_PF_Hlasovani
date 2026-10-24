@@ -34,7 +34,7 @@ export function AddGuestToMeetingForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!guestId) {
-      setError("Vyberte hosta.");
+      setError("Vyber hosta.");
       return;
     }
 
@@ -48,12 +48,12 @@ export function AddGuestToMeetingForm({
         showToast("error", result.error);
       } else {
         setGuestId("");
-        showToast("success", "Host byl pridan ke schuzce.");
+        showToast("success", "Host je přidaný ke schůzce.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se pridat hosta.");
-      showToast("error", "Nepodarilo se pridat hosta.");
+      setError("Hosta se nepodařilo přidat.");
+      showToast("error", "Hosta se nepodařilo přidat.");
     } finally {
       setLoading(false);
     }
@@ -70,12 +70,18 @@ export function AddGuestToMeetingForm({
           value={guestId}
           onChange={(e) => setGuestId(e.target.value)}
           options={guestOptions}
-          placeholder="Vyberte hosta..."
+          placeholder="Vyber hosta..."
           error={error}
         />
       </div>
-      <Button type="submit" variant="primary" size="sm" loading={loading}>
-        Pridat
+      <Button
+        type="submit"
+        variant="primary"
+        size="sm"
+        loading={loading}
+        className="min-h-[44px]"
+      >
+        Přidat
       </Button>
     </form>
   );

@@ -22,7 +22,7 @@ const cases: TestCase[] = [
         originalSubjectDate: "2026-09-24",
       });
 
-      assert.equal(subject, "BNI Hlasovani - Nezapomeň prosím odhlasovat (schůzka 24. 9.)");
+      assert.equal(subject, "BNI Hlasování: nezapomeň prosím odhlasovat (schůzka 24. 9.)");
       assert.match(html, /k hostům ze schůzky 24\. 9\. od tebe zatím nemáme žádný hlas\. Nezapomeň prosím odhlasovat\./);
       assert.match(html, /Hlasování končí ve středu 30\. 9\. ve 23:59\./);
       assert.match(html, /Připomínku posíláme jen těm, kdo zatím nehlasovali\. Jakmile dáš aspoň jeden hlas, další už nepřijde\./);
@@ -67,7 +67,7 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "T3. magicUrl s '\"' a '<' -> escapovano v href; magicUrl:null -> zadne '<a ', obsahuje 'Odkaz pro hlasovani (2026-09-24)'",
+    name: "T3. magicUrl s '\"' a '<' -> escapovano v href; magicUrl:null -> zadne '<a ', obsahuje 'odkaz pro hlasování (2026-09-24)'",
     run: () => {
       const withUrl = buildReminderEmail({
         meetingDate: "2026-09-24",
@@ -87,7 +87,7 @@ const cases: TestCase[] = [
         originalSubjectDate: "2026-09-24",
       });
       assert.doesNotMatch(withoutUrl.html, /<a /);
-      assert.match(withoutUrl.html, /Odkaz pro hlasovani \(2026-09-24\)/);
+      assert.match(withoutUrl.html, /odkaz pro hlasování \(2026-09-24\)/);
     },
   },
 ];

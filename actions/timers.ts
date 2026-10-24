@@ -32,12 +32,15 @@ export async function createTimerAction(
     throw new Error(auth.error);
   }
 
-  if (!name || name.trim().length === 0 || name.trim().length > 100) {
-    throw new Error("Timer name must be 1–100 characters.");
+  if (!name || name.trim().length === 0) {
+    throw new Error("Název je povinný.");
+  }
+  if (name.trim().length > 100) {
+    throw new Error("Název může mít nejvýš 100 znaků.");
   }
 
   if (!Number.isInteger(displaySeconds) || displaySeconds <= 0 || displaySeconds > 86400) {
-    throw new Error("display_seconds must be a positive integer ≤ 86400.");
+    throw new Error("Délka musí být celé číslo od 1 do 86400.");
   }
 
   const viewToken = randomBytes(32).toString("hex");
@@ -68,7 +71,7 @@ export async function deleteTimerAction(controlToken: string): Promise<void> {
   }
 
   if (!controlToken) {
-    throw new Error("controlToken is required.");
+    throw new Error("Chybí kód časovače.");
   }
 
   await getDb().delete(timer).where(eq(timer.controlToken, controlToken));
@@ -89,7 +92,7 @@ export async function regenerateViewTokenAction(
   }
 
   if (!controlToken) {
-    throw new Error("controlToken is required.");
+    throw new Error("Chybí kód časovače.");
   }
 
   const newViewToken = randomBytes(32).toString("hex");
@@ -104,7 +107,7 @@ export async function regenerateViewTokenAction(
     .returning({ id: timer.id });
 
   if (result.length === 0) {
-    throw new Error("Timer not found for the given control token.");
+    throw new Error("Časovač nebyl nalezen.");
   }
 
   return { newViewToken };

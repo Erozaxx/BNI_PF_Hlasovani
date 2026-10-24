@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 interface ArchiveFiltersProps {
   meetings: Array<{ id: string; date: string; status: string | null }>;
@@ -125,7 +126,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
                   type="button"
                   onClick={() => handleMeetingToggle(m.id)}
                   className={`
-                    inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
+                    inline-flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
                     ${
                       isSelected
                         ? "bg-primary text-white border-primary"
@@ -143,7 +144,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
           </div>
         ) : (
           <p className="text-sm text-text-muted">
-            Zadne schuzky.
+            Žádné schůzky.
           </p>
         )}
       </div>
@@ -170,7 +171,12 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
       {/* Clear filters */}
       {hasFilters && (
         <div>
-          <Button variant="ghost" size="sm" onClick={handleClearAll}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearAll}
+            className="min-h-[44px]"
+          >
             Zrušit filtry
           </Button>
         </div>
@@ -181,12 +187,7 @@ export function ArchiveFilters({ meetings, categories }: ArchiveFiltersProps) {
 
 function formatDate(dateStr: string): string {
   try {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("cs-CZ", {
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    });
+    return formatWeekdayFull(dateStr);
   } catch {
     return dateStr;
   }

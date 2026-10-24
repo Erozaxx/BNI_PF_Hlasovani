@@ -33,8 +33,8 @@ export default async function AdminTimersPage() {
         ) : (
           <Card>
             <EmptyState
-              title="Zatim zadne casovace"
-              description="Vytvorte prvni casovac pomoci formulare vyse."
+              title="Zatím žádné časovače"
+              description="Vytvoř první ve formuláři výše."
             />
           </Card>
         )}

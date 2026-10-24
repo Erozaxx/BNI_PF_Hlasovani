@@ -817,6 +817,47 @@ const cases: TestCase[] = [
       }
     },
   },
+  {
+    name: "14. iter-042 (B7/5, #6, Z3): vypnutá Burza: stránky featureOff, akce requireFeature za guardem, věta pod Využil(a) jsem podle bonusu, dashboard podmíněný",
+    run: () => {
+      const pages = walk(join(ROOT, "app", "(app)", "burza")).filter((f) => f.endsWith("page.tsx"));
+      assert.equal(pages.length, 5);
+      for (const f of pages) {
+        const src = stripComments(readFileSync(f, "utf8"));
+        const session = src.indexOf("await requirePageSession(");
+        const off = src.indexOf('await featureOff("burza")');
+        assert.ok(session > 0 && off > session, `${relative(ROOT, f)}: featureOff hned po session`);
+        assert.ok(src.includes("<FeatureOff"), relative(ROOT, f));
+      }
+      const act = readSrc("actions/burza.ts");
+      const chunks = act.split(/export async function /).slice(1);
+      assert.equal(chunks.length, 10);
+      for (const c of chunks) {
+        const name = c.slice(0, c.indexOf("("));
+        const guard = c.search(/await (requireAuth|requirePermission)\(/);
+        const feature = c.indexOf('await requireFeature("burza")');
+        assert.ok(guard >= 0 && feature > guard, `${name}: requireFeature za guardem`);
+      }
+      assert.equal(
+        TEXTS.usedHelpHint(true),
+        "Zaškrtni, když ti tenhle člen pomohl. Připíše mu to bonus do interního semaforu. Odškrtnout můžeš kdykoli."
+      );
+      assert.equal(TEXTS.usedHelpHint(false), "Zaškrtni, když ti tenhle člen pomohl. Odškrtnout můžeš kdykoli.");
+      assert.equal(
+        TEXTS.usedContactHint(true),
+        "Zaškrtni, když ti kontakt pomohl. Členovi, který ho nabízí, se připíše bonus do interního semaforu."
+      );
+      assert.equal(TEXTS.usedContactHint(false), "Zaškrtni, když ti kontakt pomohl.");
+      assert.ok(!TEXTS.usedHelpHint(false).includes("bonus") && !TEXTS.usedContactHint(false).includes("bonus"));
+      assert.ok(!/\d+ bod/.test(TEXTS.usedHelpHint(true) + TEXTS.usedContactHint(true)), "bez počtu bodů");
+      // věta je pod přepínačem na obou kartách a přepínače dál bez window.confirm
+      assert.ok(readSrc("components/burza/OfferCard.tsx").includes("TEXTS.usedHelpHint(bonusOn)"));
+      assert.ok(readSrc("components/burza/ContactCard.tsx").includes("TEXTS.usedContactHint(bonusOn)"));
+      assert.ok(readSrc("app/(app)/burza/page.tsx").includes("bonusSources(await getChapterSettings()).burza"));
+      const dash = readSrc("app/(app)/dashboard/page.tsx");
+      assert.ok(/settings\.burzaEnabled && <DashboardBurza/.test(dash), "widget Burzy podmíněný");
+    },
+  },
 ];
 
 let passed = 0;

@@ -5,6 +5,8 @@ import { getGuests } from "@/lib/db/queries/guests";
 import { getVotingResults } from "@/lib/db/queries/votes";
 import { getActiveMembers } from "@/lib/db/queries/members";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
+import { DEFAULT_CHAPTER_SETTINGS } from "@/lib/chapter/settings";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
@@ -22,6 +24,7 @@ import { SortableMeetingGuestList } from "./SortableMeetingGuestList";
 import { MemberLinksManager } from "./MemberLinksManager";
 import { statusLabel } from "@/lib/meetings/statusLabel";
 import { SHEET_TEXTS } from "@/lib/attendance/sheet";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 export default async function MeetingDetailPage({
   params,
@@ -72,20 +75,24 @@ export default async function MeetingDetailPage({
     isManagement &&
     (meeting.status === "draft" || meeting.status === "active");
 
-  // Data pro StartVotingPanel (iter-026, arch 2.6/#4 a 8.3): "X z Y clenu" a
-  // disabled tlacitko u schuzky bez hostu. Obe hodnoty jsou levke SELECTy
-  // (getMembers/getMeetingLinkRows uz repo pouziva jinde) — zadny novy dotaz
-  // nad ramec toho, co uz na strance beze i tak existuje (MemberLinksManager
-  // cte tutez informaci pres GET /member-links).
+  // Data pro StartVotingPanel (iter-026, arch 2.6/#4 a 8.3): "X z Y členů" a
+  // disabled tlačítko u schůzky bez hostů. Obě hodnoty jsou levné SELECTy
+  // (getMembers/getMeetingLinkRows už repo používá jinde), žádný nový dotaz
+  // nad rámec toho, co na stránce běží i tak (MemberLinksManager
+  // čte tutéž informaci přes GET /member-links).
   const hasGuests = meeting.guests.length > 0;
   let membersWithEmailCount = 0;
   let initialLinkEmailSentCount = 0;
+  // iter-042 (BK3): konec hlasování v textu pod Spustit se počítá podle dne z nastavení.
+  let regularWeekday = DEFAULT_CHAPTER_SETTINGS.meetingWeekday;
   if (isManagement) {
-    const [allMembers, linkRows] = await Promise.all([
+    const [allMembers, linkRows, chapterSettings] = await Promise.all([
       // iter-037 (T-003b, arch 5.3): "X z Y" počítá jen aktivní členy.
       getActiveMembers(),
       getMeetingLinkRows(id),
+      getChapterSettings(),
     ]);
+    regularWeekday = chapterSettings.meetingWeekday;
     membersWithEmailCount = allMembers.filter((m) => !!m.email).length;
     const sentByMember = new Map(
       linkRows.map((l) => [l.memberId, l.linkEmailSentAt !== null])
@@ -112,15 +119,15 @@ export default async function MeetingDetailPage({
   return (
     <div className="space-y-6 max-w-3xl">
       <Link href="/meetings">
-        <Button variant="link" size="sm">
-          &larr; Zpet na schuzky
+        <Button variant="link" size="sm" className="min-h-[44px]">
+          &larr; Zpět na schůzky
         </Button>
       </Link>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-main">
-            Schůzka {meeting.date}
+            Schůzka {formatWeekdayFull(meeting.date)}
           </h1>
           <div className="mt-2">{statusBadge(meeting.status)}</div>
           {meeting.location && (
@@ -138,11 +145,14 @@ export default async function MeetingDetailPage({
           )}
           {meeting.votingClosesAt && meeting.status === "voting" && (
             <p className="text-sm text-text-muted mt-1">
-              Uzavira se:{" "}
-              {new Date(meeting.votingClosesAt).toLocaleDateString("cs-CZ", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
+              Uzavírá se:{" "}
+              {formatWeekdayFull(
+                new Date(meeting.votingClosesAt).toLocaleDateString("sv-SE", {
+                  timeZone: "Europe/Prague",
+                })
+              )}{" "}
+              {new Date(meeting.votingClosesAt).toLocaleTimeString("cs-CZ", {
+                timeZone: "Europe/Prague",
                 hour: "2-digit",
                 minute: "2-digit",
               })}
@@ -184,7 +194,7 @@ export default async function MeetingDetailPage({
               />
               <div className="mt-4 border-t border-border pt-4">
                 <h2 className="text-sm font-semibold text-text-muted mb-3">
-                  Hromadny import hostu
+                  Hromadný import hostů
                 </h2>
                 <ImportGuestsButton meetingId={id} />
               </div>
@@ -193,7 +203,7 @@ export default async function MeetingDetailPage({
           {availableGuests.length === 0 && (
             <>
               <h2 className="text-sm font-semibold text-text-muted mb-3">
-                Hromadny import hostu
+                Hromadný import hostů
               </h2>
               <ImportGuestsButton meetingId={id} />
             </>
@@ -221,14 +231,14 @@ export default async function MeetingDetailPage({
         ) : (
           <Card>
             <EmptyState
-              title="Zadni hoste"
-              description="Ke schuzce nejsou prirazeni zadni hoste. Pridejte je pomoci formulare vyse."
+              title="Žádní hosté"
+              description="Ke schůzce nejsou přiřazení žádní hosté. Přidej je ve formuláři výše."
             />
           </Card>
         )}
       </section>
 
-      {/* Spusteni hlasovani + MemberLinksManager (management only) — iter-026 */}
+      {/* Spuštění hlasování + MemberLinksManager (management only), iter-026 */}
       {isManagement && (
         <section className="space-y-4">
           <StartVotingPanel
@@ -238,6 +248,7 @@ export default async function MeetingDetailPage({
             meetingDate={meeting.date}
             initialLinkEmailSentCount={initialLinkEmailSentCount}
             membersWithEmailCount={membersWithEmailCount}
+            regularWeekday={regularWeekday}
           />
           {(meeting.status === "active" ||
             meeting.status === "voting" ||

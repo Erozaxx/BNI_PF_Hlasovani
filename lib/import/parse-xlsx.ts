@@ -4,12 +4,12 @@ import type { ImportPreviewRow } from "@/lib/types/import";
 export type ParsedMemberRow = {
   name: string;
   obor: string | null;
-  /** "Clen" or similar — informational only, never used for managementRole */
+  /** "Clen" or similar - informational only, never used for managementRole */
   role: string | null;
   /**
    * Optional "Datum vstupu" column (iter-020, MAJOR-3), normalized to
    * "YYYY-MM-DD", or null if the column/cell is absent or unparseable.
-   * Never blocks the import — a null value falls back to member.joined_at's
+   * Never blocks the import - a null value falls back to member.joined_at's
    * own DB default (CURRENT_DATE) at write time (see actions/import-members.ts).
    */
   joinedAt: string | null;
@@ -39,14 +39,14 @@ function isValidDateParts(y: number, m: number, d: number): boolean {
  *
  * Accepts:
  *  - a JS Date (workbook is read with `cellDates: true`, so a cell formatted
- *    as a date in Excel arrives as a Date object) — read via UTC getters,
+ *    as a date in Excel arrives as a Date object) - read via UTC getters,
  *    since the xlsx library computes serial-date-to-Date conversion in UTC
  *    internally, matching that avoids an off-by-one-day shift.
  *  - an ISO string "YYYY-MM-DD"
  *  - a Czech/European string "D.M.YYYY" / "DD.MM.YYYY"
  *
  * Any other shape (plain un-formatted number, unrecognized string, etc.)
- * yields null — the import is never blocked by a bad/missing date (MAJOR-3).
+ * yields null - the import is never blocked by a bad/missing date (MAJOR-3).
  */
 function parseImportJoinedAt(raw: unknown): string | null {
   if (raw == null || raw === "") return null;
@@ -89,27 +89,27 @@ function parseImportJoinedAt(raw: unknown): string | null {
  * Parse a BNI member XLSX file from an ArrayBuffer.
  *
  * Expected column layout (0-indexed):
- *   col 0 — role (e.g. "Clen")
- *   col 1 — name (required)
- *   col 2 — (unused)
- *   col 3 — obor (profession / industry)
- *   col 4 — Datum vstupu (optional, iter-020 MAJOR-3 — date cell or
+ *   col 0 - role (e.g. "Clen")
+ *   col 1 - name (required)
+ *   col 2 - (unused)
+ *   col 3 - obor (profession / industry)
+ *   col 4 - Datum vstupu (optional, iter-020 MAJOR-3 - date cell or
  *           "YYYY-MM-DD" / "DD.MM.YYYY" text; absent/unparseable is fine)
  *
- * Returns a result object — never throws.
+ * Returns a result object - never throws.
  * Rows without a name (col 1) are filtered out.
  * Rows with a duplicate name (case-insensitive) are included with status
  * 'skipped' so the caller can communicate that back to the admin.
  *
  * NOTE: The role column is informational only and is NEVER mapped to
- * managementRole — that would bypass the intentional admin-manual elevation flow.
+ * managementRole - that would bypass the intentional admin-manual elevation flow.
  */
 export function parseXlsxFile(buffer: ArrayBuffer): ParseXlsxResult {
   try {
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
-      return { success: false, error: "XLSX soubor neobsahuje zadny list." };
+      return { success: false, error: "Soubor neobsahuje žádný list." };
     }
 
     const sheet = workbook.Sheets[sheetName];
@@ -123,7 +123,7 @@ export function parseXlsxFile(buffer: ArrayBuffer): ParseXlsxResult {
     if (validRows.length > 500) {
       return {
         success: false,
-        error: `XLSX obsahuje prilis mnoho radku (${validRows.length}). Maximum je 500.`,
+        error: `Soubor má příliš mnoho řádků (${validRows.length}). Nejvýš jich může být 500.`,
       };
     }
 
@@ -158,7 +158,7 @@ export function parseXlsxFile(buffer: ArrayBuffer): ParseXlsxResult {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `Nepodarilo se nacist XLSX soubor: ${message}` };
+    return { success: false, error: `Soubor se nepodařilo načíst: ${message}` };
   }
 }
 
@@ -176,7 +176,7 @@ export function parseXlsxFileWithDuplicates(buffer: ArrayBuffer):
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
-      return { success: false, error: "XLSX soubor neobsahuje zadny list." };
+      return { success: false, error: "Soubor neobsahuje žádný list." };
     }
 
     const sheet = workbook.Sheets[sheetName];
@@ -189,7 +189,7 @@ export function parseXlsxFileWithDuplicates(buffer: ArrayBuffer):
     if (validRows.length > 500) {
       return {
         success: false,
-        error: `XLSX obsahuje prilis mnoho radku (${validRows.length}). Maximum je 500.`,
+        error: `Soubor má příliš mnoho řádků (${validRows.length}). Nejvýš jich může být 500.`,
       };
     }
 
@@ -215,6 +215,6 @@ export function parseXlsxFileWithDuplicates(buffer: ArrayBuffer):
     return { success: true, rows };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `Nepodarilo se nacist XLSX soubor: ${message}` };
+    return { success: false, error: `Soubor se nepodařilo načíst: ${message}` };
   }
 }

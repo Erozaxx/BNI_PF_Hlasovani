@@ -26,6 +26,7 @@ import {
   buildEventLink,
 } from "@/lib/events/magic-link";
 import { castVote } from "@/lib/events/voting";
+import { validateCreateEventInput } from "@/lib/events/create-input";
 import { encryptToken, decryptToken } from "@/lib/events/token-encryption";
 import type { ActionResult } from "@/lib/types";
 
@@ -55,9 +56,8 @@ export async function createEventAction(
   const auth = await requirePermission("events.manage");
   if (!auth.success) return auth;
 
-  if (!title || !title.trim()) {
-    return { success: false, error: "Nazev akce je povinny." };
-  }
+  const inputError = validateCreateEventInput(title, config, description);
+  if (inputError) return { success: false, error: inputError };
 
   if (
     config.votingType === "max_x" &&
@@ -65,7 +65,7 @@ export async function createEventAction(
   ) {
     return {
       success: false,
-      error: "Pro typ hlasovani max_x je povinny limit (min. 1).",
+      error: "U hlasování „nejvýš N možností“ zadej limit, nejméně 1.",
     };
   }
 
@@ -96,7 +96,7 @@ export async function createEventAction(
     return { success: true, data: { id: newEvent.id } };
   } catch (error) {
     console.error("createEventAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit akci." };
+    return { success: false, error: "Akci se nepodařilo vytvořit." };
   }
 }
 
@@ -113,7 +113,7 @@ export async function updateEventAction(
   if (!auth.success) return auth;
 
   if (!title || !title.trim()) {
-    return { success: false, error: "Nazev akce je povinny." };
+    return { success: false, error: "Název akce je povinný." };
   }
 
   try {
@@ -124,7 +124,7 @@ export async function updateEventAction(
     if (existing.status !== "draft" && existing.status !== "active") {
       return {
         success: false,
-        error: "Editovat lze pouze akce ve stavu draft nebo active.",
+        error: "Upravit jde jen akce v přípravě nebo aktivní.",
       };
     }
 
@@ -141,7 +141,7 @@ export async function updateEventAction(
     return { success: true };
   } catch (error) {
     console.error("updateEventAction error:", error);
-    return { success: false, error: "Nepodarilo se aktualizovat akci." };
+    return { success: false, error: "Akci se nepodařilo upravit." };
   }
 }
 
@@ -162,7 +162,7 @@ export async function deleteEventAction(id: string): Promise<ActionResult> {
       return {
         success: false,
         error:
-          "Aktivni akci nelze smazat. Nejdrive akci uzavrete.",
+          "Aktivní akci nejde smazat. Nejdřív ji uzavři.",
       };
     }
 
@@ -172,7 +172,7 @@ export async function deleteEventAction(id: string): Promise<ActionResult> {
     return { success: true };
   } catch (error) {
     console.error("deleteEventAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat akci." };
+    return { success: false, error: "Akci se nepodařilo smazat." };
   }
 }
 
@@ -201,7 +201,7 @@ export async function activateEventAction(
     if (existing.status !== "draft") {
       return {
         success: false,
-        error: "Aktivovat lze pouze akce ve stavu draft.",
+        error: "Spustit jde jen akci v přípravě.",
       };
     }
 
@@ -222,13 +222,13 @@ export async function activateEventAction(
 
     for (const p of participants) {
       const email = p.memberEmail ?? p.externalEmail ?? null;
-      const name  = p.memberName  ?? p.externalName  ?? "Ucastnik";
+      const name  = p.memberName  ?? p.externalName  ?? "Účastník";
 
       if (!p.memberActive) { skippedInactive++; continue; }
       if (!email) { skipped++; continue; }
 
       if (!p.encryptedToken) {
-        // Edge case: legacy/manual row without encrypted_token — generate fresh
+        // Edge case: legacy/manual row without encrypted_token - generate fresh
         const rawToken = generateEventToken();
         const tokenHash = hashEventToken(rawToken);
         const encryptedToken = encryptToken(rawToken, encKey);
@@ -272,7 +272,7 @@ export async function activateEventAction(
     return { success: true, data: { skippedInactive } };
   } catch (error) {
     console.error("activateEventAction error:", error);
-    return { success: false, error: "Nepodarilo se aktivovat akci." };
+    return { success: false, error: "Akci se nepodařilo spustit." };
   }
 }
 
@@ -291,7 +291,7 @@ export async function closeEventAction(id: string): Promise<ActionResult> {
     if (existing.status !== "active") {
       return {
         success: false,
-        error: "Uzavrit lze pouze aktivni akce.",
+        error: "Uzavřít jde jen aktivní akci.",
       };
     }
 
@@ -305,7 +305,7 @@ export async function closeEventAction(id: string): Promise<ActionResult> {
     return { success: true };
   } catch (error) {
     console.error("closeEventAction error:", error);
-    return { success: false, error: "Nepodarilo se uzavrit akci." };
+    return { success: false, error: "Akci se nepodařilo uzavřít." };
   }
 }
 
@@ -327,7 +327,7 @@ export async function setSelectedOptionAction(
     if (existing.status !== "closed") {
       return {
         success: false,
-        error: "Vysledek lze oznacit pouze u uzavrene akce.",
+        error: "Výsledek jde označit jen u uzavřené akce.",
       };
     }
 
@@ -360,7 +360,7 @@ export async function setSelectedOptionAction(
     return { success: true };
   } catch (error) {
     console.error("setSelectedOptionAction error:", error);
-    return { success: false, error: "Nepodarilo se nastavit vysledek." };
+    return { success: false, error: "Výsledek se nepodařilo nastavit." };
   }
 }
 
@@ -393,7 +393,7 @@ export async function markEventDoneAction(eventId: string): Promise<ActionResult
     const existing = await getEventById(eventId);
     if (!existing) return { success: false, error: "Akce nebyla nalezena." };
     if (existing.status !== "closed") {
-      return { success: false, error: "Pouze uzavrenou akci lze oznacit jako konanou." };
+      return { success: false, error: "Jako konanou jde označit jen uzavřenou akci." };
     }
 
     await markEventDone(eventId);
@@ -402,7 +402,7 @@ export async function markEventDoneAction(eventId: string): Promise<ActionResult
     return { success: true };
   } catch (error) {
     console.error("markEventDoneAction error:", error);
-    return { success: false, error: "Nepodarilo se oznacit akci jako konanou." };
+    return { success: false, error: "Akci se nepodařilo označit jako konanou." };
   }
 }
 
@@ -420,7 +420,7 @@ export async function addOptionAction(
   if (!auth.success) return auth;
 
   if (!label || !label.trim()) {
-    return { success: false, error: "Nazev moznosti je povinny." };
+    return { success: false, error: "Název možnosti je povinný." };
   }
 
   try {
@@ -431,7 +431,7 @@ export async function addOptionAction(
     if (existing.status !== "draft" && existing.status !== "active") {
       return {
         success: false,
-        error: "Moznosti lze pridavat pouze u akcí ve stavu draft nebo active.",
+        error: "Možnosti jde přidávat jen u akce v přípravě nebo aktivní.",
       };
     }
 
@@ -447,11 +447,11 @@ export async function addOptionAction(
     if (dbError?.code === "23505") {
       return {
         success: false,
-        error: "Moznost s timto nazvem jiz existuje.",
+        error: "Možnost s tímhle názvem už existuje.",
       };
     }
     console.error("addOptionAction error:", error);
-    return { success: false, error: "Nepodarilo se pridat moznost." };
+    return { success: false, error: "Možnost se nepodařilo přidat." };
   }
 }
 
@@ -474,7 +474,7 @@ export async function removeOptionAction(
     if (existing.status !== "draft" && existing.status !== "active") {
       return {
         success: false,
-        error: "Moznosti lze odebirat pouze u akcí ve stavu draft nebo active.",
+        error: "Možnosti jde odebírat jen u akce v přípravě nebo aktivní.",
       };
     }
 
@@ -488,7 +488,7 @@ export async function removeOptionAction(
     return { success: true };
   } catch (error) {
     console.error("removeOptionAction error:", error);
-    return { success: false, error: "Nepodarilo se odebrat moznost." };
+    return { success: false, error: "Možnost se nepodařilo odebrat." };
   }
 }
 
@@ -508,7 +508,7 @@ export async function addParticipantAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Jmeno ucastnika je povinne." };
+    return { success: false, error: "Jméno účastníka je povinné." };
   }
 
   try {
@@ -519,7 +519,7 @@ export async function addParticipantAction(
     if (existing.status !== "draft" && existing.status !== "active") {
       return {
         success: false,
-        error: "Ucastniky lze pridavat pouze u akcí ve stavu draft nebo active.",
+        error: "Účastníky jde přidávat jen u akce v přípravě nebo aktivní.",
       };
     }
 
@@ -562,11 +562,11 @@ export async function addParticipantAction(
     if (dbError?.code === "23505") {
       return {
         success: false,
-        error: "Ucastnik s timto emailem jiz existuje v teto akci.",
+        error: "Účastník s tímhle e-mailem už v téhle akci je.",
       };
     }
     console.error("addParticipantAction error:", error);
-    return { success: false, error: "Nepodarilo se pridat ucastnika." };
+    return { success: false, error: "Účastníka se nepodařilo přidat." };
   }
 }
 
@@ -589,7 +589,7 @@ export async function removeParticipantAction(
     if (existing.status !== "draft" && existing.status !== "active") {
       return {
         success: false,
-        error: "Ucastniky lze odebirat pouze u akcí ve stavu draft nebo active.",
+        error: "Účastníky jde odebírat jen u akce v přípravě nebo aktivní.",
       };
     }
 
@@ -606,7 +606,7 @@ export async function removeParticipantAction(
     return { success: true };
   } catch (error) {
     console.error("removeParticipantAction error:", error);
-    return { success: false, error: "Nepodarilo se odebrat ucastnika." };
+    return { success: false, error: "Účastníka se nepodařilo odebrat." };
   }
 }
 
@@ -623,7 +623,7 @@ export async function resendMagicLinkAction(
   try {
     const participant = await getParticipantById(participantId);
     if (!participant) {
-      return { success: false, error: "Ucastnik nebyl nalezen." };
+      return { success: false, error: "Účastník nebyl nalezen." };
     }
     // iter-037 (T-003b): neaktivnímu členovi pozvánku neposíláme.
     if (!(await isEventParticipantAllowed(participantId))) {
@@ -638,23 +638,23 @@ export async function resendMagicLinkAction(
     if (eventData.status !== "active") {
       return {
         success: false,
-        error: "Pozvankovy email lze odeslat pouze pro aktivni akce.",
+        error: "Pozvánku jde odeslat jen u aktivní akce.",
       };
     }
 
     if (!participant.magicTokenHash) {
       return {
         success: false,
-        error: "Ucastnik nema vygenerovany token. Obnovte token nejdrive.",
+        error: "Účastník nemá odkaz. Nejdřív vytvoř nový odkaz.",
       };
     }
 
     // Determine email and name
     let email: string | null = null;
-    let name: string = "Ucastnik";
+    let name: string = "Účastník";
 
     if (participant.memberId) {
-      // BNI member — load from member table
+      // BNI member - load from member table
       const [memberRow] = await getDb()
         .select({ email: member.email, name: member.name })
         .from(member)
@@ -662,23 +662,23 @@ export async function resendMagicLinkAction(
         .limit(1);
 
       if (!memberRow) {
-        return { success: false, error: "Clen nebyl nalezen." };
+        return { success: false, error: "Člen nebyl nalezen." };
       }
       email = memberRow.email;
       name = memberRow.name;
     } else {
       email = participant.externalEmail;
-      name = participant.externalName ?? "Ucastnik";
+      name = participant.externalName ?? "Účastník";
     }
 
     if (!email) {
       return {
         success: false,
-        error: "Ucastnik nema zadany email — email nelze odeslat.",
+        error: "Účastník nemá zadaný e-mail, pozvánku nejde odeslat.",
       };
     }
 
-    // We can't recover the raw token from the hash — generate a new token
+    // We can't recover the raw token from the hash - generate a new token
     const rawToken = generateEventToken();
     const tokenHash = hashEventToken(rawToken);
     const encryptedToken = encryptToken(rawToken, process.env.EVENT_TOKEN_ENCRYPTION_KEY!);
@@ -699,7 +699,7 @@ export async function resendMagicLinkAction(
     if (!emailResult.success) {
       return {
         success: false,
-        error: `Email se nepodarilo odeslat: ${emailResult.error}`,
+        error: `E-mail se nepodařilo odeslat: ${emailResult.error}`,
       };
     }
 
@@ -707,7 +707,7 @@ export async function resendMagicLinkAction(
     return { success: true };
   } catch (error) {
     console.error("resendMagicLinkAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat pozvankovy email." };
+    return { success: false, error: "Pozvánku se nepodařilo odeslat." };
   }
 }
 
@@ -726,7 +726,7 @@ export async function resendAllMagicLinksAction(
     const eventData = await getEventById(eventId);
     if (!eventData) return { success: false, error: "Akce nebyla nalezena." };
     if (eventData.status !== "active") {
-      return { success: false, error: "Hromadne odeslani je mozne pouze u aktivni akce." };
+      return { success: false, error: "Hromadně odeslat jde jen u aktivní akce." };
     }
 
     const participants = await getEventParticipants(eventId);
@@ -738,7 +738,7 @@ export async function resendAllMagicLinksAction(
 
     for (const p of participants) {
       const email = p.memberEmail ?? p.externalEmail ?? null;
-      const name = p.memberName ?? p.externalName ?? "Ucastnik";
+      const name = p.memberName ?? p.externalName ?? "Účastník";
 
       // iter-037 (T-003b, K14): neaktivní člen pozvánku nedostane.
       if (!p.memberActive) { skippedInactive++; continue; }
@@ -766,7 +766,7 @@ export async function resendAllMagicLinksAction(
     return { success: true, data: { sent, skipped, skippedInactive } };
   } catch (error) {
     console.error("resendAllMagicLinksAction error:", error);
-    return { success: false, error: "Nepodarilo se odeslat hromadne pozvanky." };
+    return { success: false, error: "Pozvánky se nepodařilo odeslat hromadně." };
   }
 }
 
@@ -774,7 +774,7 @@ export async function resendAllMagicLinksAction(
  * Return the magic link for a participant WITHOUT invalidating their token.
  * Decrypts the stored encrypted_token. No DB write unless fallback is triggered.
  *
- * Fallback (NULL encrypted_token — legacy rows): generates a new token,
+ * Fallback (NULL encrypted_token - legacy rows): generates a new token,
  * stores both hash and encrypted form, returns the new link with a warning.
  * This matches the current resetParticipantTokenAction behavior for legacy rows.
  */
@@ -789,7 +789,7 @@ export async function getParticipantLinkAction(
   try {
     const participant = await getParticipantById(participantId);
     if (!participant) {
-      return { success: false, error: "Ucastnik nebyl nalezen." };
+      return { success: false, error: "Účastník nebyl nalezen." };
     }
     // iter-037 (T-003b, gate sekce 5): odkaz neaktivního člena se nezobrazuje.
     if (!(await isEventParticipantAllowed(participantId))) {
@@ -797,7 +797,7 @@ export async function getParticipantLinkAction(
     }
 
     if (participant.encryptedToken) {
-      // Happy path: decrypt and return — no DB write
+      // Happy path: decrypt and return - no DB write
       try {
         const rawToken = decryptToken(participant.encryptedToken, encKey);
         const link = buildEventLink(participant.eventId, rawToken);
@@ -811,7 +811,7 @@ export async function getParticipantLinkAction(
       }
     }
 
-    // Fallback: legacy row or failed decryption — generate new token
+    // Fallback: legacy row or failed decryption - generate new token
     console.warn(
       `getParticipantLinkAction: encrypted_token missing or unreadable for participant ${participantId}, generating new token`
     );
@@ -829,7 +829,7 @@ export async function getParticipantLinkAction(
     return { success: true, data: { link, regenerated: true } };
   } catch (error) {
     console.error("getParticipantLinkAction error:", error);
-    return { success: false, error: "Nepodarilo se ziskat odkaz ucastnika." };
+    return { success: false, error: "Odkaz účastníka se nepodařilo získat." };
   }
 }
 
@@ -846,7 +846,7 @@ export async function resetParticipantTokenAction(
   try {
     const participant = await getParticipantById(participantId);
     if (!participant) {
-      return { success: false, error: "Ucastnik nebyl nalezen." };
+      return { success: false, error: "Účastník nebyl nalezen." };
     }
     // iter-037 (T-003b): neaktivnímu členovi nový odkaz nevzniká.
     if (!(await isEventParticipantAllowed(participantId))) {
@@ -868,7 +868,7 @@ export async function resetParticipantTokenAction(
     return { success: true, data: { link } };
   } catch (error) {
     console.error("resetParticipantTokenAction error:", error);
-    return { success: false, error: "Nepodarilo se obnovit token ucastnika." };
+    return { success: false, error: "Odkaz účastníka se nepodařilo obnovit." };
   }
 }
 
@@ -876,7 +876,7 @@ export async function resetParticipantTokenAction(
 
 /**
  * Cast a vote for an event participant.
- * This action is cookie-free / session-free — auth is via URL token (participantId from verified token).
+ * This action is cookie-free / session-free - auth is via URL token (participantId from verified token).
  * The caller (route handler / page) must verify the token BEFORE calling this action.
  *
  * eventId is used for pick_one (delete all votes for this event).
@@ -893,7 +893,7 @@ export async function castVoteAction(
 ): Promise<ActionResult> {
   // Validate inputs
   if (!participantId || !optionId || !eventId) {
-    return { success: false, error: "Neplatne parametry hlasovani." };
+    return { success: false, error: "Neplatné parametry hlasování." };
   }
 
   try {
@@ -910,11 +910,11 @@ export async function castVoteAction(
     if (eventData.status !== "active") {
       return {
         success: false,
-        error: "Hlasovat lze pouze v aktivni akci.",
+        error: "Hlasovat jde jen v aktivní akci.",
       };
     }
 
-    // For max_x: always use votingMaxX from DB — do not rely on client-provided value
+    // For max_x: always use votingMaxX from DB - do not rely on client-provided value
     const resolvedOptions =
       votingType === "max_x"
         ? { ...options, maxX: eventData.votingMaxX ?? options?.maxX }
@@ -923,13 +923,13 @@ export async function castVoteAction(
     const result = await castVote(participantId, eventId, optionId, votingType, resolvedOptions);
 
     if (!result.success) {
-      return { success: false, error: result.error ?? "Hlasovani se nepodarilo." };
+      return { success: false, error: result.error ?? "Hlasování se nepodařilo." };
     }
 
     revalidatePath(`/e/${eventId}`);
     return { success: true };
   } catch (error) {
     console.error("castVoteAction error:", error);
-    return { success: false, error: "Hlasovani se nepodarilo. Zkuste to znovu." };
+    return { success: false, error: "Hlasování se nepodařilo. Zkus to znovu." };
   }
 }

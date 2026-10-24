@@ -1,12 +1,12 @@
 /**
- * iter-027 (T-005) — datový model logu běhů (arch iter-027 T-001, sekce 3, 9).
+ * iter-027 (T-005) - datový model logu běhů (arch iter-027 T-001, sekce 3, 9).
  *
  * Čistý typový modul: žádný import drizzle-orm, @/lib/db/*, next/server ani
  * resend. Bezpečné pro scripts/test-ops-events.ts (tsx bez DATABASE_URL).
  *
  * `OpsEventInput` je záměrně uzavřený typ (9.1, vrstva 1 proti úniku tokenů):
  * NEMÁ pole `url`, `link`, `token`, `href` ani `rawToken`. Kdo by chtěl
- * zalogovat magic link, musí nejdřív rozšířit tenhle typ — to je viditelná
+ * zalogovat magic link, musí nejdřív rozšířit tenhle typ - to je viditelná
  * změna v code review, ne překlep v nějakém volajícím kódu.
  */
 
@@ -14,7 +14,7 @@ export type OpsEventSource = "cron" | "gui" | "manual" | "system";
 export type OpsEventSeverity = "info" | "warn" | "error";
 
 /**
- * Číselník `kind` (3.3). Autorita je tenhle union, NE databáze — `severity`
+ * Číselník `kind` (3.3). Autorita je tenhle union, NE databáze - `severity`
  * má CHECK, `kind` ne (bude přibývat, CHECK by znamenal migraci za každý
  * nový druh; chybný `kind` v logu nikomu neublíží, viz 3.2).
  */
@@ -38,7 +38,7 @@ export type OpsEventKind =
   | "retention.purged"
   | "migration.applied"
   // iter-028 (T-006, arch 7): připomínky (fáze 8). "reminder.round" NENÍ
-  // v TERMINAL_KINDS — je to souhrn kola, ne konec běhu, jinak by přebil
+  // v TERMINAL_KINDS - je to souhrn kola, ne konec běhu, jinak by přebil
   // pozdější `cron.finished` v `deriveRunStatus` (7).
   | "reminder.sent"
   | "reminder.failed"
@@ -102,12 +102,15 @@ export type OpsEventKind =
   | "semafor.imported"
   | "semafor.month-deleted"
   | "semafor.row-deleted"
-  | "semafor.alias-removed";
+  | "semafor.alias-removed"
+  // iter-042 (B5, security bod 6): změna Nastavení chapteru. Jednorázová událost
+  // s vlastním runId. Bez jmen, `memberId` a e-mailu, v detailu jen klíče a hodnoty.
+  | "settings.changed";
 
 /**
  * Explicitní množina terminálních kindů (3.3, MAJOR-2 review T-002).
  * Autorita pro detektor zaseklých běhů (`deriveRunStatus`, T-006,
- * lib/ops/run-status.ts). Konvence "končí na -failed" NENÍ dost —
+ * lib/ops/run-status.ts). Konvence "končí na -failed" NENÍ dost -
  * `dispatch.failed` patří sem výslovně, ne odvozením z přípony, aby budoucí
  * nekonzistentní pojmenování nerozbilo detekci.
  */
@@ -144,10 +147,11 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "semafor.month-deleted",
   "semafor.row-deleted",
   "semafor.alias-removed",
+  "settings.changed",
 ];
 
 /**
- * Vstup do `logOpsEvent` / `buildOpsEvent`. `occurredAt` je nepovinné —
+ * Vstup do `logOpsEvent` / `buildOpsEvent`. `occurredAt` je nepovinné -
  * když chybí, `buildOpsEvent` ho doplní `new Date()` (3.2: "occurred_at
  * posílá aplikace", DB default `now()` je jen pojistka pro čas zápisu, ne
  * čas události).
@@ -173,7 +177,7 @@ export interface OpsEventInput {
 }
 
 /**
- * Řádek připravený k INSERTu — výstup `buildOpsEvent`, už po redakci (9.2) a
+ * Řádek připravený k INSERTu - výstup `buildOpsEvent`, už po redakci (9.2) a
  * zkrácení. Všechna nepovinná pole `OpsEventInput` jsou tu normalizovaná na
  * `null` (žádné `undefined` směrem do DB vrstvy).
  */

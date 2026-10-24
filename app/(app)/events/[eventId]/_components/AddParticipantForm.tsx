@@ -36,7 +36,7 @@ export function AddParticipantForm({ eventId }: AddParticipantFormProps) {
       } else {
         setName("");
         setEmail("");
-        setSuccessMsg("Ucastnik pridan." + (email ? " Pozvanka odeslana." : ""));
+        setSuccessMsg("Účastník je přidaný." + (email ? " Pozvánka je odeslaná." : ""));
         router.refresh();
       }
     });
@@ -51,18 +51,18 @@ export function AddParticipantForm({ eventId }: AddParticipantFormProps) {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <Input
-              label="Jmeno *"
+              label="Jméno *"
               name="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Jan Novak"
+              placeholder="Jan Novák"
               required
               disabled={isPending}
             />
           </div>
           <div className="flex-1">
             <Input
-              label="Email (volitelny)"
+              label="E-mail (volitelný)"
               name="email"
               type="email"
               value={email}

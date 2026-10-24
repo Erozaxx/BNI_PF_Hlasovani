@@ -8,7 +8,7 @@ import { SortableQuestionList } from "./SortableQuestionList";
 /**
  * Global interview question set editor (arch section 6.1/6.2, T-004a delta 1).
  *
- * Lives OUTSIDE the /admin/* segment on purpose — admin AND moderator must be
+ * Lives OUTSIDE the /admin/* segment on purpose - admin AND moderator must be
  * able to manage the question set, and middleware only session-gates this
  * route (no role check there). The role check therefore happens here,
  * page-level, exactly like every action in actions/interview-questions.ts
@@ -24,26 +24,26 @@ export default async function InterviewQuestionsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-text-main">
-          Sada otazek pro pohovory
+          Sada otázek pro pohovory
         </h1>
         <p className="text-sm text-text-muted mt-1">
-          Otazky pouzite pri zalozeni noveho pohovoru (5 a 10 mesicu). Zmena
-          textu, poradi nebo archivace se projevi jen u nove zalozenych
-          pohovoru — jiz zalozene pohovory maji zamrazenou kopii otazek v
-          okamziku zalozeni.
+          Otázky se použijí při založení nového pohovoru (po 5 a po 10 měsících).
+          Změna textu, pořadí nebo archivace se projeví jen u nově založených
+          pohovorů. Pohovor si otázky uloží při založení, pozdější úpravy otázek
+          ho nezmění.
         </p>
       </div>
 
       <Card>
         <h2 className="text-sm font-semibold text-text-muted mb-3">
-          Nova otazka
+          Nová otázka
         </h2>
         <CreateQuestionForm />
       </Card>
 
       <section>
         <h2 className="text-lg font-semibold text-text-main mb-4">
-          Otazky ({questions.length})
+          Otázky ({questions.length})
         </h2>
         {questions.length > 0 ? (
           <SortableQuestionList
@@ -58,8 +58,8 @@ export default async function InterviewQuestionsPage() {
         ) : (
           <Card>
             <EmptyState
-              title="Zatim zadne otazky"
-              description="Pridejte prvni otazku pomoci formulare vyse."
+              title="Zatím žádné otázky"
+              description="Přidej první otázku ve formuláři výše."
             />
           </Card>
         )}

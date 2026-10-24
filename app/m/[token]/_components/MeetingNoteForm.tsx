@@ -63,7 +63,7 @@ export function MeetingNoteForm({
             ? meetingTokenActionError(tokenError.reason, "note")
             : typeof data.error === "string"
               ? data.error
-              : "Nepodarilo se ulozit poznamku."
+              : "Poznámka se neuložila. Zkus to znovu."
         );
         return;
       }
@@ -79,7 +79,7 @@ export function MeetingNoteForm({
       setText("");
       setOpen(false);
     } catch {
-      setError("Nepodarilo se odeslat poznamku. Zkuste to znovu.");
+      setError("Poznámka se neuložila. Zkus to znovu.");
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ export function MeetingNoteForm({
       <button
         type="button"
         onClick={handleOpen}
-        className="text-sm text-navy hover:underline"
+        className="min-h-[44px] text-sm text-navy hover:underline"
       >
         + Přidat poznámku
       </button>
@@ -102,10 +102,10 @@ export function MeetingNoteForm({
       <Textarea
         ref={textareaRef}
         name="note-text"
-        label="Nova poznamka"
+        label="Nová poznámka"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Napis poznamku..."
+        placeholder="Napiš poznámku..."
         error={error ?? undefined}
         disabled={loading}
         rows={3}
@@ -114,19 +114,21 @@ export function MeetingNoteForm({
         <Button
           type="submit"
           size="sm"
+          className="min-h-[44px]"
           loading={loading}
           disabled={!text.trim()}
         >
-          Ulozit
+          Uložit
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="sm"
+          className="min-h-[44px]"
           onClick={handleCancel}
           disabled={loading}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </form>

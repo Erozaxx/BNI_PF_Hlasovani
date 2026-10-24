@@ -18,7 +18,7 @@ import type { OpsEventInput } from "@/lib/ops/types";
 /** Konečné texty, doslova z gate sekce 5. Test hlídá znění i absenci U+2014. */
 export const INTERNAL_TEXTS = {
   title: "Interní schůzka",
-  hint: "Počítá se do docházky jako běžná schůzka, jen bez hostů a hlasování.",
+  hint: "Interní schůzka je schůzka bez hostů a hlasování. Do docházky se počítá jako běžná.",
   create: "Založit interní schůzku",
   created: "Na tenhle den je interní schůzka. Počítá se do docházky.",
   pastInternal: "Ten den byla interní schůzka.",
@@ -54,12 +54,21 @@ export const INTERNAL_CANCEL_UNTIL = "17:00";
 
 // ── Tón dne ──────────────────────────────────────────────────
 
-export type DayTone = "meeting" | "internal" | "none";
+export type DayTone = "meeting" | "internal" | "regular" | "none";
 
-/** Běžná schůzka vyhrává nad interní (5.3). */
-export function dayTone(input: { hasMeeting: boolean; hasInternal: boolean }): DayTone {
+/**
+ * Tón dne (iter-042 B3): schůzka s hosty > interní > pravidelný den > nic.
+ * Schůzka s hosty vyhrává nad interní (5.3) i u minulých dnů, takže den zůstává
+ * tmavě modrý i po schůzce. `isRegularDay` je den v týdnu z nastavení chapteru.
+ */
+export function dayTone(input: {
+  hasMeeting: boolean;
+  hasInternal: boolean;
+  isRegularDay?: boolean;
+}): DayTone {
   if (input.hasMeeting) return "meeting";
   if (input.hasInternal) return "internal";
+  if (input.isRegularDay) return "regular";
   return "none";
 }
 
@@ -218,29 +227,35 @@ const CELL_BASE =
   "flex min-h-[44px] flex-col items-center justify-center rounded-lg text-sm leading-tight focus:outline-none focus:shadow-focus";
 
 /**
- * Třídy buňky dne, společné pro kalendář člena i Omluvy (7.2). Modrý podklad má
- * každý den s běžnou schůzkou, zelený každý den s interní (běžná ji přebíjí už
- * v `dayTone`). Čtvrtek bez schůzky podklad nemá, jen tučné číslo. Text na modré
- * je `text-text-main`: `text-navy` na `bg-navy-light` dává jen 4,44:1 (pod AA).
+ * Třídy buňky dne, společné pro kalendář člena i Omluvy (iter-042 B3, gate Z4).
+ *
+ * - regular (pravidelný den): `bg-navy-soft` #d6dcff, text `text-text-main`
+ * - meeting (schůzka s hosty, i po schůzce): `bg-navy` #605BE5, bílý text, 5,1:1
+ * - internal (interní schůzka): `bg-success` #2d7a3a, bílý text, 5,3:1
+ * - none: bez podkladu, minulé dny šedě
+ *
+ * Symboly ● ◐ ✓ N A a počet omluvených nemají vlastní barvu a dědí barvu
+ * textu buňky. Vybraný den má `ring-offset-2`, aby rámeček neležel na modré.
  */
-export function dayCellClass(tone: DayTone, thursday: boolean, past: boolean, selected: boolean): string {
+export function dayCellClass(tone: DayTone, past: boolean, selected: boolean): string {
   const parts = [CELL_BASE];
   if (tone === "internal") {
-    parts.push("bg-success-light font-semibold text-success");
+    parts.push("bg-success font-semibold text-white");
   } else if (tone === "meeting") {
-    parts.push("bg-navy-light font-semibold text-text-main");
+    parts.push("bg-navy font-semibold text-white");
+  } else if (tone === "regular") {
+    parts.push("bg-navy-soft text-text-main");
   } else {
     parts.push("hover:bg-background");
     parts.push(past ? "text-text-muted" : "text-text-main");
-    if (thursday) parts.push("font-semibold");
   }
-  if (selected) parts.push("ring-2 ring-primary");
+  if (selected) parts.push("ring-2 ring-primary ring-offset-2");
   return parts.join(" ");
 }
 
-/** Třídy čísla dne: podtržení má běžná i interní schůzka. */
+/** Třídy čísla dne: podtržení má jen den se založenou schůzkou (s hosty i interní), pravidelný den ne. */
 export function dayNumberClass(tone: DayTone): string {
-  return tone === "none" ? "" : "underline decoration-2 underline-offset-2";
+  return tone === "meeting" || tone === "internal" ? "underline decoration-2 underline-offset-2" : "";
 }
 
 // ── Ops událost (10) ─────────────────────────────────────────

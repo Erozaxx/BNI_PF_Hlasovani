@@ -17,7 +17,7 @@ interface ChangeLeaderFormProps {
   interviewId: string;
   currentLeaderId: string | null;
   members: MemberOption[];
-  /** Leader change is guarded to status='open' (arch 8b) — render read-only otherwise. */
+  /** Leader change is guarded to status='open' (arch 8b) - render read-only otherwise. */
   disabled: boolean;
 }
 
@@ -36,7 +36,7 @@ export function ChangeLeaderForm({
   if (disabled) {
     return (
       <p className="text-sm text-text-muted">
-        Vedouciho lze zmenit jen u otevreneho pohovoru.
+        Vedoucího jde změnit jen u otevřeného pohovoru.
       </p>
     );
   }
@@ -52,7 +52,7 @@ export function ChangeLeaderForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!leaderId) {
-      setError("Vyberte vedouciho.");
+      setError("Vyber vedoucího.");
       return;
     }
 
@@ -65,12 +65,12 @@ export function ChangeLeaderForm({
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Vedouci pohovoru byl zmenen.");
+        showToast("success", "Vedoucí pohovoru je změněný.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se zmenit vedouciho.");
-      showToast("error", "Nepodarilo se zmenit vedouciho.");
+      setError("Vedoucího se nepodařilo změnit.");
+      showToast("error", "Vedoucího se nepodařilo změnit.");
     } finally {
       setLoading(false);
     }
@@ -87,13 +87,12 @@ export function ChangeLeaderForm({
           value={leaderId}
           onChange={(e) => setLeaderId(e.target.value)}
           options={options}
-          placeholder="Vyberte vedouciho..."
+          placeholder="Vyber vedoucího…"
           error={error}
         />
         {selectedLeader && !selectedLeader.email && (
           <p className="text-xs text-warning mt-1">
-            Tento clen nema email — odkaz na vyplneni pujde poslat az po
-            doplneni emailu.
+            Tenhle člen nemá e-mail. Odkaz na vyplnění půjde poslat až po doplnění e-mailu.
           </p>
         )}
       </div>
@@ -101,10 +100,11 @@ export function ChangeLeaderForm({
         type="submit"
         variant="secondary"
         size="sm"
+        className="min-h-[44px]"
         loading={loading}
         disabled={unchanged}
       >
-        Zmenit vedouciho
+        Změnit vedoucího
       </Button>
     </form>
   );

@@ -28,7 +28,7 @@ const VALID_VOTE_VALUES: ReadonlySet<string> = new Set(["up", "neutral", "down"]
  *
  * Body: { guestId: string, value: "up"|"neutral"|"down", reason?: string }
  *
- * Auth: magic token in URL — no session required.
+ * Auth: magic token in URL - no session required.
  */
 export async function POST(
   req: NextRequest,
@@ -48,7 +48,7 @@ export async function POST(
     return err(401, "Invalid token");
   }
 
-  // meetingId is server-side only — never from body
+  // meetingId is server-side only - never from body
   const { meetingId, memberId } = tokenResult;
 
   // 2. Check meeting is in voting phase
@@ -63,7 +63,7 @@ export async function POST(
   }
 
   if (meetingRows[0].status !== "voting") {
-    return err(403, `Voting not open — meeting is in '${meetingRows[0].status}' phase`);
+    return err(403, `Voting not open - meeting is in '${meetingRows[0].status}' phase`);
   }
 
   // 3. Parse body
@@ -90,7 +90,7 @@ export async function POST(
   };
 
   if (!VALID_VOTE_VALUES.has(value)) {
-    return err(400, "Invalid vote value — must be one of: up, neutral, down");
+    return err(400, "Invalid vote value - must be one of: up, neutral, down");
   }
 
   const voteValue = value as VoteValue;
@@ -120,7 +120,7 @@ export async function POST(
     return err(403, "Voting is not enabled for this guest");
   }
 
-  // 5. UPSERT vote — inserts on first vote, updates on re-vote
+  // 5. UPSERT vote - inserts on first vote, updates on re-vote
   const upserted = await getDb()
     .insert(vote)
     .values({

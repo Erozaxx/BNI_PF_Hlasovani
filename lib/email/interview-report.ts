@@ -3,7 +3,7 @@ import type { PairedQuestionRow } from "@/lib/db/queries/interviews";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// escapeHtml here intentionally ALSO escapes the apostrophe — lib/email/resend.ts
+// escapeHtml here intentionally ALSO escapes the apostrophe - lib/email/resend.ts
 // and lib/events/magic-link.ts do not (pentest iter-019 M-6, POTVRZEN: "casovana
 // bomba" because those callers only interpolate names/labels). This module
 // interpolates free-text interview answers into the same HTML, so an
@@ -33,12 +33,12 @@ function hasText(value: string | null): value is string {
  * One question + its (possibly empty) answer, rendered as a bordered block.
  *
  * iter-021 (arch T-001 6.3, T-003 NIT-1, decision D-4): `applies === false`
- * means the question does not apply to this interview's type — the question
+ * means the question does not apply to this interview's type - the question
  * text is wrapped in <s> with the strike-through style on THAT element (not a
- * bare text-decoration on the wrapping <div>/<p> — a chunk of mail clients,
+ * bare text-decoration on the wrapping <div>/<p> - a chunk of mail clients,
  * notably Outlook desktop, ignore that). The answer line is replaced with
- * "Neplati pro tento typ pohovoru", which must read clearly on its own even
- * if the <s> never renders — Resend sends html-only, no text/plain fallback.
+ * "Neplatí pro tento typ pohovoru", which must read clearly on its own even
+ * if the <s> never renders - Resend sends html-only, no text/plain fallback.
  * `applies === true` renders byte-for-byte identical to the pre-iter-021
  * output (old interviews, backfilled true/true).
  */
@@ -50,8 +50,8 @@ function answerBlock(text: string, valueText: string | null, applies: boolean): 
   const answerHtml = applies
     ? answered
       ? escapeHtml(valueText as string)
-      : "Bez odpovedi"
-    : "Neplati pro tento typ pohovoru";
+      : "Bez odpovědi"
+    : "Neplatí pro tento typ pohovoru";
   const answerColor = applies ? (answered ? "#1a1a1a" : "#999") : "#999";
 
   return `
@@ -72,7 +72,7 @@ function htmlShell(title: string, subtitle: string, bodyHtml: string): string {
   </div>
   ${bodyHtml}
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8E8E8;text-align:center;">
-    <p style="color:#999;font-size:12px;">Automaticky generovany report z BNI Hlasovani</p>
+    <p style="color:#999;font-size:12px;">Automaticky generovaný report z BNI Hlasování</p>
   </div>
 </body>
 </html>`;
@@ -98,7 +98,7 @@ export interface InterviewReportData {
 /**
  * Build the single-interview report (arch section 8g). Used both for the
  * admin/mod "Nahled" on the interview detail page and as the exact HTML body
- * sendInterviewReportAction mails out — same function, same output, so the
+ * sendInterviewReportAction mails out - same function, same output, so the
  * preview is never out of sync with what actually gets sent. Report contains
  * no magic link (arch 8g).
  */
@@ -106,21 +106,21 @@ export function buildInterviewReportHtml(data: InterviewReportData): string {
   const meta = `
     <table style="width:100%;margin-bottom:24px;font-size:13px;">
       <tbody>
-        <tr><td style="padding:2px 8px 2px 0;color:#666;">Vedouci pohovoru:</td><td style="padding:2px 0;">${data.leaderName ? escapeHtml(data.leaderName) : "-"}</td></tr>
-        <tr><td style="padding:2px 8px 2px 0;color:#666;">Zalozeno:</td><td style="padding:2px 0;">${formatDate(data.createdAt)}</td></tr>
-        <tr><td style="padding:2px 8px 2px 0;color:#666;">Odeslano:</td><td style="padding:2px 0;">${data.submittedAt ? formatDate(data.submittedAt) : "-"}</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:#666;">Vedoucí pohovoru:</td><td style="padding:2px 0;">${data.leaderName ? escapeHtml(data.leaderName) : "-"}</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:#666;">Založeno:</td><td style="padding:2px 0;">${formatDate(data.createdAt)}</td></tr>
+        <tr><td style="padding:2px 8px 2px 0;color:#666;">Odesláno:</td><td style="padding:2px 0;">${data.submittedAt ? formatDate(data.submittedAt) : "-"}</td></tr>
       </tbody>
     </table>`;
 
   const questionsHtml =
     data.questions.length > 0
       ? data.questions.map((q) => answerBlock(q.text, q.valueText, q.applies)).join("\n")
-      : `<p style="font-size:13px;color:#999;">Tento pohovor nema zadne otazky v zamrazenem snapshotu.</p>`;
+      : `<p style="font-size:13px;color:#999;">Tento pohovor nemá žádné otázky.</p>`;
 
   return htmlShell(
-    "BNI Hlasovani - Pohovor",
+    "BNI Hlasování: pohovor",
     `${data.memberName} - ${data.typeLabel}`,
-    `${meta}<h2 style="font-size:16px;color:#333;margin-bottom:12px;">Otazky a odpovedi</h2>${questionsHtml}`
+    `${meta}<h2 style="font-size:16px;color:#333;margin-bottom:12px;">Otázky a odpovědi</h2>${questionsHtml}`
   );
 }
 
@@ -135,7 +135,7 @@ export interface InterviewCompareReportData {
  * Build the 5-vs-10 compare report (arch sections 4.2 / 8g): one table for
  * questions paired across both interviews, plus two extra sections for
  * questions that only exist in one side. Rows already arrive paired/ordered
- * from pairInterviewAnswersForCompare() (T-005) — this module only renders
+ * from pairInterviewAnswersForCompare() (T-005) - this module only renders
  * them, it does no pairing logic of its own.
  */
 export function buildInterviewCompareReportHtml(
@@ -147,10 +147,10 @@ export function buildInterviewCompareReportHtml(
   // output unchanged (old interviews, backfilled true/true).
   const answerCell = (value: string | null, applies: boolean | null): string => {
     if (applies === false) {
-      return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:#999;"><s style="text-decoration:line-through;color:#999;">Neplati</s></td>`;
+      return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:#999;"><s style="text-decoration:line-through;color:#999;">Neplatí</s></td>`;
     }
     const answered = hasText(value);
-    return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:${answered ? "#1a1a1a" : "#999"};">${answered ? escapeHtml(value as string) : "Bez odpovedi"}</td>`;
+    return `<td style="padding:6px 8px;font-size:13px;white-space:pre-wrap;vertical-align:top;color:${answered ? "#1a1a1a" : "#999"};">${answered ? escapeHtml(value as string) : "Bez odpovědi"}</td>`;
   };
 
   const pairedTable =
@@ -158,9 +158,9 @@ export function buildInterviewCompareReportHtml(
       ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
           <thead>
             <tr style="background:#f5f5f5;">
-              <th style="padding:6px 8px;text-align:left;font-size:12px;">Otazka</th>
-              <th style="padding:6px 8px;text-align:left;font-size:12px;">Odpoved 5 m</th>
-              <th style="padding:6px 8px;text-align:left;font-size:12px;">Odpoved 10 m</th>
+              <th style="padding:6px 8px;text-align:left;font-size:12px;">Otázka</th>
+              <th style="padding:6px 8px;text-align:left;font-size:12px;">Odpověď 5 m</th>
+              <th style="padding:6px 8px;text-align:left;font-size:12px;">Odpověď 10 m</th>
             </tr>
           </thead>
           <tbody>
@@ -175,10 +175,10 @@ export function buildInterviewCompareReportHtml(
               .join("\n")}
           </tbody>
         </table>`
-      : `<p style="font-size:13px;color:#999;margin-bottom:24px;">Zadne sparovane otazky.</p>`;
+      : `<p style="font-size:13px;color:#999;margin-bottom:24px;">Žádné spárované otázky.</p>`;
 
   // iter-021 (T-003 NIT-1): onlySection ALWAYS reads applies of its OWN side
-  // — applies5 for "Jen v pohovoru 5 mesicu", applies10 for "... 10 mesicu".
+  // - applies5 for "Jen v pohovoru 5 měsíců", applies10 for "... 10 mesicu".
   // The other side is always null here (question doesn't exist there) and is
   // never read. `?? true` is a purely defensive fallback (own side can't
   // legally be null per the pairing contract, T-001 6.2).
@@ -198,19 +198,19 @@ export function buildInterviewCompareReportHtml(
            .join("\n")}`
       : "";
 
-  const onlyIn5Html = onlySection("Jen v pohovoru 5 mesicu", data.onlyIn5, "5");
-  const onlyIn10Html = onlySection("Jen v pohovoru 10 mesicu", data.onlyIn10, "10");
+  const onlyIn5Html = onlySection("Jen v pohovoru 5 měsíců", data.onlyIn5, "5");
+  const onlyIn10Html = onlySection("Jen v pohovoru 10 měsíců", data.onlyIn10, "10");
 
   return htmlShell(
-    "BNI Hlasovani - Porovnani pohovoru",
-    `${data.memberName} - 5 vs 10 mesicu`,
+    "BNI Hlasování: porovnání pohovorů",
+    `${data.memberName} - 5 vs 10 měsíců`,
     `${pairedTable}${onlyIn5Html}${onlyIn10Html}`
   );
 }
 
 /**
  * Send a pre-built interview report email to an arbitrary recipient (arch 8g:
- * report may go to "komukoli z clenu", not just mod/admin — the recipient
+ * report may go to "komukoli z clenu", not just mod/admin - the recipient
  * check itself lives in the calling action). Shared by both
  * sendInterviewReportAction and sendInterviewCompareReportAction; the only
  * difference between the two call sites is which build*Html function
@@ -225,7 +225,7 @@ export async function sendInterviewReportEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromField = `BNI Hlasovani <${fromEmail}>`;
+  const fromField = `BNI Hlasování <${fromEmail}>`;
 
   if (!apiKey) {
     console.warn(

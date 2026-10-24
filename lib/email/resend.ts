@@ -108,26 +108,26 @@ export function buildReportHtml(data: ReportData): string {
                   `<li style="margin-bottom:6px;font-size:13px;">${escapeHtml(n.text)} <span style="color:#999;font-size:11px;">(${formatDate(n.createdAt)})</span></li>`
               )
               .join("\n")
-          : '<li style="color:#999;font-size:13px;">Zadne poznamky</li>';
+          : '<li style="color:#999;font-size:13px;">Žádné poznámky</li>';
 
       return `
         <div style="margin-bottom:24px;padding:16px;border:1px solid #E8E8E8;border-radius:12px;">
           <h3 style="margin:0 0 8px;color:#1a1a1a;">${escapeHtml(g.guestName)}${categoryLabel}</h3>
           <p style="margin:4px 0 12px;font-size:14px;">${voteSummary}</p>
 
-          <h4 style="margin:12px 0 6px;font-size:13px;color:#605BE5;">Jmenovite vysledky</h4>
+          <h4 style="margin:12px 0 6px;font-size:13px;color:#605BE5;">Jmenovité výsledky</h4>
           <table style="border-collapse:collapse;width:100%;">
             <thead>
               <tr style="background:#f5f5f5;">
-                <th style="padding:4px 8px;text-align:left;font-size:12px;">Clen</th>
+                <th style="padding:4px 8px;text-align:left;font-size:12px;">Člen</th>
                 <th style="padding:4px 8px;text-align:center;font-size:12px;">Hlas</th>
-                <th style="padding:4px 8px;text-align:left;font-size:12px;">Duvod</th>
+                <th style="padding:4px 8px;text-align:left;font-size:12px;">Důvod</th>
               </tr>
             </thead>
             <tbody>${voteRows}</tbody>
           </table>
 
-          <h4 style="margin:16px 0 6px;font-size:13px;color:#605BE5;">Poznamky</h4>
+          <h4 style="margin:16px 0 6px;font-size:13px;color:#605BE5;">Poznámky</h4>
           <ul style="margin:0;padding-left:20px;">${noteRows}</ul>
         </div>`;
     })
@@ -138,15 +138,15 @@ export function buildReportHtml(data: ReportData): string {
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:22px;">BNI Hlasovani - Report</h1>
-    <p style="margin:4px 0 0;color:#666;font-size:14px;">Schuzka: ${escapeHtml(data.meetingDate)}</p>
+    <h1 style="margin:0;color:#cf2e2e;font-size:22px;">BNI Hlasování: report</h1>
+    <p style="margin:4px 0 0;color:#666;font-size:14px;">Schůzka: ${escapeHtml(data.meetingDate)}</p>
   </div>
 
-  <h2 style="font-size:16px;color:#333;margin-bottom:16px;">Hoste (${data.guests.length})</h2>
+  <h2 style="font-size:16px;color:#333;margin-bottom:16px;">Hosté (${data.guests.length})</h2>
   ${guestSections}
 
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8E8E8;text-align:center;">
-    <p style="color:#999;font-size:12px;">Automaticky generovany report z BNI Hlasovani</p>
+    <p style="color:#999;font-size:12px;">Automaticky generovaný report z BNI Hlasování</p>
   </div>
 </body>
 </html>`;
@@ -175,7 +175,7 @@ function formatDate(d: Date): string {
  * Get admin and moderator email addresses.
  *
  * Iter-026 (arch 7.2): přepsáno nad `getManagementRecipients()`
- * (lib/db/queries/members.ts) — ta filtruje admin/moderator + neprázdný
+ * (lib/db/queries/members.ts) - ta filtruje admin/moderator + neprázdný
  * e-mail přímo v SQL, aby v repu neexistovaly dvě nezávislé definice toho,
  * kdo je "management".
  */
@@ -214,9 +214,9 @@ export async function sendReport(
 
   try {
     const { error } = await resend.emails.send({
-      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      from: `BNI Hlasování <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: emails,
-      subject: `BNI Report - Schuzka ${data.meetingDate}`,
+      subject: `BNI Report: schůzka ${data.meetingDate}`,
       html,
     });
 
@@ -249,10 +249,10 @@ export async function sendMeetingMagicLinkEmail(
 ): Promise<{ success: boolean; error?: string; resendId?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromField = `BNI Hlasovani <${fromEmail}>`;
+  const fromField = `BNI Hlasování <${fromEmail}>`;
 
   // iter-027 (T-005, arch 2.2): prefix klíče (apiKey.slice(0, 8) + "...")
-  // odstraněn z výpisu — diagnostickou hodnotu nesou keyLength a rozlišení
+  // odstraněn z výpisu - diagnostickou hodnotu nesou keyLength a rozlišení
   // set/MISSING, obojí zůstává na tomtéž řádku.
   console.info(`[sendMeetingMagicLinkEmail] to=${email} from=${fromField} apiKey=${apiKey ? "set" : "MISSING"} keyLength=${apiKey?.length ?? 0}`);
 
@@ -269,21 +269,21 @@ export async function sendMeetingMagicLinkEmail(
     const { data, error } = await resend.emails.send({
       from: fromField,
       to: [email],
-      subject: `BNI Hlasovani - Odkaz pro hlasovani${dateLabel}`,
+      subject: `BNI Hlasování: odkaz pro hlasování${dateLabel}`,
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasování</h1>
   </div>
-  <p>Dobry den${memberName ? ` ${escapeHtml(memberName)}` : ""},</p>
-  <p>Byl pro vas pripraven odkaz pro hlasovani na schuzi${dateLabel ? ` <strong>${escapeHtml(dateLabel.replace(/[()]/g, "").trim())}</strong>` : ""}. Kliknutim nize pristupite na stranku hlasovani:</p>
+  <p>Dobrý den${memberName ? ` ${escapeHtml(memberName)}` : ""},</p>
+  <p>Byl pro vás připraven odkaz pro hlasování na schůzi${dateLabel ? ` <strong>${escapeHtml(dateLabel.replace(/[()]/g, "").trim())}</strong>` : ""}. Kliknutím níže přistoupíte na stránku hlasování:</p>
   <div style="text-align:center;margin:24px 0;">
-    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Prejit na hlasovani</a>
+    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Přejít na hlasování</a>
   </div>
-  <p style="color:#666;font-size:13px;">Odkaz je osobni a platny po dobu hlasovani.</p>
-  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+  <p style="color:#666;font-size:13px;">Odkaz je osobní a platný po dobu hlasování.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento e-mail nežádali, můžete ho ignorovat.</p>
 </body>
 </html>`,
     });
@@ -305,7 +305,7 @@ export async function sendMeetingMagicLinkEmail(
 /**
  * Send a scoped interview magic link email to the interview leader (iter-020,
  * T-008, arch section 8c). Same code path is used for the first send and for
- * every regeneration — the caller (sendInterviewLinkAction) always passes a
+ * every regeneration - the caller (sendInterviewLinkAction) always passes a
  * freshly (re)generated token, so there is nothing "resend"-specific here.
  */
 export async function sendInterviewLinkEmail(
@@ -317,7 +317,7 @@ export async function sendInterviewLinkEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromField = `BNI Hlasovani <${fromEmail}>`;
+  const fromField = `BNI Hlasování <${fromEmail}>`;
 
   if (!apiKey) {
     console.warn("RESEND_API_KEY not configured, logging interview magic link to console");
@@ -330,21 +330,21 @@ export async function sendInterviewLinkEmail(
     const { data, error } = await resend.emails.send({
       from: fromField,
       to: [email],
-      subject: `BNI Hlasovani - Pohovor (${typeLabel}) - ${memberName}`,
+      subject: `BNI Hlasování: pohovor (${typeLabel}) - ${memberName}`,
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasování</h1>
   </div>
-  <p>Dobry den${leaderName ? ` ${escapeHtml(leaderName)}` : ""},</p>
-  <p>Byl pro vas pripraven odkaz na vyplneni pohovoru (<strong>${escapeHtml(typeLabel)}</strong>) se clenem <strong>${escapeHtml(memberName)}</strong>. Kliknutim nize otevrete formular:</p>
+  <p>Dobrý den${leaderName ? ` ${escapeHtml(leaderName)}` : ""},</p>
+  <p>Byl pro vás připraven odkaz na vyplnění pohovoru (<strong>${escapeHtml(typeLabel)}</strong>) s členem <strong>${escapeHtml(memberName)}</strong>. Kliknutím níže otevřete formulář:</p>
   <div style="text-align:center;margin:24px 0;">
     <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Vyplnit pohovor</a>
   </div>
-  <p style="color:#666;font-size:13px;">Odkaz je platny 30 dni. Odpovedi muzete prubezne ukladat a vratit se k nim pozdeji; po odeslani jsou jen ke cteni.</p>
-  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+  <p style="color:#666;font-size:13px;">Odkaz je platný 30 dní. Odpovědi můžete průběžně ukládat a vrátit se k nim později. Po odeslání jsou jen ke čtení.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento e-mail nežádali, můžete ho ignorovat.</p>
 </body>
 </html>`,
     });
@@ -379,23 +379,23 @@ export async function sendMagicLinkEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      from: `BNI Hlasování <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: [email],
-      subject: "BNI Hlasovani - Vas pristupovy odkaz",
+      subject: "BNI Hlasování: váš přístupový odkaz",
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasování</h1>
   </div>
   <p>Dobry den${memberName ? ` ${escapeHtml(memberName)}` : ""},</p>
-  <p>Kliknutim na tlacitko nize se prihlaste do systemu hlasovani:</p>
+  <p>Kliknutím na tlačítko níže se přihlaste do systému hlasování:</p>
   <div style="text-align:center;margin:24px 0;">
-    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Prihlasit se</a>
+    <a href="${escapeHtml(magicLink)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">Přihlásit se</a>
   </div>
-  <p style="color:#666;font-size:13px;">Odkaz je platny 7 dni.</p>
-  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento email nezadali, muzete ho ignorovat.</p>
+  <p style="color:#666;font-size:13px;">Odkaz je platný 7 dní.</p>
+  <p style="color:#999;font-size:12px;margin-top:32px;border-top:1px solid #E8E8E8;padding-top:12px;">Pokud jste o tento e-mail nežádali, můžete ho ignorovat.</p>
 </body>
 </html>`,
     });
@@ -414,9 +414,9 @@ export async function sendMagicLinkEmail(
 }
 
 /**
- * Build HTML body for the Thursday voting warning email. `lines` are the
+ * Build HTML body for the regular-day voting warning email. `lines` are the
  * pre-decided, pre-formatted paragraph/bullet strings from
- * decideThursdayWarning (lib/meetings/warning-plan.ts, arch iter-026 3.4) —
+ * decideRegularDayWarning (lib/meetings/warning-plan.ts, arch iter-026 3.4) -
  * this function only wraps them, it makes no decision and formats no text
  * of its own.
  */
@@ -430,24 +430,24 @@ function buildVotingWarningHtml(subject: string, lines: string[]): string {
 <head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#1a1a1a;">
   <div style="text-align:center;padding:16px 0;border-bottom:3px solid #cf2e2e;margin-bottom:24px;">
-    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasovani</h1>
+    <h1 style="margin:0;color:#cf2e2e;font-size:20px;">BNI Hlasování</h1>
     <p style="margin:4px 0 0;color:#666;font-size:13px;">${escapeHtml(subject)}</p>
   </div>
   <div style="font-size:14px;line-height:1.5;">${bodyLines}</div>
   <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E8E8E8;text-align:center;">
-    <p style="color:#999;font-size:12px;">Automaticky generovany varovny email z BNI Hlasovani</p>
+    <p style="color:#999;font-size:12px;">Automaticky generovaný varovný e-mail z BNI Hlasování</p>
   </div>
 </body>
 </html>`;
 }
 
 /**
- * Odešle čtvrteční varovný mail management týmu — jedno volání Resendu, se
+ * Odešle čtvrteční varovný mail management týmu - jedno volání Resendu, se
  * všemi adresami v poli `to` (iter-026, arch 7.2/7.5). `subject` a `lines`
- * přicházejí hotové z `decideThursdayWarning`; tahle funkce nic nerozhoduje,
+ * přicházejí hotové z `decideRegularDayWarning`; tahle funkce nic nerozhoduje,
  * jen odešle a zaloguje výsledek.
  *
- * Nemá vlastní try/catch jen navíc pro paranoju — volající (cron fáze 3,
+ * Nemá vlastní try/catch jen navíc pro paranoju - volající (cron fáze 3,
  * app/api/cron/close-voting/route.ts) obaluje celou fázi vlastním
  * try/catch, aby pád varování nikdy nespadl cron (arch 7.5). Tahle funkce
  * ale sama nikdy nevyhazuje: Resend chyby i síťové výjimky se tu zachytávají
@@ -466,7 +466,7 @@ export async function sendVotingWarningEmail(
 
   const recipients = await getManagementRecipients();
   if (recipients.length === 0) {
-    console.error("[voting-warning] zadny prijemce s managementRole a emailem");
+    console.error("[voting-warning] žádný příjemce s managementRole a e-mailem");
     return { sent: 0, recipients: [], error: "no-management-recipients" };
   }
 
@@ -475,7 +475,7 @@ export async function sendVotingWarningEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: `BNI Hlasovani <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
+      from: `BNI Hlasování <${process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev"}>`,
       to: emails,
       subject,
       html,
@@ -498,12 +498,12 @@ export async function sendVotingWarningEmail(
 /**
  * Odešle připomínkový mail jednomu členovi (iter-028, T-006, arch 4.4 krok
  * d, 7). `subject`/`html` přicházejí hotové z `buildReminderEmail`
- * (lib/email/reminder-template.ts) — tahle funkce nic nerozhoduje ani
+ * (lib/email/reminder-template.ts) - tahle funkce nic nerozhoduje ani
  * neformátuje, jen odešle a zaloguje výsledek, stejně jako
  * `sendMeetingMagicLinkEmail`.
  *
  * Na rozdíl od `sendMeetingMagicLinkEmail` (N-4) NIKDY nevypisuje odkaz do
- * konzole — bez `RESEND_API_KEY` zaloguje jen adresáta a předmět. `html`
+ * konzole - bez `RESEND_API_KEY` zaloguje jen adresáta a předmět. `html`
  * (které odkaz obsahuje) se do žádného logu nedostane.
  */
 export async function sendVotingReminderEmail(
@@ -513,7 +513,7 @@ export async function sendVotingReminderEmail(
 ): Promise<{ success: boolean; error?: string; resendId?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromField = `BNI Hlasovani <${fromEmail}>`;
+  const fromField = `BNI Hlasování <${fromEmail}>`;
 
   if (!apiKey) {
     console.warn("RESEND_API_KEY not configured, skipping voting reminder email");

@@ -28,7 +28,7 @@ export function TimerCard({ timer: t }: TimerCardProps) {
       await navigator.clipboard.writeText(url);
       showToast("success", `${label} zkopírován.`);
     } catch {
-      showToast("error", "Kopírování selhalo, zkopírujte ručně.");
+      showToast("error", "Kopírování se nepodařilo, zkopíruj odkaz ručně.");
     }
   }
 
@@ -52,17 +52,19 @@ export function TimerCard({ timer: t }: TimerCardProps) {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => copyToClipboard(viewUrl, "Zobrazovací link")}
+            className="min-h-[44px]"
+            onClick={() => copyToClipboard(viewUrl, "Odkaz pro publikum")}
           >
-            Kopírovat zobrazovací link
+            Kopírovat odkaz pro publikum
           </Button>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => copyToClipboard(controlUrl, "Ovládací link")}
+            className="min-h-[44px]"
+            onClick={() => copyToClipboard(controlUrl, "Odkaz pro moderátora")}
           >
-            Kopírovat ovládací link
+            Kopírovat odkaz pro moderátora
           </Button>
           <DeleteTimerButton
             controlToken={t.controlToken}

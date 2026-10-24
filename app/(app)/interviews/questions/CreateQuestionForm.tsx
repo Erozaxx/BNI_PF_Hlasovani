@@ -22,14 +22,14 @@ export function CreateQuestionForm() {
     let hasError = false;
 
     if (!text.trim()) {
-      setError("Text otazky je povinny.");
+      setError("Text otázky je povinný.");
       hasError = true;
     } else {
       setError("");
     }
 
     if (!appliesMonth5 && !appliesMonth10) {
-      setAppliesError("Otazka musi platit alespon pro jeden typ pohovoru.");
+      setAppliesError("Otázka musí platit aspoň pro jeden typ pohovoru.");
       hasError = true;
     } else {
       setAppliesError("");
@@ -52,12 +52,12 @@ export function CreateQuestionForm() {
         setText("");
         setAppliesMonth5(true);
         setAppliesMonth10(true);
-        showToast("success", "Otazka byla vytvorena.");
+        showToast("success", "Otázka je vytvořená.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se vytvorit otazku.");
-      showToast("error", "Nepodarilo se vytvorit otazku.");
+      setError("Otázku se nepodařilo vytvořit.");
+      showToast("error", "Otázku se nepodařilo vytvořit.");
     } finally {
       setLoading(false);
     }
@@ -67,10 +67,10 @@ export function CreateQuestionForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-xl">
       <Textarea
         name="text"
-        label="Text otazky"
+        label="Text otázky"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Napr. Jak se ti darilo v posledních 5 mesicich v BNI?"
+        placeholder="Např. Jak se ti dařilo v posledních 5 měsících v BNI?"
         error={error}
       />
       <div className="flex flex-col gap-2">
@@ -86,7 +86,7 @@ export function CreateQuestionForm() {
             htmlFor="create-applies-month-5"
             className="text-sm text-text-main cursor-pointer"
           >
-            Plati pro pohovor 5 mesicu
+            Platí pro pohovor po 5 měsících
           </label>
         </div>
         <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function CreateQuestionForm() {
             htmlFor="create-applies-month-10"
             className="text-sm text-text-main cursor-pointer"
           >
-            Plati pro pohovor 10 mesicu
+            Platí pro pohovor po 10 měsících
           </label>
         </div>
         {appliesError && (
@@ -109,8 +109,8 @@ export function CreateQuestionForm() {
         )}
       </div>
       <div>
-        <Button type="submit" variant="primary" size="sm" loading={loading}>
-          Pridat otazku
+        <Button type="submit" variant="primary" size="sm" className="min-h-[44px]" loading={loading}>
+          Přidat otázku
         </Button>
       </div>
     </form>

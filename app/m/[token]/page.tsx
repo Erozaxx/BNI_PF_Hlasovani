@@ -2,6 +2,8 @@ import { MeetingExpired } from "./_components/MeetingExpired";
 import { MeetingWaiting } from "./_components/MeetingWaiting";
 import { GuestCardMeeting } from "./_components/GuestCardMeeting";
 import { Badge } from "@/components/ui/Badge";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
+import { pragueToday } from "@/lib/members/activity";
 import type { VoteDetailItem } from "./_components/MeetingResultsView";
 import {
   tokenErrorText,
@@ -44,6 +46,8 @@ interface MeetingData {
   phase: "active" | "voting" | "closed";
   meetingDate: string;
   location: string | null;
+  /** ISO konec hlasování (iter-042 Z1), `null` když hlasování nemá uložený konec. */
+  votingClosesAt?: string | null;
   memberName: string | null;
   guests: GuestShape[];
 }
@@ -82,7 +86,7 @@ async function fetchMeetingData(token: string): Promise<FetchResult> {
       const body = await res.json();
       apiError = (body as { error?: unknown })?.error;
     } catch {
-      // beze změny — chybějící/nečitelné tělo znamená obecný důvod
+      // beze změny - chybějící/nečitelné tělo znamená obecný důvod
     }
     return { kind: "expired", reason: tokenErrorText(401, apiError)?.reason ?? null };
   }
@@ -99,9 +103,9 @@ async function fetchMeetingData(token: string): Promise<FetchResult> {
 }
 
 const phaseLabel: Record<string, string> = {
-  active: "Aktivni",
+  active: "Aktivní",
   voting: "Hlasování probíhá",
-  closed: "Uzavreno",
+  closed: "Uzavřeno",
 };
 
 const phaseBadgeVariant: Record<
@@ -112,6 +116,24 @@ const phaseBadgeVariant: Record<
   voting: "danger",
   closed: "success",
 };
+
+/**
+ * iter-042 (Z1): „st 28. 10. 23:59“ z uloženého konce hlasování, vždy v pražském
+ * čase (ne v pásmu serveru). `null` při chybějící nebo nečitelné hodnotě.
+ */
+function closesAtText(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  const day = formatWeekdayFull(pragueToday(at));
+  const time = at.toLocaleTimeString("cs-CZ", {
+    timeZone: "Europe/Prague",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${day} ${time}`;
+}
 
 export default async function MemberMeetingPage({
   params,
@@ -129,7 +151,7 @@ export default async function MemberMeetingPage({
     return <MeetingExpired reason={data.reason} />;
   }
 
-  // Early return for not_voting — MUST be before guests destructuring (MeetingData only)
+  // Early return for not_voting - MUST be before guests destructuring (MeetingData only)
   if (data.phase === "not_voting") {
     return (
       <MeetingWaiting
@@ -141,6 +163,7 @@ export default async function MemberMeetingPage({
   }
 
   const { phase, meetingDate, location, memberName, guests } = data;
+  const closesAt = closesAtText(data.votingClosesAt);
 
   return (
     <div className="min-h-screen bg-background">
@@ -149,18 +172,18 @@ export default async function MemberMeetingPage({
         <div className="space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-text-main">
-              Schuzka {meetingDate}
+              Schůzka {formatWeekdayFull(meetingDate)}
             </h1>
             <Badge variant={phaseBadgeVariant[phase] ?? "neutral"}>
               {phaseLabel[phase] ?? phase}
             </Badge>
           </div>
           {location && (
-            <p className="text-sm text-text-muted">Misto: {location}</p>
+            <p className="text-sm text-text-muted">Místo: {location}</p>
           )}
           {memberName && (
             <p className="text-sm text-text-muted">
-              Prihlaseny clen: {memberName}
+              Hlasuješ jako: {memberName}
             </p>
           )}
         </div>
@@ -169,14 +192,16 @@ export default async function MemberMeetingPage({
         {phase === "voting" && (
           <div className="bg-danger-light border border-danger rounded-lg px-4 py-3">
             <p className="text-sm font-medium text-danger">
-              Hlasovani je spusteno. Odevzdejte svuj hlas ke kazdemu hostu.
+              {closesAt
+                ? `Hlasování běží do ${closesAt}. Pro a Nevím se uloží hned, u Proti napiš důvod. Hlas můžeš do konce hlasování změnit tlačítkem Změnit.`
+                : "Hlasování běží. Pro a Nevím se uloží hned, u Proti napiš důvod."}
             </p>
           </div>
         )}
         {phase === "closed" && (
           <div className="bg-success-light border border-success rounded-lg px-4 py-3">
             <p className="text-sm font-medium text-success">
-              Hlasovani bylo uzavreno. Nize vidite vysledky vasich hlasu.
+              Hlasování je uzavřené. Níže vidíš výsledky.
             </p>
           </div>
         )}
@@ -184,11 +209,11 @@ export default async function MemberMeetingPage({
         {/* Guests */}
         <section>
           <h2 className="text-lg font-semibold text-text-main mb-4">
-            Hoste ({guests.length})
+            Hosté ({guests.length})
           </h2>
           {guests.length === 0 ? (
             <p className="text-sm text-text-muted">
-              Ke schuzce nejsou prirazeni zadni hoste.
+              Ke schůzce nejsou přiřazení žádní hosté.
             </p>
           ) : (
             <div className="space-y-4">

@@ -19,7 +19,7 @@ export function DeleteGuestButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      `Opravdu smazat hosta "${guestName}"? Budou smazány i všechny poznámky a hlasy tohoto hosta.`
+      `Smazat hosta "${guestName}"? Vrátit to nepůjde. Smažou se i všechny jeho poznámky a hlasy.`
     );
     if (!confirmed) return;
 
@@ -29,11 +29,11 @@ export function DeleteGuestButton({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", `Host "${guestName}" byl smazan.`);
+        showToast("success", `Host "${guestName}" je smazaný.`);
         router.push("/guests");
       }
     } catch {
-      showToast("error", "Nepodarilo se smazat hosta.");
+      showToast("error", "Hosta se nepodařilo smazat.");
     } finally {
       setLoading(false);
     }
@@ -46,6 +46,7 @@ export function DeleteGuestButton({
       size="sm"
       loading={loading}
       onClick={handleDelete}
+      className="min-h-[44px]"
     >
       Smazat hosta
     </Button>

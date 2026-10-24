@@ -23,7 +23,7 @@ interface VoteFormProps {
 
 const voteOptions: { value: VoteValue; label: string; emoji: string }[] = [
   { value: "up", label: "Pro", emoji: "\u{1F44D}" },
-  { value: "neutral", label: "Neutralni", emoji: "\u{1F610}" },
+  { value: "neutral", label: "Nevím", emoji: "\u{1F610}" },
   { value: "down", label: "Proti", emoji: "\u{1F44E}" },
 ];
 
@@ -40,12 +40,12 @@ export function VoteForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Already voted — show what was cast
+  // Already voted - show what was cast
   if (existingVote) {
     const option = voteOptions.find((o) => o.value === existingVote.value);
     return (
       <div className="space-y-2">
-        <p className="text-sm text-text-muted">Vas hlas:</p>
+        <p className="text-sm text-text-muted">Tvůj hlas:</p>
         <div className="flex items-center gap-2">
           <span className="text-2xl">{option?.emoji ?? "?"}</span>
           <span className="font-medium text-text-main">
@@ -54,18 +54,18 @@ export function VoteForm({
         </div>
         {existingVote.reason && (
           <p className="text-sm text-text-muted">
-            Duvod: {existingVote.reason}
+            Důvod: {existingVote.reason}
           </p>
         )}
       </div>
     );
   }
 
-  // Voting not open — hide form
+  // Voting not open - hide form
   if (!votingOpen) {
     return (
       <p className="text-sm text-text-muted">
-        Hlasovani neni aktivni.
+        Hlasování neběží.
       </p>
     );
   }
@@ -74,7 +74,7 @@ export function VoteForm({
     if (!selected) return;
 
     if (selected === "down" && reason.trim().length === 0) {
-      setError("Hlasovani proti vyzaduje uvedeni duvodu.");
+      setError("U hlasu Proti napiš důvod.");
       return;
     }
 
@@ -92,12 +92,12 @@ export function VoteForm({
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Hlas byl uspesne odeslan.");
+        showToast("success", "Hlas je odeslaný.");
         router.push(`/meetings/${meetingId}`);
       }
     } catch {
-      setError("Nepodarilo se odeslat hlas.");
-      showToast("error", "Nepodarilo se odeslat hlas.");
+      setError("Hlas se nepodařilo odeslat.");
+      showToast("error", "Hlas se nepodařilo odeslat.");
     } finally {
       setLoading(false);
     }
@@ -117,7 +117,7 @@ export function VoteForm({
             }}
             disabled={loading}
             className={`
-              flex flex-col items-center gap-1 px-4 py-3 rounded-lg border-2 transition-colors
+              flex min-h-[44px] flex-col items-center gap-1 px-4 py-3 rounded-lg border-2 transition-colors
               focus:outline-none focus:shadow-focus
               ${
                 selected === opt.value
@@ -135,16 +135,16 @@ export function VoteForm({
         ))}
       </div>
 
-      {/* Reason field — shown only for 'down' */}
+      {/* Reason field - shown only for 'down' */}
       {selected === "down" && (
         <Textarea
-          label="Duvod (povinny)"
+          label="Důvod (povinný)"
           name="reason"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Prosim uvedte duvod vaseho hlasu proti..."
+          placeholder="Napiš důvod svého hlasu Proti..."
           error={
-            selected === "down" && error.includes("duvod") ? error : undefined
+            selected === "down" && error.includes("důvod") ? error : undefined
           }
         />
       )}
@@ -157,13 +157,14 @@ export function VoteForm({
           onClick={handleSubmit}
           loading={loading}
           disabled={loading}
+          className="min-h-[44px]"
         >
           Odeslat hlas
         </Button>
       )}
 
       {/* Error message */}
-      {error && !error.includes("duvod") && (
+      {error && !error.includes("důvod") && (
         <p className="text-sm text-danger">{error}</p>
       )}
     </div>

@@ -127,10 +127,10 @@ export function VotingView({
         "pick_one"
       );
       if (result.success) {
-        setSuccess("Hlas byl ulozen.");
+        setSuccess("Hlas je uložený.");
         router.refresh();
       } else {
-        setError(result.error ?? "Hlasovani se nepodarilo.");
+        setError(result.error ?? "Hlasování se nepodařilo.");
       }
     });
   }
@@ -173,7 +173,7 @@ export function VotingView({
           { action: "remove" }
         );
         if (!result.success) {
-          setError(result.error ?? "Hlasovani se nepodarilo.");
+          setError(result.error ?? "Hlasování se nepodařilo.");
           return;
         }
       }
@@ -188,12 +188,12 @@ export function VotingView({
           { action: "add", maxX: maxX > 0 ? maxX : undefined }
         );
         if (!result.success) {
-          setError(result.error ?? "Hlasovani se nepodarilo.");
+          setError(result.error ?? "Hlasování se nepodařilo.");
           return;
         }
       }
 
-      setSuccess("Hlasy byly ulozeny.");
+      setSuccess("Hlasy jsou uložené.");
       router.refresh();
     });
   }
@@ -214,7 +214,7 @@ export function VotingView({
         setPickerMinute("");
         router.refresh();
       } else {
-        setAddOptionError(result.error ?? "Nepodarilo se pridat moznost.");
+        setAddOptionError(result.error ?? "Možnost se nepodařilo přidat.");
       }
     });
   }
@@ -225,15 +225,15 @@ export function VotingView({
         {/* Header */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Badge variant="info">Aktivni hlasovani</Badge>
+            <Badge variant="info">Hlasování běží</Badge>
             {event.votingType === "pick_one" && (
-              <Badge variant="neutral">Vyber jednu moznost</Badge>
+              <Badge variant="neutral">Vyberte jednu možnost</Badge>
             )}
             {event.votingType === "multiple" && (
-              <Badge variant="neutral">Vice moznosti</Badge>
+              <Badge variant="neutral">Více možností</Badge>
             )}
             {event.votingType === "max_x" && (
-              <Badge variant="neutral">Max {maxX} hlasu</Badge>
+              <Badge variant="neutral">Nejvýš {maxX} hlasů</Badge>
             )}
           </div>
           <h1 className="text-2xl font-bold text-text-main">{event.title}</h1>
@@ -289,10 +289,10 @@ export function VotingView({
                     <div className="flex items-center gap-2 shrink-0">
                       {isMyVote && (
                         <span className="text-primary text-sm font-semibold">
-                          Vas hlas
+                          Váš hlas
                         </span>
                       )}
-                      <Badge variant="neutral">{option.voteCount} hlasu</Badge>
+                      <Badge variant="neutral">{option.voteCount} hlasů</Badge>
                     </div>
                   </div>
                   <div className="mt-2 h-1 bg-border/40 rounded-full overflow-hidden">
@@ -353,10 +353,10 @@ export function VotingView({
                     <div className="flex items-center gap-2 shrink-0">
                       {isMyVote && (
                         <span className="text-primary text-sm font-semibold">
-                          Vas hlas
+                          Váš hlas
                         </span>
                       )}
-                      <Badge variant="neutral">{option.voteCount} hlasu</Badge>
+                      <Badge variant="neutral">{option.voteCount} hlasů</Badge>
                     </div>
                   </label>
                 );
@@ -364,7 +364,7 @@ export function VotingView({
 
               {event.votingType === "max_x" && (
                 <p className="text-sm text-text-muted">
-                  Vybrano: {selectedIds.size} / {maxX}
+                  Vybráno: {selectedIds.size} / {maxX}
                 </p>
               )}
 
@@ -373,7 +373,7 @@ export function VotingView({
                 onClick={handleSaveVotes}
                 loading={isPending}
                 disabled={isPending}
-                className="w-full mt-2"
+                className="w-full mt-2 min-h-[44px]"
               >
                 Uložit hlasy
               </Button>
@@ -436,9 +436,9 @@ export function VotingView({
                     onChange={(e) => setNewOptionLabel(e.target.value)}
                     placeholder={
                       eventOptionType === "date"
-                        ? "Napr. 15. 4. 2026"
+                        ? "Např. 15. 4. 2026"
                         : eventOptionType === "datetime"
-                        ? "Napr. 15. 4. 2026 14:00"
+                        ? "Např. 15. 4. 2026 14:00"
                         : "Název možnosti..."
                     }
                     disabled={addOptionPending}
@@ -451,6 +451,7 @@ export function VotingView({
                 <Button
                   variant="secondary"
                   size="sm"
+                  className="min-h-[44px]"
                   onClick={handleAddOption}
                   loading={addOptionPending}
                   disabled={addOptionPending || !newOptionLabel.trim() || !!labelError}

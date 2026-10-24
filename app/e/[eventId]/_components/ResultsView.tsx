@@ -36,7 +36,7 @@ export function ResultsView({
         {/* Header */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Badge variant="warning">Uzavreno</Badge>
+            <Badge variant="warning">Uzavřeno</Badge>
           </div>
           <h1 className="text-2xl font-bold text-text-main">{event.title}</h1>
           {event.description && (
@@ -44,7 +44,7 @@ export function ResultsView({
           )}
           {event.closedAt && (
             <p className="text-xs text-text-muted mt-2">
-              Uzavreno:{" "}
+              Uzavřeno:{" "}
               {new Date(event.closedAt).toLocaleDateString("cs-CZ", {
                 day: "numeric",
                 month: "long",
@@ -61,7 +61,7 @@ export function ResultsView({
               <span className="text-lg">&#10003;</span>
               <div>
                 <p className="text-xs font-medium text-primary uppercase tracking-wide mb-0.5">
-                  Vybrany termin
+                  Vybraný termín
                 </p>
                 <p className="font-semibold text-text-main">
                   {options.find((o) => o.id === event.selectedOptionId)
@@ -104,18 +104,18 @@ export function ResultsView({
                     </span>
                     {isSelected && (
                       <span className="shrink-0 text-xs font-semibold text-primary">
-                        &#10003; Vybrany termin
+                        &#10003; Vybraný termín
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {isMyVote && (
-                      <Badge variant="info">Vas hlas</Badge>
+                      <Badge variant="info">Váš hlas</Badge>
                     )}
                     {isTopVote && !isSelected && (
-                      <Badge variant="success">Nejvice hlasu</Badge>
+                      <Badge variant="success">Nejvíc hlasů</Badge>
                     )}
-                    <Badge variant="neutral">{option.voteCount} hlasu</Badge>
+                    <Badge variant="neutral">{option.voteCount} hlasů</Badge>
                   </div>
                 </div>
 
@@ -134,7 +134,7 @@ export function ResultsView({
 
           {sorted.length === 0 && (
             <p className="text-center text-text-muted py-8">
-              Zadne moznosti nebyly pridany.
+              Žádné možnosti nebyly přidány.
             </p>
           )}
         </div>

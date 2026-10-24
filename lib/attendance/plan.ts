@@ -5,7 +5,7 @@
  * Čistý modul: žádný import drizzle-orm, @/lib/db/*, next/* ani resend. Bezpečné
  * pro scripts/test-iter-039-omluvy.ts i pro klientskou komponentu.
  *
- * K2 (Tom, 20. 10. 2026): pod jménem je jen „ohlášeno <datum>“, kdo omluvu
+ * K2 (Tom, 20. 10. 2026): pod jménem je jen „omluveno <datum>“, kdo omluvu
  * zapsal se nezobrazuje a nikde se nenačítá.
  */
 
@@ -18,13 +18,13 @@ import {
   monthEnd,
   monthOf,
   monthStart,
-  nextThursday,
 } from "@/lib/attendance/rules";
+import { DEFAULT_CHAPTER_SETTINGS, nextRegularDay, type ChapterSettings } from "@/lib/chapter/settings";
 
 export const PLAN_TEXTS = {
   title: "Omluvy",
   legend:
-    "Číslo pod dnem je počet omluvených. Modrý den je běžná schůzka s hosty, zelený den interní schůzka.",
+    "Číslo pod dnem je počet omluvených. Světle modrý den je pravidelná schůzka, tmavě modrý schůzka s hosty, zelený interní schůzka.",
   empty: "–",
   link: "Zápis dne",
   prevMonth: "Předchozí měsíc",
@@ -40,7 +40,7 @@ export interface PlanEntry {
   name: string;
   /** `null` = bez náhradníka. */
   substituteName: string | null;
-  /** `YYYY-MM-DD`, kdy byla omluva ohlášena (pražský den). */
+  /** `YYYY-MM-DD`, kdy byla omluva zapsána (pražský den). */
   announcedOn: string;
 }
 
@@ -84,13 +84,20 @@ export function planCountText(n: number): string {
   return `${n} omluvených`;
 }
 
-/** `aria-label` dne: „čtvrtek 22. října, 3 omluvení, schůzka v aplikaci“. */
-export function planDayAria(date: string, count: number, hasMeeting: boolean, hasInternal = false): string {
+/** `aria-label` dne: „čtvrtek 22. října, 3 omluvení, schůzka s hosty“ (iter-042 B3: i „interní schůzka“, „pravidelná schůzka“). */
+export function planDayAria(
+  date: string,
+  count: number,
+  hasMeeting: boolean,
+  hasInternal = false,
+  isRegular = false
+): string {
   const base = dayAriaLabel(date, { mark: "none", result: null, hasMeeting: false });
   const parts = [base];
   if (count > 0) parts.push(planCountText(count));
-  if (hasMeeting) parts.push("schůzka v aplikaci");
+  if (hasMeeting) parts.push("schůzka s hosty");
   else if (hasInternal) parts.push("interní schůzka");
+  else if (isRegular) parts.push("pravidelná schůzka");
   return parts.join(", ");
 }
 
@@ -100,13 +107,13 @@ export function planEntryLine(row: Pick<PlanEntry, "substituteName">): string {
 }
 
 /**
- * Šedý řádek: „ohlášeno 15. 10.“ (jen datum, K2). Když ohlášení není v roce
- * `today`, přidá se rok („ohlášeno 30. 12. 2025“), ať se nepletou dva roky.
+ * Šedý řádek: „omluveno 15. 10.“ (jen datum, K2). Když omluva není v roce
+ * `today`, přidá se rok („omluveno 30. 12. 2025“), ať se nepletou dva roky.
  */
 export function planEntryMeta(row: Pick<PlanEntry, "announcedOn">, today: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(row.announcedOn);
-  if (!m) return "ohlášeno";
-  const base = `ohlášeno ${Number(m[3])}. ${Number(m[2])}.`;
+  if (!m) return "omluveno";
+  const base = `omluveno ${Number(m[3])}. ${Number(m[2])}.`;
   return m[1] === today.slice(0, 4) ? base : `${base} ${m[1]}`;
 }
 
@@ -138,7 +145,8 @@ export function planSummary(entries: readonly Pick<PlanEntry, "substituteName">[
 
 /**
  * Výchozí vybraný den (K1): platné `?d=` v rozsahu má přednost, jinak nejbližší
- * den od dneška včetně, na který je omluva, a když žádný není, nejbližší čtvrtek.
+ * den od dneška včetně, na který je omluva, a když žádný není, nejbližší pravidelný
+ * den schůzky (iter-042 B4, výchozí čtvrtek).
  */
 export function pickInitialDay(input: {
   today: string;
@@ -146,6 +154,8 @@ export function pickInitialDay(input: {
   datesWithAbsences: readonly string[];
   from: string;
   to: string;
+  /** Den pravidelné schůzky z nastavení chapteru; bez něj čtvrtek. */
+  settings?: Pick<ChapterSettings, "meetingWeekday">;
 }): string {
   const { today, requested, datesWithAbsences, from, to } = input;
   if (requested && requested >= from && requested <= to) return requested;
@@ -153,5 +163,5 @@ export function pickInitialDay(input: {
   for (const d of datesWithAbsences) {
     if (d >= today && (best === null || d < best)) best = d;
   }
-  return best ?? nextThursday(today);
+  return best ?? nextRegularDay(today, input.settings ?? DEFAULT_CHAPTER_SETTINGS);
 }

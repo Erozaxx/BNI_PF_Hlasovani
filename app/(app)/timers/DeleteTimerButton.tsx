@@ -18,17 +18,17 @@ export function DeleteTimerButton({ controlToken, timerName }: DeleteTimerButton
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      `Opravdu chcete smazat casovac "${timerName}"? Tato akce je nevratna.`
+      `Smazat časovač „${timerName}“? Vrátit to nepůjde.`
     );
     if (!confirmed) return;
 
     setLoading(true);
     try {
       await deleteTimerAction(controlToken);
-      showToast("success", `Casovac "${timerName}" byl smazan.`);
+      showToast("success", `Časovač „${timerName}“ je smazaný.`);
       router.refresh();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Nepodarilo se smazat casovac.";
+      const msg = err instanceof Error ? err.message : "Časovač se nepodařilo smazat.";
       showToast("error", msg);
     } finally {
       setLoading(false);
@@ -40,6 +40,7 @@ export function DeleteTimerButton({ controlToken, timerName }: DeleteTimerButton
       type="button"
       variant="danger"
       size="sm"
+      className="min-h-[44px]"
       loading={loading}
       onClick={handleDelete}
     >

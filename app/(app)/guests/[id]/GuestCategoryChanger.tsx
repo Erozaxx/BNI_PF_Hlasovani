@@ -41,12 +41,12 @@ export function GuestCategoryChanger({
         setError(result.error);
         showToast("error", result.error);
       } else {
-        showToast("success", "Kategorie byla zmenena.");
+        showToast("success", "Kategorie je změněná.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se zmenit kategorii.");
-      showToast("error", "Nepodarilo se zmenit kategorii.");
+      setError("Kategorii se nepodařilo změnit.");
+      showToast("error", "Kategorii se nepodařilo změnit.");
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export function GuestCategoryChanger({
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
           options={categoryOptions}
-          placeholder="Vyberte kategorii"
+          placeholder="Vyber kategorii"
         />
       </div>
       <Button
@@ -69,6 +69,7 @@ export function GuestCategoryChanger({
         onClick={handleChange}
         loading={loading}
         disabled={categoryId === currentCategoryId}
+        className="min-h-[44px]"
       >
         Změnit
       </Button>

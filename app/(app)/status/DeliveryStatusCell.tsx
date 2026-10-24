@@ -7,11 +7,11 @@ import { mapResendStatus, type DeliveryStatus } from "@/lib/ops/resend-status";
 interface DeliveryStatusCellProps {
   eventId: string;
   resendEmailId: string | null;
-  /** Uložený terminální stav z DB (8.1 bod 3), nebo `null` — pak se po
+  /** Uložený terminální stav z DB (8.1 bod 3), nebo `null` - pak se po
    * namountování dotáhne živě. */
   initialDeliveryStatus: string | null;
   /** Kdy se cache naplnila (`delivery_checked_at`), ISO string. Použije se
-   * jako "čas" u cachovaného řádku (7.4 krok 4: "Doruceno a cas"). */
+   * jako "čas" u cachovaného řádku (7.4 krok 4: "Doručeno a čas"). */
   initialDeliveryCheckedAt: string | null;
 }
 
@@ -21,7 +21,7 @@ const SEVERITY_BADGE: Record<DeliveryStatus["severity"], BadgeVariant> = {
   error: "danger",
 };
 
-/** "22. 8. 07:05" — Europe/Prague vždy (R9). */
+/** "22. 8. 07:05" - Europe/Prague vždy (R9). */
 function formatDeliveryAt(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -41,16 +41,16 @@ function formatDeliveryAt(iso: string): string {
 
 /**
  * Klientská buňka „Stav u poskytovatele" (arch iter-027 T-001, sekce 8.3,
- * 7.3, 7.4). Stránka se renderuje jen z databáze (D5) — Resend volá TATO
+ * 7.3, 7.4). Stránka se renderuje jen z databáze (D5) - Resend volá TATO
  * komponenta, a to až po namountování, nikdy server render.
  *
  * Bez `resendEmailId` (mail se přes Resend vůbec neposlal) se nevolá nic.
  * S uloženým terminálním stavem (`initialDeliveryStatus`) se taky nevolá
- * nic — hodnota se jen zobrazí přes stejnou čistou `mapResendStatus`, kterou
+ * nic - hodnota se jen zobrazí přes stejnou čistou `mapResendStatus`, kterou
  * používá i server route, aby tu nebyla druhá kopie mapovací logiky.
  *
  * Když `POST /api/status/delivery` spadne nebo vrátí chybu, buňka degraduje
- * na "Nezjisteno" + tlačítko — NIKDY nehodí chybu výš (AC: "degraduje jeden
+ * na "Nezjištěno" + tlačítko - NIKDY nehodí chybu výš (AC: "degraduje jeden
  * sloupec, ne obrazovka").
  */
 export function DeliveryStatusCell({
@@ -116,11 +116,11 @@ export function DeliveryStatusCell({
   }
 
   if (!resendEmailId) {
-    return <span className="text-xs text-text-muted">Neodeslano pres Resend</span>;
+    return <span className="text-xs text-text-muted">Neodesláno poštovní službou</span>;
   }
 
   if (loading) {
-    return <span className="text-xs text-text-muted">Nacitani…</span>;
+    return <span className="text-xs text-text-muted">Načítání…</span>;
   }
 
   if (failed || !status) {
@@ -130,9 +130,9 @@ export function DeliveryStatusCell({
         <button
           type="button"
           onClick={handleRecheck}
-          className="text-primary underline focus:outline-none focus:shadow-focus"
+          className="inline-flex items-center min-h-[44px] text-primary underline focus:outline-none focus:shadow-focus"
         >
-          Overit znovu
+          Ověřit znovu
         </button>
       </span>
     );
@@ -147,9 +147,9 @@ export function DeliveryStatusCell({
       <button
         type="button"
         onClick={handleRecheck}
-        className="text-xs text-text-muted underline hover:text-primary focus:outline-none focus:shadow-focus"
+        className="inline-flex items-center min-h-[44px] text-xs text-text-muted underline hover:text-primary focus:outline-none focus:shadow-focus"
       >
-        Overit znovu
+        Ověřit znovu
       </button>
     </span>
   );

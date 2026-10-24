@@ -7,12 +7,13 @@ import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { votingClosesAtFor, isDeliveryDue } from "@/lib/meetings/voting-window";
 import { deliveryHint, type DeliveryHint } from "@/lib/meetings/morning-dispatch";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 type SkipReason = "inactive" | "no-email" | "revoked" | "already-sent";
 
 type DispatchOutcome =
   | { status: "sent" }
-  // iter-028 (T-005, arch 3.3): deliver:"defer" — odkaz čeká na ranní cron.
+  // iter-028 (T-005, arch 3.3): deliver:"defer" - odkaz čeká na ranní cron.
   | { status: "scheduled" }
   | { status: "skipped"; reason: SkipReason }
   | { status: "error"; reason: string };
@@ -47,30 +48,33 @@ interface StartVotingPanelProps {
   meetingId: string;
   status: string; // "draft" | "active" | "voting" | "closed"
   hasGuests: boolean;
-  /** Datum schůzky "YYYY-MM-DD" (iter-028, arch 3.6) — uzávěrka a "kdy odejdou maily" se počítají od něj. */
+  /** Datum schůzky "YYYY-MM-DD" (iter-028, arch 3.6), uzávěrka a "kdy odejdou maily" se počítají od něj. */
   meetingDate: string;
-  /** Kolik členů s e-mailem už má značku odeslání — jen pro počáteční zobrazení stavu 'voting'. */
+  /** Kolik členů s e-mailem už má značku odeslání, jen pro počáteční zobrazení stavu 'voting'. */
   initialLinkEmailSentCount: number;
-  /** Kolik členů celkem má e-mail — jmenovatel "X z Y" a text potvrzovacího dialogu. */
+  /** Kolik členů celkem má e-mail, jmenovatel "X z Y" a text potvrzovacího dialogu. */
   membersWithEmailCount: number;
+  /** iter-042 (BK3): den pravidelné schůzky z Nastavení chapteru (0 až 6), podle něj končí hlasování. Výchozí čtvrtek. */
+  regularWeekday?: number;
 }
 
 const SKIP_LABEL: Record<SkipReason, string> = {
-  inactive: "preskoceno: neaktivni",
-  "no-email": "preskoceno: bez e-mailu",
-  revoked: "preskoceno: odkaz revokovan",
-  "already-sent": "preskoceno: odkaz jiz odeslan",
+  inactive: "přeskočeno: neaktivní",
+  "no-email": "přeskočeno: bez e-mailu",
+  revoked: "přeskočeno: odkaz zneplatněný",
+  "already-sent": "přeskočeno: odkaz už odeslaný",
 };
 
-function formatClosesAtPreview(meetingDate: string): string {
-  const closesAt = votingClosesAtFor(meetingDate, new Date());
-  return closesAt.toLocaleDateString("cs-CZ", {
+/** „st 28. 10. 2026 23:59“, čas výslovně v Europe/Prague (iter-042 Z1). */
+function formatClosesAtPreview(meetingDate: string, regularWeekday?: number): string {
+  const closesAt = votingClosesAtFor(meetingDate, new Date(), regularWeekday);
+  const day = closesAt.toLocaleDateString("sv-SE", { timeZone: "Europe/Prague" });
+  const time = closesAt.toLocaleTimeString("cs-CZ", {
     timeZone: "Europe/Prague",
-    day: "numeric",
-    month: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+  return `${formatWeekdayFull(day)} ${time}`;
 }
 
 /** "YYYY-MM-DD" -> "D. M." (arch 3.6, bez roku, telo panelu). */
@@ -79,15 +83,15 @@ function formatCzShortDate(dateStr: string): string {
   return `${day}. ${month}.`;
 }
 
-/** `{kdy}` z arch 3.6 — kdy odejdou maily, slovně. */
+/** `{kdy}` z arch 3.6 - kdy odejdou maily, slovně. */
 function formatDeliveryHint(hint: DeliveryHint): string {
   switch (hint.kind) {
     case "on-date":
-      return `v den schuzky ${formatCzShortDate(hint.date)} rano`;
+      return `v den schůzky ${formatCzShortDate(hint.date)} ráno`;
     case "today-morning":
-      return "dnes rano";
+      return "dnes ráno";
     case "tomorrow-morning":
-      return "zitra rano";
+      return "zítra ráno";
   }
 }
 
@@ -98,6 +102,7 @@ export function StartVotingPanel({
   meetingDate,
   initialLinkEmailSentCount,
   membersWithEmailCount,
+  regularWeekday,
 }: StartVotingPanelProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -128,7 +133,7 @@ export function StartVotingPanel({
       if (!res.ok || body.ok !== true) {
         showToast(
           "error",
-          body.error ?? "Nepodarilo se spustit hlasovani."
+          body.error ?? "Hlasování se nepodařilo spustit."
         );
         return;
       }
@@ -145,26 +150,26 @@ export function StartVotingPanel({
           ).length
       );
       setResendAll(false);
-      // iter-028 (T-005, arch 3.6): deliver:"defer" nikdy nic neposlal —
+      // iter-028 (T-005, arch 3.6): deliver:"defer" nikdy nic neposlal,
       // toast to nesmí předstírat. deliver:"now" (Rozeslat hned) beze změny.
       showToast(
         "success",
         dispatchResult.deliver === "defer"
-          ? `Hlasovani spusteno, maily odejdou ${formatDeliveryHint(
+          ? `Hlasování spuštěno, maily odejdou ${formatDeliveryHint(
               deliveryHint(dispatchResult.meetingDate, new Date())
             )}.`
-          : `Odeslano ${dispatchResult.counts.sent} z ${dispatchResult.totalMembers} clenu.`
+          : `Odesláno ${dispatchResult.counts.sent} z ${dispatchResult.totalMembers} členů.`
       );
       router.refresh();
     } catch {
-      showToast("error", "Nepodarilo se spustit hlasovani.");
+      showToast("error", "Hlasování se nepodařilo spustit.");
     } finally {
       setLoading(false);
     }
   }
 
   function handleStart() {
-    const closesLabel = formatClosesAtPreview(meetingDate);
+    const closesLabel = formatClosesAtPreview(meetingDate, regularWeekday);
     if (
       !confirm(
         `Spustit hlasování? Maily členům odejdou ${kdy}, ne teď. Hlasování poběží do ${closesLabel}.`
@@ -177,7 +182,7 @@ export function StartVotingPanel({
 
   function handleSendNowClick() {
     const missing = membersWithEmailCount - linkEmailSentCount;
-    if (!confirm(`Poslat odkaz hned ${missing} clenum, kteri ho jeste nemaji?`)) {
+    if (!confirm(`Poslat odkaz hned ${missing} členům, kteří ho ještě nemají?`)) {
       return;
     }
     dispatch("send-now", false);
@@ -194,7 +199,7 @@ export function StartVotingPanel({
     }
     if (
       confirm(
-        `Poslat odkaz hned znovu vsem ${membersWithEmailCount} clenum? Jejich dosavadni odkazy prestanou platit.`
+        `Poslat odkaz znovu všem ${membersWithEmailCount} členům? Jejich dosavadní odkazy přestanou platit.`
       )
     ) {
       setResendAll(true);
@@ -217,29 +222,26 @@ export function StartVotingPanel({
               onClick={handleStart}
               loading={loading}
               disabled={!hasGuests}
-              title={
-                hasGuests
-                  ? undefined
-                  : "Schuzka nema zadneho hosta, neni o cem hlasovat. Nejdrive pridejte hosty."
-              }
+              className="min-h-[44px]"
             >
               Spustit hlasování
             </Button>
             <p className="text-sm text-text-muted">
               {hasGuests
-                ? `Zalozi odkazy vsem clenum s e-mailem a spusti hlasovani do ${formatClosesAtPreview(
-                    meetingDate
-                  )}. Maily clenum odejdou ${kdy}. Po spusteni uz nejde pridavat hosty.`
-                : "Schuzka nema zadneho hosta, neni o cem hlasovat. Nejdrive pridejte hosty."}
+                ? `Založí odkazy všem členům s e-mailem a spustí hlasování do ${formatClosesAtPreview(
+                    meetingDate,
+                    regularWeekday
+                  )}. Maily odejdou ${kdy}. Po spuštění už nejde přidávat hosty.`
+                : "Schůzka nemá žádného hosta, není o čem hlasovat. Nejdřív přidej hosty."}
             </p>
           </div>
         )}
 
         {currentStatus === "voting" && !dueToday && (
           <p className="text-sm text-text-muted">
-            Hlasovani je spustene. Odkazy odejdou {membersWithEmailCount} clenum
-            v den schuzky {formatCzShortDate(meetingDate)} rano. Do te doby
-            nikomu nic neprijde.
+            Hlasování je spuštěné. Odkazy odejdou {membersWithEmailCount} členům
+            v den schůzky {formatCzShortDate(meetingDate)} ráno. Do té doby
+            nikomu nic nepřijde.
           </p>
         )}
 
@@ -250,16 +252,17 @@ export function StartVotingPanel({
               size="sm"
               onClick={handleSendNowClick}
               loading={loading}
+              className="min-h-[44px]"
             >
               Rozeslat hned
             </Button>
             <p className="text-sm text-text-muted">
-              Odkaz uz dostalo{" "}
+              Odkaz už dostalo{" "}
               <strong>
                 {linkEmailSentCount} z {membersWithEmailCount}
               </strong>{" "}
-              clenu. Zbylym ho posle ranni rozeslani {kdy}. Rozeslat hned ho
-              posle v tuto chvili.
+              členů. Ostatním ho pošle ranní rozeslání {kdy}. Rozeslat hned ho
+              pošle teď.
             </p>
           </div>
         )}
@@ -273,15 +276,16 @@ export function StartVotingPanel({
                 onClick={handleSendNowResendClick}
                 loading={loading}
                 disabled={!resendAll}
+                className="min-h-[44px]"
               >
                 Rozeslat hned
               </Button>
             </div>
             <p className="text-sm text-text-muted">
-              Odkaz uz dostali vsichni ({membersWithEmailCount} z{" "}
+              Odkaz už dostali všichni ({membersWithEmailCount} z{" "}
               {membersWithEmailCount}).
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex min-h-[44px] items-center gap-2">
               <input
                 type="checkbox"
                 id="resend-all"
@@ -293,14 +297,14 @@ export function StartVotingPanel({
                 htmlFor="resend-all"
                 className="text-sm text-text-main cursor-pointer"
               >
-                Poslat znovu i tem, kteri odkaz uz dostali
+                Poslat znovu i těm, kdo odkaz už dostali (starý odkaz přestane platit)
               </label>
             </div>
           </div>
         )}
 
         {currentStatus === "closed" && (
-          <p className="text-sm text-text-muted">Hlasovani je uzavrene.</p>
+          <p className="text-sm text-text-muted">Hlasování je uzavřené.</p>
         )}
       </Card>
 
@@ -308,9 +312,9 @@ export function StartVotingPanel({
         <Card>
           {result.deliver === "defer" ? (
             <p className="text-sm font-medium text-text-main mb-3">
-              Hlasovani spusteno. Odkazy odejdou{" "}
+              Hlasování spuštěno. Odkazy odejdou{" "}
               {formatDeliveryHint(deliveryHint(result.meetingDate, new Date()))}:{" "}
-              {result.counts.scheduled} clenu, bez e-mailu{" "}
+              {result.counts.scheduled} členů, bez e-mailu{" "}
               {
                 result.recipients.filter(
                   (r) =>
@@ -322,7 +326,7 @@ export function StartVotingPanel({
             </p>
           ) : (
             <p className="text-sm font-medium text-text-main mb-3">
-              Odeslano {result.counts.sent} z {result.totalMembers} clenu
+              Odesláno {result.counts.sent} z {result.totalMembers} členů
               {result.counts.error > 0 && ` · ${result.counts.error} chyb`}
               {" · bez e-mailu "}
               {
@@ -352,9 +356,9 @@ export function StartVotingPanel({
                   : "text-text-muted";
               const label =
                 r.outcome.status === "sent"
-                  ? `odeslano${r.linkCreated ? " (novy odkaz)" : ""}`
+                  ? `odesláno${r.linkCreated ? " (nový odkaz)" : ""}`
                   : r.outcome.status === "scheduled"
-                  ? "odejde rano"
+                  ? "odejde ráno"
                   : r.outcome.status === "error"
                   ? `chyba: ${r.outcome.reason}`
                   : SKIP_LABEL[r.outcome.reason];
@@ -369,7 +373,7 @@ export function StartVotingPanel({
                     {r.memberName}
                   </span>
                   <span className="text-text-muted text-xs">
-                    {r.memberEmail ?? "—"}
+                    {r.memberEmail ?? "bez e-mailu"}
                   </span>
                   <span className="text-xs">{label}</span>
                 </div>

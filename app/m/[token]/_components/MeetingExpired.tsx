@@ -14,14 +14,14 @@ interface MeetingExpiredProps {
 
 /**
  * Shown when the magic link token is invalid, revoked, or expired.
- * Static view — no interactivity needed.
+ * Static view - no interactivity needed.
  */
 export function MeetingExpired({ reason }: MeetingExpiredProps) {
   const content = reason
     ? MEETING_TOKEN_PAGE_TEXT[reason]
     : {
-        title: "Link vypršel",
-        body: "Tento odkaz pro hlasovani uz neni platny. Kontaktujte organizatora schuzky pro zaslani noveho odkazu.",
+        title: "Odkaz vypršel",
+        body: "Odkaz už neplatí. Nový ti pošle vedení chapteru.",
       };
 
   return (

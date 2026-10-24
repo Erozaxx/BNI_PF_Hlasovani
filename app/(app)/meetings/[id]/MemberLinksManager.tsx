@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
+import { formatWeekdayFull } from "@/lib/attendance/rules";
 
 interface MemberLink {
   memberId: string;
   memberName: string;
   memberEmail: string;
-  /** iter-037: deaktivovaný člen, bez akcí Kopírovat, Poslat email a Regenerovat. */
+  /** iter-037: deaktivovaný člen, bez akcí Zkopírovat odkaz, Poslat e-mailem a Nový odkaz. */
   isInactive: boolean;
   hasLink: boolean;
   isRevoked: boolean;
@@ -27,8 +28,8 @@ interface MemberLinksManagerProps {
 
 /**
  * Výpis odkazů + operace po jednotlivcích (iter-026, arch 4.4). Hromadné
- * spuštění/rozeslání dělá StartVotingPanel — tahle komponenta se stará jen
- * o kopírování, regeneraci, revokaci a poslání e-mailu jednomu členovi.
+ * spuštění/rozeslání dělá StartVotingPanel, tahle komponenta se stará jen
+ * o kopírování, nový odkaz, zneplatnění a poslání e-mailu jednomu členovi.
  *
  * Klient nikdy nedrží syrový token (arch 1, bod 3): "Kopírovat" i "Poslat
  * email" volají server, který si token vždy sám regeneruje.
@@ -52,13 +53,13 @@ export function MemberLinksManager({
       const res = await fetch(`/api/meetings/${meetingId}/member-links`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Nepodarilo se nacist magic linky.");
+        setError(body.error ?? "Odkazy se nepodařilo načíst.");
         return;
       }
       const data = await res.json();
       setLinks(data.links ?? []);
     } catch {
-      setError("Nepodarilo se nacist magic linky.");
+      setError("Odkazy se nepodařilo načíst.");
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ export function MemberLinksManager({
   async function handleCopy(memberId: string, memberName: string) {
     if (
       !confirm(
-        `Zkopirovanim se odkaz pregeneruje. Dosud rozeslany odkaz clena ${memberName} prestane platit. Pokracovat?`
+        `Zkopírováním vznikne nový odkaz. Dosavadní odkaz člena ${memberName} přestane platit. Pokračovat?`
       )
     ) {
       return;
@@ -88,25 +89,32 @@ export function MemberLinksManager({
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast("error", body.error ?? "Nepodarilo se regenerovat token.");
+        showToast("error", body.error ?? "Odkaz se nepodařilo vytvořit.");
         return;
       }
       const url = body.magicUrl ?? `${window.location.origin}/m/${body.rawToken}`;
       try {
         await navigator.clipboard.writeText(url);
-        showToast("success", "Odkaz zkopirovan do schranky.");
+        showToast("success", "Odkaz je zkopírovaný do schránky.");
       } catch {
-        showToast("error", "Odkaz byl vygenerovan, ale nepodarilo se ho zkopirovat.");
+        showToast("error", "Odkaz je hotový, ale nepodařilo se ho zkopírovat.");
       }
       await fetchLinks();
     } catch {
-      showToast("error", "Nepodarilo se zkopirovat odkaz.");
+      showToast("error", "Odkaz se nepodařilo zkopírovat.");
     } finally {
       setMemberBusy(memberId, false);
     }
   }
 
-  async function handleRegenerate(memberId: string) {
+  async function handleRegenerate(memberId: string, memberName: string) {
+    if (
+      !confirm(
+        `Vytvořit nový odkaz pro ${memberName}? Dosavadní odkaz přestane platit.`
+      )
+    ) {
+      return;
+    }
     setMemberBusy(memberId, true);
     try {
       const res = await fetch(
@@ -115,13 +123,13 @@ export function MemberLinksManager({
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast("error", body.error ?? "Nepodarilo se regenerovat token.");
+        showToast("error", body.error ?? "Odkaz se nepodařilo vytvořit.");
         return;
       }
-      showToast("success", "Token byl regenerovan. Puvodni odkaz uz neplati.");
+      showToast("success", "Nový odkaz je hotový, původní už neplatí.");
       await fetchLinks();
     } catch {
-      showToast("error", "Nepodarilo se regenerovat token.");
+      showToast("error", "Odkaz se nepodařilo vytvořit.");
     } finally {
       setMemberBusy(memberId, false);
     }
@@ -129,7 +137,7 @@ export function MemberLinksManager({
 
   async function handleRevoke(memberId: string, memberName: string) {
     if (
-      !confirm(`Opravdu chcete revokovat magic link pro ${memberName}? Clen ztrati pristup.`)
+      !confirm(`Zneplatnit odkaz člena ${memberName}? Hlasovat s ním už nepůjde.`)
     ) {
       return;
     }
@@ -141,13 +149,13 @@ export function MemberLinksManager({
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast("error", body.error ?? "Nepodarilo se revokovat token.");
+        showToast("error", body.error ?? "Odkaz se nepodařilo zneplatnit.");
         return;
       }
-      showToast("success", "Magic link byl revokovan.");
+      showToast("success", "Odkaz je zneplatněný.");
       await fetchLinks();
     } catch {
-      showToast("error", "Nepodarilo se revokovat token.");
+      showToast("error", "Odkaz se nepodařilo zneplatnit.");
     } finally {
       setMemberBusy(memberId, false);
     }
@@ -162,13 +170,13 @@ export function MemberLinksManager({
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast("error", body.error ?? "Nepodarilo se odeslat email.");
+        showToast("error", body.error ?? "E-mail se nepodařilo odeslat.");
         return;
       }
-      showToast("success", `Email odeslan clenovi ${memberName}.`);
+      showToast("success", `E-mail odešel členovi ${memberName}.`);
       await fetchLinks();
     } catch {
-      showToast("error", "Nepodarilo se odeslat email.");
+      showToast("error", "E-mail se nepodařilo odeslat.");
     } finally {
       setMemberBusy(memberId, false);
     }
@@ -176,21 +184,21 @@ export function MemberLinksManager({
 
   function getLinkStatusBadge(link: MemberLink) {
     if (!link.hasLink) {
-      return <Badge variant="neutral">Bez linku</Badge>;
+      return <Badge variant="neutral">Bez odkazu</Badge>;
     }
     if (link.isRevoked) {
-      return <Badge variant="danger">Revokovan</Badge>;
+      return <Badge variant="danger">Zneplatněný</Badge>;
     }
     if (link.isExpired) {
-      return <Badge variant="neutral">Expirovan</Badge>;
+      return <Badge variant="neutral">Vypršel</Badge>;
     }
-    return <Badge variant="success">Aktivni</Badge>;
+    return <Badge variant="success">Platí</Badge>;
   }
 
   if (loading) {
     return (
       <Card>
-        <p className="text-sm text-text-muted">Nacitam magic linky...</p>
+        <p className="text-sm text-text-muted">Načítám odkazy...</p>
       </Card>
     );
   }
@@ -203,7 +211,7 @@ export function MemberLinksManager({
           variant="secondary"
           size="sm"
           onClick={fetchLinks}
-          className="mt-3"
+          className="mt-3 min-h-[44px]"
         >
           Zkusit znovu
         </Button>
@@ -215,17 +223,20 @@ export function MemberLinksManager({
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-text-main">
-          Magic linky členů
+          Osobní odkazy členů
         </h2>
         <p className="text-sm text-text-muted mt-1">
-          Schuzka: {meetingDate} &mdash; {links.length} clenu
+          Schůzka: {formatWeekdayFull(meetingDate)}, {links.length} členů
+        </p>
+        <p className="text-sm text-text-muted mt-1">
+          Nový odkaz i zkopírování vytvoří nový odkaz, ten z mailu přestane platit.
         </p>
       </div>
 
       {links.length === 0 ? (
         <Card>
           <p className="text-sm text-text-muted">
-            Zadni clenove s emailem nebyli nalezeni.
+            Žádní členové s e-mailem.
           </p>
         </Card>
       ) : (
@@ -250,7 +261,7 @@ export function MemberLinksManager({
                     </p>
                     {link.morningEmailSentAt && (
                       <p className="text-xs text-text-muted mt-0.5">
-                        Odkaz odeslan:{" "}
+                        Odkaz odeslán:{" "}
                         {new Date(link.morningEmailSentAt).toLocaleDateString(
                           "cs-CZ",
                           {
@@ -264,7 +275,7 @@ export function MemberLinksManager({
                     )}
                     {link.expiresAt && (
                       <p className="text-xs text-text-muted mt-0.5">
-                        Expiruje:{" "}
+                        Platí do:{" "}
                         {new Date(link.expiresAt).toLocaleDateString("cs-CZ", {
                           day: "numeric",
                           month: "numeric",
@@ -284,9 +295,9 @@ export function MemberLinksManager({
                           size="sm"
                           onClick={() => handleCopy(link.memberId, link.memberName)}
                           loading={busy}
-                          title="Regenerovat token a zkopirovat magic link URL"
+                          className="min-h-[44px]"
                         >
-                          Kopirovat
+                          Zkopírovat odkaz
                         </Button>
                         <Button
                           variant="secondary"
@@ -294,23 +305,18 @@ export function MemberLinksManager({
                           onClick={() => handleSendEmail(link.memberId, link.memberName)}
                           loading={busy}
                           disabled={!link.hasLink || link.isRevoked}
-                          title={
-                            !link.hasLink
-                              ? "Clen nema link"
-                              : link.isRevoked
-                              ? "Link je revokovan"
-                              : "Odeslat magic link email"
-                          }
+                          className="min-h-[44px]"
                         >
-                          Poslat email
+                          Poslat e-mailem
                         </Button>
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleRegenerate(link.memberId)}
+                          onClick={() => handleRegenerate(link.memberId, link.memberName)}
                           loading={busy}
+                          className="min-h-[44px]"
                         >
-                          Regenerovat
+                          Nový odkaz
                         </Button>
                       </>
                     )}
@@ -320,15 +326,9 @@ export function MemberLinksManager({
                       onClick={() => handleRevoke(link.memberId, link.memberName)}
                       loading={busy}
                       disabled={!link.hasLink || link.isRevoked}
-                      title={
-                        !link.hasLink
-                          ? "Clen nema link"
-                          : link.isRevoked
-                          ? "Link jiz revokovan"
-                          : "Revokovat magic link"
-                      }
+                      className="min-h-[44px]"
                     >
-                      Revokovat
+                      Zneplatnit
                     </Button>
                   </div>
                 </div>

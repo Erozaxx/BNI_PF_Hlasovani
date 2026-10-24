@@ -22,7 +22,7 @@ import { InterviewListTable } from "./InterviewListTable";
 /**
  * Interview management landing page (arch section 8a/8f, T-007; iter-032
  * T-001b: filtr u hlaviček, vedoucí v řádku, chip zakládá pohovor). Mod/admin
- * only — middleware only session-gates this route (like /interviews/questions,
+ * only - middleware only session-gates this route (like /interviews/questions,
  * T-004a delta 1), so the role check happens here, page-level (R-9), same as
  * every action in actions/interviews.ts re-checks it independently.
  */
@@ -75,10 +75,10 @@ export default async function InterviewsPage({
     isInactive: e.isInactive,
   }));
 
-  // memberId -> which types already have a non-cancelled interview — comfort
+  // memberId -> which types already have a non-cancelled interview - comfort
   // hint for the founding form only, the DB partial UNIQUE stays the authority.
   // D-4 (decision_iter-023_T-002): skip cancelled interviews so this matches
-  // its own comment above — no MVP path sets status='cancelled' today, so
+  // its own comment above - no MVP path sets status='cancelled' today, so
   // this is a provably-safe no-op, kept preventively.
   const existingByMember: Record<string, { month5: boolean; month10: boolean }> = {};
   for (const i of interviews) {
@@ -90,7 +90,7 @@ export default async function InterviewsPage({
   }
 
   // Pre-fill from a chip click on /admin/members (arch iter-023 T-001 §3.3).
-  // Validation is a pure lookup over already-loaded data — never throws, an
+  // Validation is a pure lookup over already-loaded data - never throws, an
   // invalid or missing param just falls back to "no pre-fill" for that field.
   const params = await searchParams;
   const initialType =
@@ -101,7 +101,7 @@ export default async function InterviewsPage({
   const initialMemberId = memberExists ? params.memberId : undefined;
 
   // Stale-chip guard: the type may have been founded in the meantime (double
-  // tab, back/forward router cache) — don't pre-select a now-disabled option,
+  // tab, back/forward router cache) - don't pre-select a now-disabled option,
   // keep the member pre-selected so the existing form hint explains why.
   const taken =
     initialMemberId && initialType

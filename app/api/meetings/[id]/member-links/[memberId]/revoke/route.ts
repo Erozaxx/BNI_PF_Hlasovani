@@ -29,14 +29,14 @@ export async function POST(
   // 2. Load meeting
   const meetingData = await getMeetingById(meetingId);
   if (!meetingData) {
-    return err(404, "Meeting not found");
+    return err(404, "Schůzka nebyla nalezena.");
   }
 
   // 3. Revoke the token
   const revoked = await revokeMeetingToken(meetingId, memberId);
 
   if (!revoked) {
-    return err(404, "No link found for this member in this meeting");
+    return err(404, "Tenhle člen nemá u téhle schůzky žádný odkaz.");
   }
 
   console.info(

@@ -1,8 +1,8 @@
 /**
  * Testy pro lib/ops/* (iter-027, T-005 + T-006 + T-005r; rozšířeno iter-028,
- * T-005) — arch iter-027 T-001, sekce 12; arch iter-028 T-001, sekce 8.2.
+ * T-005) - arch iter-027 T-001, sekce 12; arch iter-028 T-001, sekce 8.2.
  *
- * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-warning-plan.ts.
+ * Bez DATABASE_URL, bez sítě, bez CI - vzor je scripts/test-warning-plan.ts.
  * Spuštění: npm run test:ops-events
  *
  * Pokrývá VŠECH 24 případů ze sekce 12 (NIT-2, souvislé číslování) plus 2
@@ -15,15 +15,15 @@
  * (iter-028).
  *
  * Ověření "bez DB": tenhle skript NEVOLÁ `dotenv.config()` a `DATABASE_URL`
- * není v prostředí nastavené (ověřeno při psaní testu) — přesto proběhne
+ * není v prostředí nastavené (ověřeno při psaní testu) - přesto proběhne
  * zeleně. Testované čisté moduly (lib/ops/redact.ts, event-shape.ts,
  * dispatch-events.ts, retention.ts, run-status.ts, resend-status.ts)
- * neimportují drizzle-orm, next ani resend vůbec — jen
+ * neimportují drizzle-orm, next ani resend vůbec - jen
  * `lib/ops/event-log.ts` (case 22) importuje DB vrstvu
  * (lib/db/queries/ops-events.ts), a i tam se v testu použije injektovaný
  * `deps.write`, takže se `insertOpsEvent`/`getSql()` nikdy nezavolá. Import
  * `../lib/auth/meeting-magic` (case 1, 3, 4) taky transitivně importuje
- * drizzle, ale volá se jen jeho čistá `buildMeetingMagicUrl` — žádné DB
+ * drizzle, ale volá se jen jeho čistá `buildMeetingMagicUrl` - žádné DB
  * volání neproběhne, protože se nikdy nezavolá.
  */
 import assert from "node:assert/strict";
@@ -76,7 +76,7 @@ const dispatchCtx = {
 function okResult(
   counts: { sent: number; skipped: number; error: number; scheduled?: number },
   totalMembers: number,
-  // iter-028 (T-005): deliver default "now" — beze změny pro existující
+  // iter-028 (T-005): deliver default "now" - beze změny pro existující
   // volání (case 10, 11, 25, 26), které deliver nezmiňují.
   deliver: "now" | "defer" = "now"
 ): VotingDispatchResult {
@@ -269,11 +269,11 @@ const cases: TestCase[] = [
     name: "9. dispatchOutcomeEvent {ok:false, code:no-guests} -> dispatch.guard-failed, ceska hlaska",
     run: () => {
       const row = dispatchOutcomeEvent(
-        failResult("no-guests", "Hlasovani nelze spustit, schuzka nema zadneho hosta."),
+        failResult("no-guests", "Hlasování nelze spustit, schůzka nemá žádného hosta."),
         { runId: "run-1", seq: 2, actor: "cron", source: "cron", requestedMeetingId: "meeting-1" }
       );
       assert.equal(row.kind, "dispatch.guard-failed");
-      assert.match(row.message, /Hlasovani nelze spustit, schuzka nema zadneho hosta\./);
+      assert.match(row.message, /Hlasování nelze spustit, schůzka nemá žádného hosta\./);
       assert.doesNotMatch(row.message.toLowerCase(), /neco se nepovedlo/);
     },
   },
@@ -307,7 +307,7 @@ const cases: TestCase[] = [
   {
     name: "12. dispatchOutcomeEvent {ok:false, code:not-found} -> meetingId undefined, id v detail.requestedMeetingId (MAJOR-1)",
     run: () => {
-      const row = dispatchOutcomeEvent(failResult("not-found", "Schuzka nebyla nalezena."), {
+      const row = dispatchOutcomeEvent(failResult("not-found", "Schůzka nebyla nalezena."), {
         runId: "run-1",
         seq: 1,
         actor: "cron",
@@ -323,10 +323,10 @@ const cases: TestCase[] = [
     run: () => {
       const start = new Date("2026-08-22T05:00:00Z");
       const events: RunStatusEvent[] = [
-        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: "dispatch.started", message: "Spuštění hlasování zahájeno.", detail: null, occurredAt: start },
         {
           kind: "dispatch.finished",
-          message: "Hlasovaci odkazy rozeslany vsem 27 clenum.",
+          message: "Hlasovací odkazy rozeslány všem 27 členům.",
           detail: { sent: 27, skipped: 0, error: 0, totalMembers: 27 },
           occurredAt: new Date(start.getTime() + 60_000),
         },
@@ -341,7 +341,7 @@ const cases: TestCase[] = [
     run: () => {
       const start = new Date("2026-08-13T05:00:00Z");
       const events: RunStatusEvent[] = [
-        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: "dispatch.started", message: "Spuštění hlasování zahájeno.", detail: null, occurredAt: start },
       ];
       const now = new Date(start.getTime() + 30 * 60_000);
       const status = deriveRunStatus(events, now);
@@ -353,7 +353,7 @@ const cases: TestCase[] = [
     run: () => {
       const start = new Date("2026-08-20T05:00:00Z");
       const events: RunStatusEvent[] = [
-        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: "dispatch.started", message: "Spuštění hlasování zahájeno.", detail: null, occurredAt: start },
         {
           kind: "dispatch.failed",
           message: "connection terminated unexpectedly",
@@ -384,16 +384,16 @@ const cases: TestCase[] = [
     run: () => {
       const start = new Date("2026-08-22T05:00:00Z");
       const events: RunStatusEvent[] = [
-        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: "dispatch.started", message: "Spuštění hlasování zahájeno.", detail: null, occurredAt: start },
         {
           kind: "email.failed",
-          message: "Odeslani selhalo: Jan Novak - 422 invalid recipient",
+          message: "Odeslání selhalo: Jan Novák - 422 invalid recipient",
           detail: null,
           occurredAt: new Date(start.getTime() + 10_000),
         },
         {
           kind: "dispatch.finished",
-          message: "Hlasovaci odkazy rozeslany: 25 z 27 clenu, 2 chyb, 0 preskoceno.",
+          message: "Hlasovací odkazy rozeslány: 25 z 27 členů, 2 chyb, 0 přeskočeno.",
           detail: { sent: 25, skipped: 0, error: 2, totalMembers: 27 },
           occurredAt: new Date(start.getTime() + 60_000),
         },
@@ -481,11 +481,11 @@ const cases: TestCase[] = [
         kind: "email.sent",
         severity: "info",
         memberId: null,
-        memberName: "Smazany Clen",
-        message: "Hlasovaci odkaz odeslan: Smazany Clen.",
+        memberName: "Smazaný Člen",
+        message: "Hlasovací odkaz odeslán: Smazaný Člen.",
       });
       assert.equal(row.memberId, null);
-      assert.equal(row.memberName, "Smazany Clen");
+      assert.equal(row.memberName, "Smazaný Člen");
     },
   },
   {
@@ -508,7 +508,7 @@ const cases: TestCase[] = [
     name: "26. safeDispatchOutcomeEvent s vadnym vstupem (chybejici counts) nevyhodi, vraci null (review T-007 MAJOR-1)",
     run: () => {
       // Simuluje budouci defekt uvnitr ciste funkce (napr. refaktor, ktery
-      // pridal pole, jez typovy system nezachyti za behu) — presne scenar
+      // pridal pole, jez typovy system nezachyti za behu) - presne scenar
       // z review T-007 MAJOR-1: konec obalu runVotingDispatch nesmi kvuli
       // tomuhle vyhodit vyjimku ven.
       const malformed = { ok: true } as unknown as VotingDispatchResult;
@@ -525,7 +525,7 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "27. dispatchOutcomeEvent deliver:defer -> info, 'odejdou rano', detail.deliver; deriveRunStatus -> ok, presny popisek (ne 'Rozeslano 0 z 27')",
+    name: "27. dispatchOutcomeEvent deliver:defer -> info, 'odejdou ráno', detail.deliver; deriveRunStatus -> ok, presny popisek (ne 'Rozesláno 0 z 27')",
     run: () => {
       const result = okResult({ sent: 0, skipped: 0, error: 0, scheduled: 27 }, 27, "defer");
       const row = dispatchOutcomeEvent(result, {
@@ -536,25 +536,25 @@ const cases: TestCase[] = [
         requestedMeetingId: "meeting-1",
       });
       assert.equal(row.severity, "info");
-      assert.match(row.message, /odejdou rano/);
+      assert.match(row.message, /odejdou ráno/);
       assert.equal((row.detail as Record<string, unknown>).deliver, "defer");
 
       const start = new Date("2026-09-16T08:00:00Z");
       const events: RunStatusEvent[] = [
-        { kind: "dispatch.started", message: "Spusteni hlasovani zahajeno.", detail: null, occurredAt: start },
+        { kind: "dispatch.started", message: "Spuštění hlasování zahájeno.", detail: null, occurredAt: start },
         { kind: row.kind, message: row.message, detail: row.detail, occurredAt: new Date(start.getTime() + 1000) },
       ];
       const status = deriveRunStatus(events, new Date(start.getTime() + 2000));
       assert.equal(status.state, "ok");
-      assert.equal(status.label, "Spusteno, odkazy odejdou rano (27 z 27)");
-      assert.notEqual(status.label, "Rozeslano 0 z 27");
+      assert.equal(status.label, "Spuštěno, odkazy odejdou ráno (27 z 27)");
+      assert.notEqual(status.label, "Rozesláno 0 z 27");
     },
   },
   {
     name: "28. dispatchOutcomeEvent {ok:false, code:not-due} -> meetingId vyplnen (na rozdil od not-found, ztrata vazby na schuzku)",
     run: () => {
       const row = dispatchOutcomeEvent(
-        failResult("not-due", "Odkazy nelze poslat hned, den schuzky jeste nenastal."),
+        failResult("not-due", "Odkazy nelze poslat hned, den schůzky ještě nenastal."),
         { runId: "run-2", seq: 2, actor: "member-1", source: "gui", requestedMeetingId: "meeting-1" }
       );
       assert.equal(row.meetingId, "meeting-1");
@@ -599,7 +599,7 @@ const cases: TestCase[] = [
         { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
         {
           kind: "reminder.failed",
-          message: "Pripominka (kolo 1) selhala: Jan Novak - 422",
+          message: "Připomínka (kolo 1) selhala: Jan Novák - 422",
           detail: { round: 1 },
           occurredAt: new Date(start.getTime() + 5_000),
         },
@@ -622,7 +622,7 @@ const cases: TestCase[] = [
         { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
         {
           kind: "dispatch.finished",
-          message: "Hlasovaci odkazy rozeslany vsem 27 clenum.",
+          message: "Hlasovací odkazy rozeslány všem 27 členům.",
           detail: { sent: 27, skipped: 0, error: 0, totalMembers: 27 },
           occurredAt: new Date(start.getTime() + 20_000),
         },
@@ -646,7 +646,7 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "33. deriveRunStatus: totez bez dispatch.finished -> partial, 'Beh dokoncen, nektera faze selhala'",
+    name: "33. deriveRunStatus: totez bez dispatch.finished -> partial, 'Běh dokončen, některá fáze selhala'",
     run: () => {
       const start = new Date("2026-09-25T05:00:00Z");
       const events: RunStatusEvent[] = [
@@ -666,24 +666,24 @@ const cases: TestCase[] = [
       ];
       const status = deriveRunStatus(events, new Date(start.getTime() + 10_000));
       assert.equal(status.state, "partial");
-      assert.equal(status.label, "Beh dokoncen, nektera faze selhala");
+      assert.equal(status.label, "Běh dokončen, některá fáze selhala");
     },
   },
   {
-    name: "34. deriveRunStatus: bez cron.phase-failed -> popisky beze zmeny ('Rozeslano 27 z 27', 'Beh dokoncen')",
+    name: "34. deriveRunStatus: bez cron.phase-failed -> popisky beze zmeny ('Rozesláno 27 z 27', 'Běh dokončen')",
     run: () => {
       const start = new Date("2026-09-26T05:00:00Z");
       const withDispatch: RunStatusEvent[] = [
         { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
         {
           kind: "dispatch.finished",
-          message: "Hlasovaci odkazy rozeslany vsem 27 clenum.",
+          message: "Hlasovací odkazy rozeslány všem 27 členům.",
           detail: { sent: 27, skipped: 0, error: 0, totalMembers: 27 },
           occurredAt: new Date(start.getTime() + 20_000),
         },
         {
           kind: "reminder.round",
-          message: "Kolo pripominek 1: 0 odeslano, 0 chyb, 0 melo dostat.",
+          message: "Kolo připomínek 1: 0 odesláno, 0 chyb, 0 mělo dostat.",
           detail: { round: 1 },
           occurredAt: new Date(start.getTime() + 21_000),
         },
@@ -696,7 +696,7 @@ const cases: TestCase[] = [
       ];
       const statusWithDispatch = deriveRunStatus(withDispatch, new Date(start.getTime() + 30_000));
       assert.equal(statusWithDispatch.state, "ok");
-      assert.equal(statusWithDispatch.label, "Rozeslano 27 z 27");
+      assert.equal(statusWithDispatch.label, "Rozesláno 27 z 27");
 
       const bare: RunStatusEvent[] = [
         { kind: "cron.started", message: "Cron zahajen.", detail: null, occurredAt: start },
@@ -709,7 +709,7 @@ const cases: TestCase[] = [
       ];
       const statusBare = deriveRunStatus(bare, new Date(start.getTime() + 5_000));
       assert.equal(statusBare.state, "ok");
-      assert.equal(statusBare.label, "Beh dokoncen");
+      assert.equal(statusBare.label, "Běh dokončen");
     },
   },
 ];

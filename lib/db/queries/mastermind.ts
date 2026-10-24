@@ -192,7 +192,7 @@ export async function getCaseById(caseId: string): Promise<CaseDetailRow | null>
 }
 
 /**
- * Data pro nabídku čtvrtků (3.5): data schůzek od dneška a data zařazených
+ * Data pro nabídku termínů (3.5): data schůzek od dneška a data zařazených
  * případů. iter-037: případy neaktivního člena se nepočítají (při deaktivaci se
  * stejně vracejí do zásobníku).
  */
@@ -288,7 +288,7 @@ export interface RemovedCase {
   internalDate: string | null;
 }
 
-/** Autor smí stáhnout jen navržený, vedení navržený i zařazený. Zájmy kaskádou. */
+/** Autor smí smazat jen navržený, vedení navržený i zařazený. Zájmy kaskádou. */
 export async function removeCaseGuarded(opts: {
   caseId: string;
   actorId: string;
@@ -383,10 +383,10 @@ export type ScheduleOutcome =
   | { ok: false; reason: "gone" | "not-proposed" | "taken" | "open-meeting" | "not-available" };
 
 /**
- * Zařazení na čtvrtek: jeden UPDATE. Podmínky: stav `proposed`, datum není
+ * Zařazení na pravidelný den: jeden UPDATE. Podmínky: stav `proposed`, datum není
  * v minulosti, na datum není žádná schůzka v `meeting` (jen čtení). Kolize
- * na `mmc_one_per_date` (23505) znamená „na tenhle čtvrtek už je případ“.
- * Že je datum čtvrtek a v okně 12 týdnů, ověřila akce před voláním.
+ * na `mmc_one_per_date` (23505) znamená „na tenhle den už je případ“.
+ * Že je datum pravidelný den a v okně 12 týdnů, ověřila akce před voláním.
  */
 export async function scheduleCaseGuarded(opts: {
   caseId: string;

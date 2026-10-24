@@ -21,6 +21,8 @@ const config: Config = {
         navy: {
           DEFAULT: "#605BE5",
           light: "#eeeeff",
+          /** iter-042 (Z4): pravidelný den v kalendáři docházky, sytější než light. */
+          soft: "#d6dcff",
         },
         surface: "#FFFFFF",
         background: "#F7F7F7",

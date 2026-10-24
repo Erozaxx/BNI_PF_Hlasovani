@@ -16,6 +16,7 @@ import {
   errTwiceText,
   fmtNum,
   importSummaryText,
+  matchNeedsAttention,
 } from "@/lib/semafor/texts";
 import { ColorBadge } from "@/components/semafor/ColorBadge";
 
@@ -218,7 +219,8 @@ export function ImportSemaforForm({
             </p>
           ))}
 
-          <ul className="mt-4 space-y-3">
+          <p className="mt-4 text-sm text-text-main">{SEMAFOR_TEXTS.importPreviewHint}</p>
+          <ul className="mt-2 space-y-3">
             {preview.rows.map((row, i) => {
               const eff = view.eff[i];
               const dup = view.dupRows.has(i);
@@ -244,7 +246,13 @@ export function ImportSemaforForm({
                     <p className="mt-2 text-sm text-danger">{row.error}</p>
                   ) : (
                     <>
-                      <p className="mt-1 text-xs text-text-muted">{row.label}</p>
+                      <p
+                        className={`mt-1 text-xs ${
+                          matchNeedsAttention(row.kind) ? "font-medium text-warning" : "text-text-muted"
+                        }`}
+                      >
+                        {row.label}
+                      </p>
                       <select
                         aria-label={row.name || `#${row.r}`}
                         value={selected}
@@ -283,6 +291,7 @@ export function ImportSemaforForm({
           >
             {SEMAFOR_TEXTS.importSave}
           </Button>
+          <p className="mt-2 text-sm text-text-muted">{SEMAFOR_TEXTS.importSaveNote}</p>
         </Card>
       )}
     </div>

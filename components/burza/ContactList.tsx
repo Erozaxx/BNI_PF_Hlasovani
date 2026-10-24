@@ -14,11 +14,14 @@ export function ContactList({
   viewerId,
   viewerIsManagement,
   usedContactIds,
+  bonusOn = true,
 }: {
   items: ContactCardData[];
   viewerId: string;
   viewerIsManagement: boolean;
   usedContactIds: string[];
+  /** Burza dává bonus do semaforu, viz `ContactCard`. */
+  bonusOn?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState("");
@@ -60,6 +63,7 @@ export function ContactList({
               viewerId={viewerId}
               viewerIsManagement={viewerIsManagement}
               used={used.has(i.id)}
+              bonusOn={bonusOn}
             />
           ))}
         </div>

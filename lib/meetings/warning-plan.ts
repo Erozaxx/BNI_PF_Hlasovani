@@ -1,15 +1,17 @@
 /**
- * Rozhodnutí o čtvrtečním varovném mailu management týmu (arch iter-026
- * T-001, sekce 3.4 a 7). Funkce vrací hotový `subject` a `lines` — modul,
+ * Rozhodnutí o varovném mailu v pravidelný den schůzky management týmu (arch iter-026
+ * T-001, sekce 3.4 a 7). Funkce vrací hotový `subject` a `lines` - modul,
  * který mail odesílá (lib/email/resend.ts, sendVotingWarningEmail), už nic
  * nerozhoduje ani neformátuje.
  *
  * Čistý modul bez DB: žádný import drizzle-orm, @/lib/db/*, next/server,
- * next/cache ani resend. Jde spustit v holém Node (tsx) bez DATABASE_URL —
+ * next/cache ani resend. Jde spustit v holém Node (tsx) bez DATABASE_URL -
  * viz scripts/test-warning-plan.ts. Import `./statusLabel` je relativní a
  * bezimportní (jen datový objekt), takže tuhle podmínku neporušuje.
  */
+import { DEFAULT_CHAPTER_SETTINGS, weekdayName } from "../chapter/settings";
 import { statusLabel } from "./statusLabel";
+import { weekdayIndexFromName } from "./voting-window";
 
 export type WarningKind =
   | "no-meeting"
@@ -24,7 +26,18 @@ export interface WarningMeeting {
 }
 
 export interface WarningInput {
-  weekdayPrague: string; // "Thursday", "Monday", ...
+  weekdayPrague: string; // anglický název dne z weekdayInPrague
+  /**
+   * iter-042: den pravidelné schůzky z nastavení chapteru (0 = neděle, 4 =
+   * čtvrtek). Bez hodnoty platí výchozí nastavení (čtvrtek).
+   */
+  regularWeekday?: number;
+  /**
+   * iter-042 (BK5): na dnešek je založená interní schůzka. Interní den není
+   * řádek v `meeting`, ale není to chyba, takže "není schůzka" se neposílá.
+   * Bez hodnoty `false`.
+   */
+  hasInternalDay?: boolean;
   todayIso: string; // "YYYY-MM-DD"
   meeting: WarningMeeting | null; // stav PO fázi 2
   /** ok:false výsledek dispatchu z fáze 2, jinak null. Viz arch 2.6.1. */
@@ -34,7 +47,7 @@ export interface WarningInput {
   /**
    * iter-028 (T-005, arch 3.7, D8): výsledek ranního `deferred-send` cíle
    * MIMO čtvrtek, jen když je to PRVNÍ den, kdy tenhle dispatch aspoň něco
-   * poslal nebo se o to pokusil (`isFirstDispatch`, morning-dispatch.ts) —
+   * poslal nebo se o to pokusil (`isFirstDispatch`, morning-dispatch.ts) -
    * jinak by varování spamovalo každé ráno, dokud se poslední člen nedošle
    * (R10). `null`, když se ten den žádný `deferred-send` cíl nekonal, nebo
    * konal a byl to routinní dosílání, ne první den.
@@ -47,7 +60,7 @@ export interface WarningInput {
 }
 
 export type WarningDecision =
-  | { warn: false; reason: "not-thursday" | "voting-ok" }
+  | { warn: false; reason: "not-regular-day" | "voting-ok" | "internal-day" }
   | {
       warn: true;
       kind: WarningKind;
@@ -56,18 +69,18 @@ export type WarningDecision =
       meetingId: string | null;
     };
 
-// process.env je globální Node API, ne import next/drizzle/resend — smí se
+// process.env je globální Node API, ne import next/drizzle/resend - smí se
 // číst i v tomto čistém modulu (stejný vzor jako route.ts:216).
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 /**
- * iter-028 (T-005, arch 3.7): po ranním běhu už samotné "Spustit hlasovani"
- * nic nepošle — kliknutí jen založí odkazy a schůzku (deliver:"defer").
+ * iter-028 (T-005, arch 3.7): po ranním běhu už samotné "Spustit hlasování"
+ * nic nepošle - kliknutí jen založí odkazy a schůzku (deliver:"defer").
  * Doplňuje se k výzvám no-meeting, not-voting a dispatch-failed (jen
  * no-guests/infra-error), kde admin po zásahu čeká na odeslání.
  */
 const RESEND_NOW_HINT =
-  'Potom klikněte na „Rozeslat hned", jinak odkazy odejdou až zítra ráno.';
+  'Potom klikněte na „Rozeslat hned“, jinak odkazy odejdou až zítra ráno.';
 
 /** "YYYY-MM-DD" -> "DD.MM.YYYY" (predmet mailu, bez mezer, dle 7.3 doslova). */
 function formatDateDot(iso: string): string {
@@ -82,7 +95,7 @@ function formatDateCz(iso: string): string {
 }
 
 /**
- * Řádek o členech bez e-mailu — přidává se jen tehdy, když nějací jsou, a
+ * Řádek o členech bez e-mailu - přidává se jen tehdy, když nějací jsou, a
  * jen k mailu, který už padá z jiného důvodu (sám o sobě nespouští
  * varování, arch 3.4 a sekce 12 A5).
  */
@@ -96,16 +109,16 @@ function withoutEmailLine(membersWithoutEmail: { memberName: string }[]): string
  * Poslední řádek `dispatch-failed` mailu se liší podle guard kódu (arch
  * 7.3): `no-guests` posílá doplnit hosty, `no-recipients` na správu členů,
  * `conflict` na kolidující schůzku. `infra-error` (T-006r, MAJOR-1 review)
- * není guard — cron narazil na skutečnou infrastrukturní chybu (např.
- * výpadek DB) mimo pět guard kódů — dostává proto vlastní text, který
+ * není guard - cron narazil na skutečnou infrastrukturní chybu (např.
+ * výpadek DB) mimo pět guard kódů - dostává proto vlastní text, který
  * neříká "doplňte data", protože se schůzkou samotnou nic v nepořádku není.
  * Ostatní kódy (`meeting-closed`, `not-found`) nejsou v 2.6.1 očekávané pro
  * čtvrteční dispatch stejné schůzky, ale dostávají obecný, pořád konkrétní
- * odkaz na detail schůzky — nikdy "zkontrolujte prosím stav systému".
+ * odkaz na detail schůzky - nikdy "zkontrolujte prosím stav systému".
  */
 function dispatchFailureAction(code: string, meetingId: string): string {
   if (code === "no-guests") {
-    return `Co s tím: otevřete ${APP_URL}/meetings/${meetingId}, doplňte hosty a klikněte na „Spustit hlasování".`;
+    return `Co s tím: otevřete ${APP_URL}/meetings/${meetingId}, doplňte hosty a klikněte na „Spustit hlasování“.`;
   }
   if (code === "no-recipients") {
     return `Co s tím: otevřete ${APP_URL}/admin/members a doplňte e-mailovou adresu alespoň jednomu členovi.`;
@@ -123,10 +136,11 @@ function dispatchFailureAction(code: string, meetingId: string): string {
  * Rozhodne, jestli a jaké varování odejde management týmu.
  *
  * Pravidla, v tomto pořadí (arch 3.4, 3.7, D8):
- * 1. weekdayPrague !== "Thursday" -> delegováno na `decideDeferredFirstDispatch`
+ * 1. dnes není pravidelný den schůzky (výchozí čtvrtek) -> delegováno na `decideDeferredFirstDispatch`
  *    (iter-028, D8: varování i mimo čtvrtek, ale jen při prvním rozeslání).
- * 2. meeting === null -> { warn:true, kind:"no-meeting" }
- * 3. dispatchFailure !== null -> { warn:true, kind:"dispatch-failed" } —
+ * 2. meeting === null -> { warn:true, kind:"no-meeting" }, ale když je dnes
+ *    interní schůzka, { warn:false, reason:"internal-day" } (BK5)
+ * 3. dispatchFailure !== null -> { warn:true, kind:"dispatch-failed" } -
  *    cron se pokusil hlasování spustit a guard ho odmítl (arch 2.6.1).
  *    Musí stát PŘED pravidlem 4, jinak by nastaly dvě tiché díry (arch 3.4).
  * 4. meeting.status !== "voting" -> { warn:true, kind:"not-voting" }
@@ -134,7 +148,7 @@ function dispatchFailureAction(code: string, meetingId: string): string {
  * 5. failedRecipients.length > 0 -> { warn:true, kind:"partial-send" }
  * 6. jinak -> { warn:false, reason:"voting-ok" }
  */
-export function decideThursdayWarning(input: WarningInput): WarningDecision {
+export function decideRegularDayWarning(input: WarningInput): WarningDecision {
   const {
     weekdayPrague,
     todayIso,
@@ -144,18 +158,23 @@ export function decideThursdayWarning(input: WarningInput): WarningDecision {
     membersWithoutEmail,
     deferredFirstDispatch,
   } = input;
+  const regularWeekday = input.regularWeekday ?? DEFAULT_CHAPTER_SETTINGS.meetingWeekday;
 
-  if (weekdayPrague !== "Thursday") {
+  if (weekdayIndexFromName(weekdayPrague) !== regularWeekday) {
     return decideDeferredFirstDispatch(deferredFirstDispatch);
   }
 
   if (meeting === null) {
+    // BK5: v den interní schůzky varování "není schůzka" nedává smysl.
+    if (input.hasInternalDay === true) {
+      return { warn: false, reason: "internal-day" };
+    }
     return {
       warn: true,
       kind: "no-meeting",
-      subject: `BNI Hlasovani - VAROVANI: na dnesek (${formatDateDot(todayIso)}) neni zadna schuzka`,
+      subject: `BNI Hlasování - VAROVÁNÍ: na dnešek (${formatDateDot(todayIso)}) není žádná schůzka`,
       lines: [
-        "Dnes je čtvrtek a v systému není schůzka s dnešním datem. Hlasování proto neběží a členům nic nepřišlo.",
+        `Dnes je ${weekdayName(regularWeekday)} a v systému není schůzka s dnešním datem. Hlasování proto neběží a členům nic nepřišlo.`,
         `Co s tím: založte schůzku a spusťte hlasování na ${APP_URL}/meetings.`,
         RESEND_NOW_HINT,
       ],
@@ -171,9 +190,9 @@ export function decideThursdayWarning(input: WarningInput): WarningDecision {
     return {
       warn: true,
       kind: "dispatch-failed",
-      subject: `BNI Hlasovani - VAROVANI: hlasovani ke schuzce ${formatDateDot(meeting.date)} nelze spustit`,
+      subject: `BNI Hlasování - VAROVÁNÍ: hlasování ke schůzce ${formatDateDot(meeting.date)} nelze spustit`,
       lines: [
-        `Cron se dnes ráno pokusil spustit hlasování ke schůzce ${formatDateCz(meeting.date)} a neuspěl. Členům nic nepřišlo a schůzka zůstala ve stavu „${statusLabel[meeting.status] ?? meeting.status}".`,
+        `Automatický běh se dnes ráno pokusil spustit hlasování ke schůzce ${formatDateCz(meeting.date)} a neuspěl. Členům nic nepřišlo a schůzka zůstala ve stavu „${statusLabel[meeting.status] ?? meeting.status}“.`,
         `Důvod: ${dispatchFailure.message}`,
         dispatchFailureAction(dispatchFailure.code, meeting.id),
         ...hint,
@@ -187,10 +206,10 @@ export function decideThursdayWarning(input: WarningInput): WarningDecision {
     return {
       warn: true,
       kind: "not-voting",
-      subject: `BNI Hlasovani - VAROVANI: hlasovani ke schuzce ${formatDateDot(meeting.date)} nebezi`,
+      subject: `BNI Hlasování - VAROVÁNÍ: hlasování ke schůzce ${formatDateDot(meeting.date)} neběží`,
       lines: [
-        `Schůzka na ${formatDateCz(meeting.date)} je ve stavu „${statusLabel[meeting.status] ?? meeting.status}" a hlasování se nepodařilo spustit automaticky. Členům nepřišel odkaz.`,
-        `Co s tím: otevřete ${APP_URL}/meetings/${meeting.id} a klikněte na „Spustit hlasování".`,
+        `Schůzka na ${formatDateCz(meeting.date)} je ve stavu „${statusLabel[meeting.status] ?? meeting.status}“ a hlasování se nepodařilo spustit automaticky. Členům nepřišel odkaz.`,
+        `Co s tím: otevřete ${APP_URL}/meetings/${meeting.id} a klikněte na „Spustit hlasování“.`,
         RESEND_NOW_HINT,
         ...withoutEmailLine(membersWithoutEmail),
       ],
@@ -202,12 +221,12 @@ export function decideThursdayWarning(input: WarningInput): WarningDecision {
     return {
       warn: true,
       kind: "partial-send",
-      subject: `BNI Hlasovani - VAROVANI: ${failedRecipients.length} clenum neprisel odkaz (schuzka ${formatDateDot(meeting.date)})`,
+      subject: `BNI Hlasování - VAROVÁNÍ: ${failedRecipients.length} členům nepřišel odkaz (schůzka ${formatDateDot(meeting.date)})`,
       lines: [
         "Hlasování běží, ale odkaz nedorazil těmto členům:",
-        ...failedRecipients.map((r) => `- ${r.memberName} — ${r.reason}`),
+        ...failedRecipients.map((r) => `- ${r.memberName} - ${r.reason}`),
         ...withoutEmailLine(membersWithoutEmail),
-        `Co s tím: ${APP_URL}/meetings/${meeting.id} → sekce „Magic linky členů" → „Poslat email" u konkrétního člena.`,
+        `Co s tím: ${APP_URL}/meetings/${meeting.id} → sekce „Osobní odkazy členů“ → „Poslat e-mailem“ u konkrétního člena.`,
       ],
       meetingId: meeting.id,
     };
@@ -218,26 +237,26 @@ export function decideThursdayWarning(input: WarningInput): WarningDecision {
 
 /**
  * D8 (arch 3.7): varování i mimo čtvrtek, ale JEN při prvním dni, kdy ranní
- * `deferred-send` cíl aspoň něco poslal nebo se o to pokusil — volající
+ * `deferred-send` cíl aspoň něco poslal nebo se o to pokusil - volající
  * (close-voting/route.ts) sem předá `deferredFirstDispatch` pouze tehdy,
  * když `isFirstDispatch` (morning-dispatch.ts) vyšlo `true`; každodenní
  * dosílání zbylých členů (routine catch-up) sem nikdy nedorazí (R10, žádný
  * spam). `null` znamená "dnes se žádný takový cíl nekonal, nebo to nebyl
- * první den" -> reason zůstává "not-thursday" ze stejného důvodu, proč
+ * první den" -> reason zůstává "not-regular-day" ze stejného důvodu, proč
  * čtvrtek sám o sobě nevaruje: nic špatného se nestalo.
  */
 function decideDeferredFirstDispatch(
   d: WarningInput["deferredFirstDispatch"]
 ): WarningDecision {
   if (d === null) {
-    return { warn: false, reason: "not-thursday" };
+    return { warn: false, reason: "not-regular-day" };
   }
 
   if (d.dispatchFailure !== null) {
     return {
       warn: true,
       kind: "dispatch-failed",
-      subject: `BNI Hlasovani - VAROVANI: rozeslani odkazu ke schuzce ${formatDateDot(d.meeting.date)} selhalo`,
+      subject: `BNI Hlasování - VAROVÁNÍ: rozeslání odkazu ke schůzce ${formatDateDot(d.meeting.date)} selhalo`,
       lines: [
         `Ranní rozeslání hlasovacích odkazů ke schůzce ${formatDateCz(d.meeting.date)} dnes selhalo. Členům, kteří odkaz ještě neměli, nic nepřišlo.`,
         `Důvod: ${d.dispatchFailure.message}`,
@@ -251,11 +270,11 @@ function decideDeferredFirstDispatch(
     return {
       warn: true,
       kind: "partial-send",
-      subject: `BNI Hlasovani - VAROVANI: ${d.failedRecipients.length} clenum neprisel odkaz (schuzka ${formatDateDot(d.meeting.date)})`,
+      subject: `BNI Hlasování - VAROVÁNÍ: ${d.failedRecipients.length} členům nepřišel odkaz (schůzka ${formatDateDot(d.meeting.date)})`,
       lines: [
         "Ranní rozeslání proběhlo, ale odkaz nedorazil těmto členům:",
-        ...d.failedRecipients.map((r) => `- ${r.memberName} — ${r.reason}`),
-        `Co s tím: ${APP_URL}/meetings/${d.meeting.id} → sekce „Magic linky členů" → „Poslat email" u konkrétního člena.`,
+        ...d.failedRecipients.map((r) => `- ${r.memberName} - ${r.reason}`),
+        `Co s tím: ${APP_URL}/meetings/${d.meeting.id} → sekce „Osobní odkazy členů“ → „Poslat e-mailem“ u konkrétního člena.`,
       ],
       meetingId: d.meeting.id,
     };

@@ -34,14 +34,14 @@ export function EditQuestionForm({
     let hasError = false;
 
     if (!text.trim()) {
-      setError("Text otazky je povinny.");
+      setError("Text otázky je povinný.");
       hasError = true;
     } else {
       setError("");
     }
 
     if (!appliesMonth5 && !appliesMonth10) {
-      setAppliesError("Otazka musi platit alespon pro jeden typ pohovoru.");
+      setAppliesError("Otázka musí platit aspoň pro jeden typ pohovoru.");
       hasError = true;
     } else {
       setAppliesError("");
@@ -72,12 +72,12 @@ export function EditQuestionForm({
         showToast("error", result.error);
       } else {
         setEditing(false);
-        showToast("success", "Otazka byla upravena.");
+        showToast("success", "Otázka je upravená.");
         router.refresh();
       }
     } catch {
-      setError("Nepodarilo se upravit otazku.");
-      showToast("error", "Nepodarilo se upravit otazku.");
+      setError("Otázku se nepodařilo upravit.");
+      showToast("error", "Otázku se nepodařilo upravit.");
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export function EditQuestionForm({
 
   if (!editing) {
     return (
-      <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+      <Button variant="ghost" size="sm" className="min-h-[44px]" onClick={() => setEditing(true)}>
         Upravit
       </Button>
     );
@@ -112,7 +112,7 @@ export function EditQuestionForm({
             htmlFor={`edit-applies-month-5-${questionId}`}
             className="text-sm text-text-main cursor-pointer"
           >
-            Plati pro pohovor 5 mesicu
+            Platí pro pohovor po 5 měsících
           </label>
         </div>
         <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ export function EditQuestionForm({
             htmlFor={`edit-applies-month-10-${questionId}`}
             className="text-sm text-text-main cursor-pointer"
           >
-            Plati pro pohovor 10 mesicu
+            Platí pro pohovor po 10 měsících
           </label>
         </div>
         {appliesError && (
@@ -135,12 +135,13 @@ export function EditQuestionForm({
         )}
       </div>
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" onClick={handleSave} loading={loading}>
-          Ulozit
+        <Button variant="primary" size="sm" className="min-h-[44px]" onClick={handleSave} loading={loading}>
+          Uložit
         </Button>
         <Button
           variant="secondary"
           size="sm"
+          className="min-h-[44px]"
           onClick={() => {
             setEditing(false);
             setText(currentText);
@@ -150,7 +151,7 @@ export function EditQuestionForm({
             setAppliesError("");
           }}
         >
-          Zrusit
+          Zrušit
         </Button>
       </div>
     </div>

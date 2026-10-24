@@ -1,8 +1,12 @@
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { featureOff } from "@/lib/chapter/feature-guard";
+import { FeatureOff } from "@/components/chapter/FeatureOff";
 import { can } from "@/lib/auth/permissions";
 import { getContactItemsForOverview, getMyContactState } from "@/lib/db/queries/burza";
 import { TEXTS, sortContactItems } from "@/lib/burza/rules";
 import { todayInPrague } from "@/lib/meetings/voting-window";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
+import { bonusSources } from "@/lib/semafor/bonus";
 import { BurzaTabs } from "@/components/burza/BurzaTabs";
 import { ContactList } from "@/components/burza/ContactList";
 import { MyContactsBox } from "@/components/burza/MyContactsBox";
@@ -15,7 +19,9 @@ import { MyContactsBox } from "@/components/burza/MyContactsBox";
  */
 export default async function BurzaContactsPage() {
   const session = await requirePageSession();
+  if (await featureOff("burza")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const isManagement = can(session, "burza.manage");
+  const bonusOn = bonusSources(await getChapterSettings()).burza;
 
   const [items, state] = await Promise.all([
     getContactItemsForOverview(),
@@ -47,6 +53,7 @@ export default async function BurzaContactsPage() {
         viewerId={session.memberId}
         viewerIsManagement={isManagement}
         usedContactIds={state.usedContactIds}
+        bonusOn={bonusOn}
       />
     </div>
   );

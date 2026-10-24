@@ -19,7 +19,7 @@ export async function createCategoryAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Nazev kategorie je povinny." };
+    return { success: false, error: "Název je povinný." };
   }
 
   try {
@@ -29,7 +29,7 @@ export async function createCategoryAction(
     return { success: true, data: { id: cat.id } };
   } catch (error) {
     console.error("createCategoryAction error:", error);
-    return { success: false, error: "Nepodarilo se vytvorit kategorii." };
+    return { success: false, error: "Kategorii se nepodařilo vytvořit." };
   }
 }
 
@@ -42,7 +42,7 @@ export async function deleteCategoryAction(id: string): Promise<ActionResult> {
   if (!auth.success) return auth;
 
   if (!id || !id.trim()) {
-    return { success: false, error: "Neplatne ID kategorie." };
+    return { success: false, error: "Neplatná kategorie." };
   }
 
   try {
@@ -56,7 +56,7 @@ export async function deleteCategoryAction(id: string): Promise<ActionResult> {
     return { success: true };
   } catch (error) {
     console.error("deleteCategoryAction error:", error);
-    return { success: false, error: "Nepodarilo se smazat kategorii." };
+    return { success: false, error: "Kategorii se nepodařilo smazat." };
   }
 }
 
@@ -71,7 +71,7 @@ export async function renameCategoryAction(
   if (!auth.success) return auth;
 
   if (!name || !name.trim()) {
-    return { success: false, error: "Nazev kategorie je povinny." };
+    return { success: false, error: "Název je povinný." };
   }
 
   try {
@@ -85,6 +85,6 @@ export async function renameCategoryAction(
     return { success: true };
   } catch (error) {
     console.error("renameCategoryAction error:", error);
-    return { success: false, error: "Nepodarilo se prejmenovat kategorii." };
+    return { success: false, error: "Kategorii se nepodařilo přejmenovat." };
   }
 }

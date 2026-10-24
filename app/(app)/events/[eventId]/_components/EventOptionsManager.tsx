@@ -50,10 +50,10 @@ export function EventOptionsManager({
   function getLabelError(label: string): string | null {
     if (!label.trim()) return null;
     if (eventOptionType === "date" && !DATE_RE.test(label.trim())) {
-      return "Zadejte datum ve formátu D. M. YYYY (např. 15. 4. 2026)";
+      return "Zadej datum ve formátu D. M. RRRR (např. 15. 4. 2026).";
     }
     if (eventOptionType === "datetime" && !DATETIME_RE.test(label.trim())) {
-      return "Zadejte datum a čas ve formátu D. M. YYYY HH:MM (např. 15. 4. 2026 14:00)";
+      return "Zadej datum a čas ve formátu D. M. RRRR HH:MM (např. 15. 4. 2026 14:00).";
     }
     return null;
   }
@@ -98,15 +98,15 @@ export function EventOptionsManager({
         setError(result.error);
       } else {
         setNewLabel("");
-        // Picker date/time intentionally kept — next option defaults to same value
-        setSuccessMsg("Moznost pridana.");
+        // Picker date/time intentionally kept - next option defaults to same value
+        setSuccessMsg("Možnost je přidaná.");
         router.refresh();
       }
     });
   }
 
   function handleRemoveOption(optionId: string, label: string) {
-    if (!confirm(`Odebrat moznost „${label}"?`)) return;
+    if (!confirm(`Odebrat možnost „${label}“?`)) return;
     setError(null);
     setSuccessMsg(null);
 
@@ -115,7 +115,7 @@ export function EventOptionsManager({
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Moznost odebrána.");
+        setSuccessMsg("Možnost je odebraná.");
         router.refresh();
       }
     });
@@ -132,7 +132,7 @@ export function EventOptionsManager({
       if (!result.success) {
         setError(result.error);
       } else {
-        setSuccessMsg("Vysledek oznacen.");
+        setSuccessMsg("Výsledek je označený.");
         router.refresh();
       }
     });
@@ -141,13 +141,13 @@ export function EventOptionsManager({
   return (
     <Card>
       <h2 className="text-lg font-semibold text-text-main mb-4">
-        Moznosti hlasovani ({options.length})
+        Možnosti hlasování ({options.length})
       </h2>
 
       {/* Call-to-action: mark winner after closing */}
       {event.status === "closed" && !event.selectedOptionId && (
         <div className="mb-4 p-3 rounded-lg border border-warning bg-warning-light text-sm text-text-main">
-          Akce je uzavřena. Klikněte na <strong>Označit vítěze</strong> u vybrané možnosti níže.
+          Akce je uzavřená. Klikni u vybrané možnosti na <strong>Označit vítěze</strong>.
         </div>
       )}
 
@@ -173,17 +173,21 @@ export function EventOptionsManager({
                   </span>
                   {isSelected && (
                     <span className="ml-2 text-xs text-success font-semibold">
-                      ✓ Vitezna moznost
+                      ✓ Vítězná možnost
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm text-text-muted">
                     {opt.voteCount}{" "}
-                    {opt.voteCount === 1 ? "hlas" : "hlasu"}
+                    {opt.voteCount === 1
+                      ? "hlas"
+                      : opt.voteCount >= 2 && opt.voteCount <= 4
+                        ? "hlasy"
+                        : "hlasů"}
                   </span>
 
-                  {/* Mark as winner button — only in closed state */}
+                  {/* Mark as winner button - only in closed state */}
                   {isClosed && !isSelected && (
                     <Button
                       variant="secondary"
@@ -196,7 +200,7 @@ export function EventOptionsManager({
                     </Button>
                   )}
 
-                  {/* Remove button — only in draft/active */}
+                  {/* Remove button - only in draft/active */}
                   {canEdit && (
                     <Button
                       variant="danger"
@@ -214,14 +218,14 @@ export function EventOptionsManager({
         </div>
       ) : (
         <p className="text-sm text-text-muted mb-4">
-          Zatim zadne moznosti. Pridejte prvni moznost nize.
+          Zatím žádné možnosti. Přidej první možnost níže.
         </p>
       )}
 
-      {/* Add option form — only in draft/active */}
+      {/* Add option form - only in draft/active */}
       {canEdit && (
         <form onSubmit={handleAddOption} className="space-y-3 pt-2 border-t border-border mt-2">
-          {/* Date / Datetime picker — shown when event optionType requires it */}
+          {/* Date / Datetime picker - shown when event optionType requires it */}
           {eventOptionType !== "text" && (
             <div className="flex items-center gap-2 text-sm text-text-muted flex-wrap">
               <span className="shrink-0">Vybrat z kalendáře:</span>
@@ -262,7 +266,7 @@ export function EventOptionsManager({
             </div>
           )}
 
-          {/* Label text field — always visible, auto-filled from picker */}
+          {/* Label text field - always visible, auto-filled from picker */}
           <div className="flex gap-2 items-start">
             <div className="flex-1">
               <Input
@@ -271,10 +275,10 @@ export function EventOptionsManager({
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder={
                   eventOptionType === "date"
-                    ? "Napr. 15. 4. 2026"
+                    ? "Např. 15. 4. 2026"
                     : eventOptionType === "datetime"
-                    ? "Napr. 15. 4. 2026 14:00"
-                    : "Napr. Varianta A"
+                    ? "Např. 15. 4. 2026 14:00"
+                    : "Např. Varianta A"
                 }
                 disabled={isPending}
               />

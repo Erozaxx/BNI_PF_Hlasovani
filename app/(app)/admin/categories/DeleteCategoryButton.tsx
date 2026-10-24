@@ -21,7 +21,7 @@ export function DeleteCategoryButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      `Opravdu chcete smazat kategorii "${categoryName}"? Hosté v této kategorii budou zobrazováni jako "[bez kategorie]".`
+      `Smazat kategorii „${categoryName}“? Hosté v ní zůstanou bez kategorie.`
     );
     if (!confirmed) return;
 
@@ -31,11 +31,11 @@ export function DeleteCategoryButton({
       if (!result.success) {
         showToast("error", result.error);
       } else {
-        showToast("success", `Kategorie "${categoryName}" byla smazána.`);
+        showToast("success", `Kategorie „${categoryName}“ je smazaná.`);
         router.refresh();
       }
     } catch {
-      showToast("error", "Nepodarilo se smazat kategorii.");
+      showToast("error", "Kategorii se nepodařilo smazat.");
     } finally {
       setLoading(false);
     }
@@ -46,6 +46,7 @@ export function DeleteCategoryButton({
       type="button"
       variant="danger"
       size="sm"
+      className="min-h-[44px]"
       loading={loading}
       onClick={handleDelete}
     >

@@ -2,29 +2,29 @@
  * Testy pro lib/meetings/warning-plan.ts (iter-026, T-006; rozšířeno
  * iter-028, T-005).
  *
- * Bez DATABASE_URL, bez sítě, bez CI — vzor je scripts/test-voting-plan.ts
+ * Bez DATABASE_URL, bez sítě, bez CI - vzor je scripts/test-voting-plan.ts
  * (iter-026, T-005). Spuštění: npm run test:warning-plan
  *
  * Pokrývá všech 12 případů ze sekce 10.4 architektury (arch_iter-026_T-001.md),
- * včetně pravidla `dispatch-failed` (arch 3.4) — případy 10 a 11 jsou přímý
+ * včetně pravidla `dispatch-failed` (arch 3.4) - případy 10 a 11 jsou přímý
  * důsledek E1 (cron smí aktivovat i schůzku ve stavu draft), případ 12 je
  * jejich protiváha (pravidlo 3 nesmí zabrat, když dispatch prošel, R9).
  *
- * Případ 13 je nový (T-006r, review MAJOR-1) — `dispatchFailure.code` je
+ * Případ 13 je nový (T-006r, review MAJOR-1) - `dispatchFailure.code` je
  * v `WarningInput` typovaný obecně jako `string`, ne jako uzavřená pětice
  * guard kódů z `VotingDispatchResult`, takže `infra-error` (syntetizovaný
  * cronem při zachycené výjimce z fáze 2, mimo scope tohoto souboru) prochází
- * pravidlem `dispatch-failed` beze změny v `decideThursdayWarning` — jediná
+ * pravidlem `dispatch-failed` beze změny v `decideRegularDayWarning` - jediná
  * změna byla vlastní text v `dispatchFailureAction()`.
  *
  * Případy 14 až 18 jsou nové (iter-028, T-005, arch 8.2 P14/P15):
  * `deferredFirstDispatch` (D8, varování i mimo čtvrtek při prvním rozeslání,
- * ne při každodenním dosílání — R10) a věta o „Rozeslat hned" u výzev, které
+ * ne při každodenním dosílání - R10) a věta o „Rozeslat hned" u výzev, které
  * po odloženém rozeslání už samy o sobě nic nepošlou (arch 3.7).
  */
 import assert from "node:assert/strict";
 import {
-  decideThursdayWarning,
+  decideRegularDayWarning,
   type WarningInput,
   type WarningMeeting,
 } from "../lib/meetings/warning-plan";
@@ -53,18 +53,18 @@ type TestCase = {
 
 const cases: TestCase[] = [
   {
-    name: "1. pondeli, zadna schuzka -> warn:false, not-thursday",
+    name: "1. pondeli, zadna schuzka -> warn:false, not-regular-day",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({ weekdayPrague: "Monday", meeting: null })
       );
-      assert.deepEqual(result, { warn: false, reason: "not-thursday" });
+      assert.deepEqual(result, { warn: false, reason: "not-regular-day" });
     },
   },
   {
     name: "2. ctvrtek, meeting: null -> warn:true, no-meeting",
     run: () => {
-      const result = decideThursdayWarning(baseInput({ meeting: null }));
+      const result = decideRegularDayWarning(baseInput({ meeting: null }));
       assert.equal(result.warn, true);
       assert.equal(result.warn && result.kind, "no-meeting");
     },
@@ -72,7 +72,7 @@ const cases: TestCase[] = [
   {
     name: "3. ctvrtek, schuzka draft -> warn:true, not-voting (scenar 13.8.2026)",
     run: () => {
-      const result = decideThursdayWarning(baseInput({ meeting: meeting("draft") }));
+      const result = decideRegularDayWarning(baseInput({ meeting: meeting("draft") }));
       assert.equal(result.warn, true);
       assert.equal(result.warn && result.kind, "not-voting");
     },
@@ -80,7 +80,7 @@ const cases: TestCase[] = [
   {
     name: "4. ctvrtek, schuzka active -> warn:true, not-voting (legacy stav)",
     run: () => {
-      const result = decideThursdayWarning(baseInput({ meeting: meeting("active") }));
+      const result = decideRegularDayWarning(baseInput({ meeting: meeting("active") }));
       assert.equal(result.warn, true);
       assert.equal(result.warn && result.kind, "not-voting");
     },
@@ -88,7 +88,7 @@ const cases: TestCase[] = [
   {
     name: "5. ctvrtek, schuzka closed -> warn:true, not-voting",
     run: () => {
-      const result = decideThursdayWarning(baseInput({ meeting: meeting("closed") }));
+      const result = decideRegularDayWarning(baseInput({ meeting: meeting("closed") }));
       assert.equal(result.warn, true);
       assert.equal(result.warn && result.kind, "not-voting");
     },
@@ -96,7 +96,7 @@ const cases: TestCase[] = [
   {
     name: "6. ctvrtek, voting, 0 selhani -> warn:false, voting-ok (normalni ctvrtek nesmi spamovat)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({ meeting: meeting("voting"), failedRecipients: [] })
       );
       assert.deepEqual(result, { warn: false, reason: "voting-ok" });
@@ -105,7 +105,7 @@ const cases: TestCase[] = [
   {
     name: "7. ctvrtek, voting, 2 selhani -> warn:true, partial-send, obe jmena v lines",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("voting"),
           failedRecipients: [
@@ -124,7 +124,7 @@ const cases: TestCase[] = [
   {
     name: "8. ctvrtek, voting, 0 selhani, 1 clen bez emailu -> warn:false (clen bez emailu sam o sobe nevaruje)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("voting"),
           failedRecipients: [],
@@ -137,7 +137,7 @@ const cases: TestCase[] = [
   {
     name: "9. ctvrtek, voting, 2 selhani, 1 bez emailu -> warn:true, clen bez emailu je v lines",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("voting"),
           failedRecipients: [
@@ -155,28 +155,28 @@ const cases: TestCase[] = [
   {
     name: "10. ctvrtek, schuzka draft, dispatchFailure no-guests -> warn:true, dispatch-failed (ne not-voting), duvod v lines",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("draft"),
           dispatchFailure: {
             code: "no-guests",
-            message: "Hlasovani nelze spustit, schuzka nema zadneho hosta.",
+            message: "Hlasování nelze spustit, schůzka nemá žádného hosta.",
           },
         })
       );
       assert.equal(result.warn, true);
       assert.equal(result.warn && result.kind, "dispatch-failed");
       const text = (result.warn && result.lines.join("\n")) || "";
-      assert.match(text, /Hlasovani nelze spustit, schuzka nema zadneho hosta\./);
+      assert.match(text, /Hlasování nelze spustit, schůzka nemá žádného hosta\./);
     },
   },
   {
     name: "11. ctvrtek, schuzka voting, dispatchFailure no-guests, 0 selhani -> warn:true, dispatch-failed (ticha dira bez pravidla 3)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("voting"),
-          dispatchFailure: { code: "no-guests", message: "Hlasovani nelze spustit." },
+          dispatchFailure: { code: "no-guests", message: "Hlasování nelze spustit." },
           failedRecipients: [],
         })
       );
@@ -187,7 +187,7 @@ const cases: TestCase[] = [
   {
     name: "12. ctvrtek, schuzka voting, dispatchFailure null, 0 selhani -> warn:false, voting-ok (pravidlo 3 nesmi zabrat kdyz dispatch prosel)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("voting"),
           dispatchFailure: null,
@@ -200,7 +200,7 @@ const cases: TestCase[] = [
   {
     name: "13. ctvrtek, schuzka draft, dispatchFailure infra-error -> warn:true, dispatch-failed, vlastni text v akci (T-006r, MAJOR-1)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("draft"),
           dispatchFailure: {
@@ -220,7 +220,7 @@ const cases: TestCase[] = [
   {
     name: "14. P14a: patek, deferredFirstDispatch se 2 selhanimi -> warn:true, partial-send",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           weekdayPrague: "Friday",
           deferredFirstDispatch: {
@@ -238,18 +238,18 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "15. P14b: patek, deferredFirstDispatch null -> warn:false, not-thursday (zadny cil dnes, nebo dosilani)",
+    name: "15. P14b: patek, deferredFirstDispatch null -> warn:false, not-regular-day (zadny cil dnes, nebo dosilani)",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({ weekdayPrague: "Friday", deferredFirstDispatch: null })
       );
-      assert.deepEqual(result, { warn: false, reason: "not-thursday" });
+      assert.deepEqual(result, { warn: false, reason: "not-regular-day" });
     },
   },
   {
     name: "16. P14c: patek, deferredFirstDispatch s dispatchFailure infra-error -> warn:true, dispatch-failed",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           weekdayPrague: "Friday",
           deferredFirstDispatch: {
@@ -266,7 +266,7 @@ const cases: TestCase[] = [
   {
     name: "17. P15a: ctvrtek, not-voting -> radek vyzvy obsahuje 'Rozeslat hned'",
     run: () => {
-      const result = decideThursdayWarning(baseInput({ meeting: meeting("draft") }));
+      const result = decideRegularDayWarning(baseInput({ meeting: meeting("draft") }));
       assert.equal(result.warn, true);
       const text = (result.warn && result.lines.join("\n")) || "";
       assert.match(text, /Rozeslat hned/);
@@ -275,18 +275,77 @@ const cases: TestCase[] = [
   {
     name: "18. P15b: ctvrtek, dispatch-failed no-guests -> radek vyzvy obsahuje 'Rozeslat hned'",
     run: () => {
-      const result = decideThursdayWarning(
+      const result = decideRegularDayWarning(
         baseInput({
           meeting: meeting("draft"),
           dispatchFailure: {
             code: "no-guests",
-            message: "Hlasovani nelze spustit, schuzka nema zadneho hosta.",
+            message: "Hlasování nelze spustit, schůzka nemá žádného hosta.",
           },
         })
       );
       assert.equal(result.warn, true);
       const text = (result.warn && result.lines.join("\n")) || "";
       assert.match(text, /Rozeslat hned/);
+    },
+  },
+  {
+    name: "19. iter-042 BK5: pravidelny den, meeting null, interni schuzka dnes -> warn:false, internal-day",
+    run: () => {
+      const result = decideRegularDayWarning(baseInput({ meeting: null, hasInternalDay: true }));
+      assert.deepEqual(result, { warn: false, reason: "internal-day" });
+    },
+  },
+  {
+    name: "20. iter-042 BK5: interni den nepotlaci varovani, kdyz schuzka existuje, ale neni voting",
+    run: () => {
+      const result = decideRegularDayWarning(
+        baseInput({ meeting: meeting("draft"), hasInternalDay: true })
+      );
+      assert.equal(result.warn && result.kind, "not-voting");
+    },
+  },
+  {
+    name: "21. iter-042: pravidelny den utery -> v utery varuje (text 'Dnes je utery'), ve ctvrtek ne",
+    run: () => {
+      const tue = decideRegularDayWarning(
+        baseInput({ weekdayPrague: "Tuesday", regularWeekday: 2, todayIso: "2026-09-22", meeting: null })
+      );
+      assert.equal(tue.warn && tue.kind, "no-meeting");
+      assert.match((tue.warn && tue.lines[0]) || "", /^Dnes je úterý a v systému není schůzka/);
+      const thu = decideRegularDayWarning(
+        baseInput({ weekdayPrague: "Thursday", regularWeekday: 2, meeting: null })
+      );
+      assert.deepEqual(thu, { warn: false, reason: "not-regular-day" });
+    },
+  },
+  {
+    name: "22. iter-042: vychozi den (bez regularWeekday) je ctvrtek a text rika 'Dnes je čtvrtek'",
+    run: () => {
+      const result = decideRegularDayWarning(baseInput({ meeting: null }));
+      assert.match((result.warn && result.lines[0]) || "", /^Dnes je čtvrtek a v systému není schůzka/);
+    },
+  },
+  {
+    name: "23. iter-042 (C3): varovani jmenuji tlacitka podle novych popisku",
+    run: () => {
+      const all = [
+        decideRegularDayWarning(baseInput({ meeting: null })),
+        decideRegularDayWarning(baseInput({ meeting: meeting("draft") })),
+        decideRegularDayWarning(
+          baseInput({
+            meeting: meeting("voting"),
+            failedRecipients: [{ memberName: "A", reason: "x" }],
+          })
+        ),
+      ]
+        .map((r) => (r.warn ? r.lines.join("\n") : ""))
+        .join("\n");
+      assert.match(all, /„Spustit hlasování“/);
+      assert.match(all, /„Rozeslat hned“/);
+      assert.match(all, /„Osobní odkazy členů“/);
+      assert.match(all, /„Poslat e-mailem“/);
+      assert.doesNotMatch(all, /Magic link|Regenerovat|Revokovat/);
     },
   },
 ];

@@ -16,6 +16,7 @@ import {
 } from "@/lib/attendance/sheet";
 import { getDayMeta, listAuditForDate, listSheetRows, type DayMeta } from "@/lib/db/queries/attendance";
 import { pragueToday } from "@/lib/members/activity";
+import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 
 export function writeCanFor(session: PermissionHolder | null | undefined): WriteCan {
   return {
@@ -44,13 +45,15 @@ export async function loadDayPayload(
   const today = pragueToday();
   const meta = await getDayMeta(date);
   const modes = modesFor({ date, today, meta, can: writeCanFor(session) });
-  const [rows, audit] = await Promise.all([
+  const [rows, audit, settings] = await Promise.all([
     listSheetRows(date),
     can(session, "attendance.audit_view") ? listAuditForDate(date) : Promise.resolve(null),
+    getChapterSettings(),
   ]);
   return {
     date,
     today,
+    meetingTime: settings.meetingTime,
     viewerId: session.memberId,
     mode: modes.presence.mode,
     excuseMode: modes.excuse.mode,

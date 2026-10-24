@@ -25,7 +25,7 @@ const SEVERITY_BADGE: Record<string, BadgeVariant> = {
   error: "danger",
 };
 
-/** "22. 8. 2026 07:00" — Europe/Prague vždy (R9). */
+/** "22. 8. 2026 07:00" - Europe/Prague vždy (R9). */
 function formatEventTime(date: Date): string {
   const day = date.toLocaleDateString("cs-CZ", {
     day: "numeric",
@@ -46,9 +46,9 @@ function formatEventTime(date: Date): string {
  * Detail běhu `/status/[runId]` (arch iter-027 T-001, sekce 7.2, 7.4 krok
  * 5). Časová osa `ORDER BY occurred_at, seq` (přesně to, co `getEventsByRunId`
  * z T-005 vrací) plus `resend_email_id` / `resend_message_id` k okopírování
- * — to je to, s čím moderátor jde za IT příjemce.
+ * - to je to, s čím moderátor jde za IT příjemce.
  *
- * Stejná role-kontrola jako `/status` (page-level, ne middleware) — tahle
+ * Stejná role-kontrola jako `/status` (page-level, ne middleware) - tahle
  * stránka je za `/status/...`, ne za `/admin`, takže moderátor sem musí.
  */
 export default async function RunDetailPage({
@@ -71,7 +71,7 @@ export default async function RunDetailPage({
     if (code === "42P01") {
       migrationMissing = true;
     } else {
-      console.error("[status-run-detail] nepodarilo se nacist beh:", err);
+      console.error("[status-run-detail] nepodařilo se načíst běh:", err);
       loadError = true;
     }
   }
@@ -81,17 +81,17 @@ export default async function RunDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-text-main">Detail behu</h1>
+        <h1 className="text-2xl font-bold text-text-main">Detail běhu</h1>
         <Link href="/status" className="text-sm text-primary underline">
-          ← Zpet na Provoz
+          ← Zpět na Provoz
         </Link>
       </div>
 
       {migrationMissing && (
         <Card>
           <EmptyState
-            title="Migrace jeste neprobehla"
-            description="Tabulka ops_event jeste neexistuje. Spustte migraci iter-027."
+            title="Provoz se teď nedá zobrazit"
+            description="V databázi chybí tabulka pro provozní záznamy. Napiš adminovi."
           />
         </Card>
       )}
@@ -99,8 +99,8 @@ export default async function RunDetailPage({
       {loadError && (
         <Card>
           <EmptyState
-            title="Data se nepodarilo nacist"
-            description="Zkuste stranku znovu nacist za chvili."
+            title="Data se nepodařilo načíst"
+            description="Zkus stránku za chvíli načíst znovu."
           />
         </Card>
       )}
@@ -108,8 +108,8 @@ export default async function RunDetailPage({
       {!migrationMissing && !loadError && events.length === 0 && (
         <Card>
           <EmptyState
-            title="Beh nenalezen"
-            description="Pro tenhle run_id neni v logu zadny zaznam."
+            title="Běh nenalezen"
+            description="Pro tenhle běh není v logu žádný záznam."
           />
         </Card>
       )}
@@ -130,10 +130,10 @@ export default async function RunDetailPage({
                   <tr className="border-b-2 border-primary text-left">
                     <th className="px-3 py-2 font-semibold">Kdy</th>
                     <th className="px-3 py-2 font-semibold">Druh</th>
-                    <th className="px-3 py-2 font-semibold">Clen</th>
-                    <th className="px-3 py-2 font-semibold">Zprava</th>
+                    <th className="px-3 py-2 font-semibold">Člen</th>
+                    <th className="px-3 py-2 font-semibold">Zpráva</th>
                     <th className="px-3 py-2 font-semibold">Stav u poskytovatele</th>
-                    <th className="px-3 py-2 font-semibold">Resend</th>
+                    <th className="px-3 py-2 font-semibold">Pošta</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,7 +150,7 @@ export default async function RunDetailPage({
                           {kindLabel(event.kind)}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2">{event.memberName ?? "—"}</td>
+                      <td className="px-3 py-2">{event.memberName ?? "–"}</td>
                       <td className="px-3 py-2 max-w-sm">
                         {event.message}
                         {event.detail != null && (
@@ -182,7 +182,7 @@ export default async function RunDetailPage({
                             )}
                           </div>
                         ) : (
-                          "—"
+                          "–"
                         )}
                       </td>
                     </tr>
