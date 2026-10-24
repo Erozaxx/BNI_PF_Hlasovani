@@ -62,7 +62,7 @@ export const MEMBER_TEXTS = {
   save: "Uložit",
   recentNames: "Dřív:",
   legend:
-    "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku, zelený den interní schůzku. ● nepřijdu, ◐ pošlu náhradníka.",
+    "Modrý den je běžná schůzka s hosty, zelený den interní schůzka. ● nepřijdu, ◐ pošlu náhradníka.",
   legendPast: "✓ přítomen, N náhradník, A absence",
   closedPanel: "Na tenhle den už změnu zapíše jen správce docházky.",
   listTitle: "Ohlášené nepřítomnosti",

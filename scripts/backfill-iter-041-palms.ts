@@ -73,12 +73,18 @@ export async function runBackfill(query: QueryFn, opts: RunOptions): Promise<Run
   const fileAliases = opts.aliasFileText ? parseAliasFile(opts.aliasFileText) : new Map<number, string>();
 
   const memberRows = await query(
-    `SELECT id::text AS id, name,
+    `SELECT id::text AS id, name, email,
             (deactivated_at IS NULL OR COALESCE(inactive_until < $1::date, false)) AS active
      FROM member`,
     [opts.today]
   );
-  const members = memberRows.map((r) => ({ id: String(r.id), name: String(r.name), active: Boolean(r.active) }));
+  // E-mail slouží jen k párování; do výpisu ani do logu se nedostane.
+  const members = memberRows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    active: Boolean(r.active),
+    email: r.email === null || r.email === undefined ? null : String(r.email),
+  }));
   const aliasRows = await query(`SELECT name_key, member_id::text AS member_id FROM semafor_name_alias`, []);
   const aliases = new Map<string, string>();
   for (const r of aliasRows) aliases.set(String(r.name_key), String(r.member_id));
@@ -102,12 +108,14 @@ export async function runBackfill(query: QueryFn, opts: RunOptions): Promise<Run
     const unmatchedNames = sheet.rows.filter((r) => unmatched.has(r.rowNo)).map((r) => `řádek ${r.rowNo}: ${r.name}`);
     if (unmatchedNames.length > 0) lines.push(`Nespárováno (jména): ${unmatchedNames.join("; ")}.`);
     const nameOf = new Map(members.map((m) => [m.id, m.name]));
-    const inexact = [...plan.stats.looseRowNos, ...plan.stats.swappedRowNos].sort((a, b) => a - b);
-    const kindOf = new Set(plan.stats.looseRowNos);
+    const inexact = [...plan.stats.looseRowNos, ...plan.stats.swappedRowNos, ...plan.stats.partialRowNos].sort((a, b) => a - b);
+    const looseSet = new Set(plan.stats.looseRowNos);
+    const partialSet = new Set(plan.stats.partialRowNos);
+    const kindLabel = (no: number) => (looseSet.has(no) ? "bez diakritiky" : partialSet.has(no) ? "částečná shoda jména" : "prohozeně");
     for (const no of inexact) {
       const idx = sheet.rows.findIndex((r) => r.rowNo === no);
       const memberName = nameOf.get(matching.memberIds[idx] ?? "") ?? "?";
-      lines.push(`Nepřesné párování, řádek ${no} (${kindOf.has(no) ? "bez diakritiky" : "prohozeně"}): ${sheet.rows[idx].name} -> ${memberName}.`);
+      lines.push(`Nepřesné párování, řádek ${no} (${kindLabel(no)}): ${sheet.rows[idx].name} -> ${memberName}.`);
     }
     for (const n of names) lines.push(`Limit absencí: ${n.name}, před ${n.before}, po ${n.after}.`);
   }

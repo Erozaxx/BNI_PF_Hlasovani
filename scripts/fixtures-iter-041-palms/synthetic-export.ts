@@ -16,6 +16,8 @@ import path from "node:path";
 export interface SyntheticRow {
   first: string;
   last: string;
+  /** Volitelný e-mail (vypíše se jen se `spec.emailColumn`), smyšlený. */
+  email?: string;
   /** Kód pro každý týden, `""` = prázdná buňka (do XML se nezapíše). */
   codes: string[];
 }
@@ -34,6 +36,8 @@ export interface SyntheticSpec {
   weekWidth?: number;
   /** UTF-8 BOM na začátku. */
   bom?: boolean;
+  /** Přidá sloupec `Email` (sloupec 3, před týdny). */
+  emailColumn?: boolean;
   /** Název listu, výchozí `Report`. */
   sheetName?: string;
 }
@@ -70,11 +74,13 @@ export function buildSyntheticExport(spec: SyntheticSpec): string {
 
   // Hlavička: sloučené buňky týdnů a další buňky přes ss:Index.
   const header: string[] = [cell("First Name"), cell("Last Name")];
+  if (spec.emailColumn) header.push(cell("Email", 3));
   spec.weeks.forEach((w, i) => header.push(cell(w, colOfWeek(i), width - 1)));
   rows.push(`<Row>${header.join("")}</Row>`);
 
   for (const r of spec.rows) {
     const cells: string[] = [cell(r.first), cell(r.last)];
+    if (spec.emailColumn && r.email) cells.push(cell(r.email, 3));
     r.codes.forEach((code, i) => {
       if (code !== "") cells.push(cell(code, colOfWeek(i)));
     });

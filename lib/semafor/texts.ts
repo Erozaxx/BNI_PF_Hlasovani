@@ -57,6 +57,8 @@ export const SEMAFOR_TEXTS = {
   areaNames: ["Docházka", "CEU", "1-2-1", "Doporučení", "TYFCB", "Hosté", "Sponzoři"] as const,
   colors: { green: "Zelená", yellow: "Žlutá", red: "Červená", grey: "Šedá" } as Record<SemaforColor, string>,
   matchLabels: {
+    email: "Shoda podle e-mailu",
+    partial: "Částečná shoda jména, ověř",
     exact: "Shoda",
     alias: "Zapamatováno",
     loose: "Bez diakritiky, ověř",

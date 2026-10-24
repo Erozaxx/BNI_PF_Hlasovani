@@ -304,11 +304,11 @@ const tests: TestCase[] = [
       assert.equal(INTERNAL_TEXTS.ariaInternal, "interní schůzka");
       assert.equal(
         MEMBER_TEXTS.legend,
-        "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku, zelený den interní schůzku. ● nepřijdu, ◐ pošlu náhradníka."
+        "Modrý den je běžná schůzka s hosty, zelený den interní schůzka. ● nepřijdu, ◐ pošlu náhradníka."
       );
       assert.equal(
         PLAN_TEXTS.legend,
-        "Číslo pod dnem je počet omluvených. Podtržený den má založenou schůzku, zelený den interní schůzku."
+        "Číslo pod dnem je počet omluvených. Modrý den je běžná schůzka s hosty, zelený den interní schůzka."
       );
       for (const v of Object.values(INTERNAL_TEXTS)) assert.ok(!v.includes(EM_DASH));
       for (const v of Object.values(INTERNAL_TEXTS)) {
@@ -339,7 +339,7 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "12. dayCellClass: internal zeleně a ne navy, běžná ve čtvrtek navy, obě podtržená, výběr ring",
+    name: "12. dayCellClass: internal zeleně a ne navy, běžná schůzka modře v kterýkoli den, čtvrtek bez schůzky bez podkladu, obě podtržená, výběr ring",
     run: () => {
       const internal = dayCellClass("internal", true, false, false);
       assert.ok(internal.includes("bg-success-light") && internal.includes("text-success"));
@@ -347,7 +347,25 @@ const tests: TestCase[] = [
       assert.ok(dayCellClass("internal", false, false, false).includes("bg-success-light"), "i mimo čtvrtek");
       assert.ok(dayCellClass("meeting", true, false, false).includes("bg-navy-light"));
       assert.ok(!dayCellClass("meeting", true, false, false).includes("bg-success-light"));
-      assert.ok(dayCellClass("none", true, false, false).includes("bg-navy-light"));
+      assert.ok(dayCellClass("meeting", false, false, false).includes("bg-navy-light"), "běžná schůzka i mimo čtvrtek (úterý)");
+      assert.ok(!dayCellClass("internal", false, false, false).includes("bg-navy-light"), "interní v pondělí je zelená");
+      const emptyThu = dayCellClass("none", true, false, false);
+      assert.ok(!emptyThu.includes("bg-navy-light") && !emptyThu.includes("bg-success-light") && emptyThu.includes("font-semibold"), "čtvrtek bez schůzky");
+      assert.ok(!dayCellClass("none", false, false, false).includes("font-semibold"));
+      // přebitá interní (obě v jeden den) je modrá
+      const overridden = dayCellClass(dayTone({ hasMeeting: true, hasInternal: true }), false, false, false);
+      assert.ok(overridden.includes("bg-navy-light") && !overridden.includes("bg-success-light"));
+      // kontrast WCAG AA (4,5:1) textu na podkladu, tokeny z globals.css
+      const css = read("app/globals.css");
+      const tok = (n: string) => css.match(new RegExp(`--color-${n}:\\s*(#[0-9a-fA-F]{6})`))![1];
+      const lum = (h: string) => {
+        const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      };
+      const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+      assert.ok(ratio(tok("success"), tok("success-light")) >= 4.5, "zelená AA");
+      assert.ok(ratio(tok("text-primary"), tok("navy-light")) >= 4.5, "modrá AA");
+      assert.ok(dayCellClass("meeting", false, true, false).includes("text-text-main"), "minulá běžná schůzka drží tmavý text");
       assert.ok(dayCellClass("none", false, true, false).includes("text-text-muted"));
       assert.ok(dayCellClass("internal", false, false, true).includes("ring-2 ring-primary"));
       assert.ok(dayCellClass("none", false, false, false).includes("min-h-[44px]"));

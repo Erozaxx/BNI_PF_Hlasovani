@@ -24,7 +24,7 @@ import {
 export const PLAN_TEXTS = {
   title: "Omluvy",
   legend:
-    "Číslo pod dnem je počet omluvených. Podtržený den má založenou schůzku, zelený den interní schůzku.",
+    "Číslo pod dnem je počet omluvených. Modrý den je běžná schůzka s hosty, zelený den interní schůzka.",
   empty: "–",
   link: "Zápis dne",
   prevMonth: "Předchozí měsíc",

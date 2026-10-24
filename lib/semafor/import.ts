@@ -68,7 +68,8 @@ export function matchFile(
   return matchNames(
     rows.map((r) => r.name),
     members,
-    aliases
+    aliases,
+    rows.map((r) => r.email)
   );
 }
 

@@ -457,7 +457,7 @@ const tests: TestCase[] = [
       assert.equal(MEMBER_TEXTS.recentNames, "Dřív:");
       assert.equal(
         MEMBER_TEXTS.legend,
-        "Schůzky bývají ve čtvrtek. Podtržený den má založenou schůzku, zelený den interní schůzku. ● nepřijdu, ◐ pošlu náhradníka."
+        "Modrý den je běžná schůzka s hosty, zelený den interní schůzka. ● nepřijdu, ◐ pošlu náhradníka."
       );
       assert.equal(MEMBER_TEXTS.legendPast, "✓ přítomen, N náhradník, A absence");
       assert.equal(MEMBER_TEXTS.closedPanel, "Na tenhle den už změnu zapíše jen správce docházky.");

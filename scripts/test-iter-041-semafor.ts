@@ -1247,6 +1247,155 @@ const tests: TestCase[] = [
       assert.ok(!stripComments(read("actions/semafor.ts")).includes("memberName"), "akce nelogují jména členů");
     },
   },
+  {
+    name: "37. částečná shoda jmen: Karla Nová vs Karla Nová Svobodová = partial, exact má přednost, jednoslovné ne, dva kandidáti = ambiguous",
+    run: () => {
+      const ms: MatchMember[] = [
+        { id: M(1), name: "Karla Nová", active: true },
+        { id: M(2), name: "Jan Novák", active: true },
+        { id: M(3), name: "Jana Nováková", active: true },
+        { id: M(4), name: "Petr", active: true },
+        { id: M(5), name: "Eva Dlouhá Krátká", active: true },
+        { id: M(6), name: "Eva Dlouhá Úzká", active: true },
+      ];
+      const r = matchNames(
+        ["Karla Nová Svobodová", "Jan Novák", "Jana Nováková", "Petr Veliký", "Eva Dlouhá", "Nová", "Karla Svobodová"],
+        ms,
+        new Map()
+      );
+      assert.deepEqual(r.map((x) => x.kind), ["partial", "exact", "exact", "none", "ambiguous", "none", "none"]);
+      assert.equal(r[0].memberId, M(1));
+      assert.equal(r[1].memberId, M(2), "Jan Novák není partial k Jana Nováková");
+      assert.equal(r[2].memberId, M(3));
+      assert.deepEqual(r[4].candidates, [M(5), M(6)]);
+      // opačný směr: jméno v aplikaci je delší než v souboru
+      const rev = matchNames(["Karla Nová"], [{ id: M(1), name: "Karla Nová Svobodová", active: true }], new Map());
+      assert.equal(rev[0].kind, "partial");
+      // diakritika a velikost písmen se ignorují
+      const loose = matchNames(["KARLA NOVA SVOBODOVA"], [{ id: M(1), name: "Karla Nová", active: true }], new Map());
+      assert.equal(loose[0].kind, "partial");
+      // partial se uloží jako alias, i když se nezměnil
+      const rows = [{ index: 0, match: r[0], hasError: false }];
+      const resolved = resolveMapping(rows, new Map(), new Set(ms.map((m) => m.id)));
+      assert.ok(resolved.ok);
+      if (resolved.ok) {
+        assert.deepEqual(aliasesToWrite(["Karla Nová Svobodová"], rows, resolved.resolved), [
+          { nameKey: nameKey("Karla Nová Svobodová"), memberId: M(1) },
+        ]);
+      }
+      assert.equal(SEMAFOR_TEXTS.matchLabels.partial, "Částečná shoda jména, ověř");
+    },
+  },
+  {
+    name: "38. e-mail má přednost před jménem i aliasem, jiný e-mail nespáruje, bez e-mailu se páruje jménem",
+    run: () => {
+      const ms: MatchMember[] = [
+        { id: M(1), name: "Marta Vzorná", active: true, email: "marta.vzorna@example.test" },
+        { id: M(2), name: "Eva Vzorová", active: true, email: "eva@example.test" },
+        { id: M(3), name: "Bez Mailu", active: true, email: null },
+      ];
+      const aliases = new Map([[nameKey("Eva Vzorová"), M(3)]]);
+      const r = matchNames(
+        ["Marta Vzorná Pokusná", "Eva Vzorová", "Eva Vzorová", "Marta Vzorná Testovací", "Bez Mailu", "Nikdo Neznámý"],
+        ms,
+        aliases,
+        [" marta.vzorna@EXAMPLE.test ", "EVA@example.test", null, "jiny@example.test", "", "neznamy@example.test"]
+      );
+      // řádky 2 a 3 mají stejné jméno: duplicate by platilo, ale e-mail rozhoduje první
+      assert.equal(r[0].kind, "email");
+      assert.equal(r[0].memberId, M(1));
+      assert.equal(r[1].kind, "email");
+      assert.equal(r[1].memberId, M(2), "e-mail přebije alias");
+      assert.equal(r[2].kind, "duplicate", "stejné jméno bez e-mailu zůstává duplicate");
+      assert.equal(r[3].kind, "partial", "cizí e-mail nespáruje, rozhodne částečná shoda jména");
+      assert.equal(r[3].memberId, M(1));
+      assert.equal(r[4].kind, "exact");
+      assert.equal(r[5].kind, "none", "neznámý e-mail a neznámé jméno");
+      // e-mail, který je v souboru dvakrát, se nepoužije
+      const twice = matchNames(["A B", "C D"], [{ id: M(1), name: "Xx Yy", active: true, email: "x@example.test" }], new Map(), [
+        "x@example.test",
+        "X@example.test",
+      ]);
+      assert.deepEqual(twice.map((x) => x.kind), ["none", "none"]);
+      // bez čtvrtého parametru funguje jako dřív
+      assert.equal(matchNames(["Eva Vzorová"], ms, new Map())[0].kind, "exact");
+      // e-mail se uloží jako alias jen při ručně změněné volbě, nezměněná shoda alias nezapisuje
+      const rows = [{ index: 0, match: r[0], hasError: false }];
+      const resolved = resolveMapping(rows, new Map(), new Set(ms.map((m) => m.id)));
+      assert.ok(resolved.ok);
+      if (resolved.ok) assert.deepEqual(aliasesToWrite(["Marta Vzorná Pokusná"], rows, resolved.resolved), []);
+    },
+  },
+  {
+    name: "39. import skóre: volitelný sloupec e-mailu (Email, E-mail, Email Address) se páruje, není mezi neznámými sloupci, bez něj vše jako dřív",
+    run: async () => {
+      const mkRows = (head: string): Cell[][] => [
+        [...HEADER, head],
+        [...dataRow("Marta Vzorná Pokusná", 60), "marta.vzorna@example.test"],
+        [...dataRow("Eva Vzorová", 50), ""],
+      ];
+      const ms: MatchMember[] = [
+        { id: M(1), name: "Marta Vzorná", active: true, email: "marta.vzorna@example.test" },
+        { id: M(2), name: "Eva Vzorová", active: true, email: "eva@example.test" },
+      ];
+      for (const head of ["Email", "E-mail", "EMAIL ADDRESS", " e-mail address "]) {
+        const file = analyzeFile(await buildXlsx(mkRows(head)));
+        assert.deepEqual(file.unknownColumns, [], `${head} není neznámý sloupec`);
+        assert.equal(file.rows[0].email, "marta.vzorna@example.test");
+        assert.equal(file.rows[1].email, null);
+        const m = matchFile(file.rows, ms, new Map());
+        assert.deepEqual(m.map((x) => x.kind), ["email", "exact"], head);
+        assert.equal(m[0].memberId, M(1));
+        // náhled: DTO nenese e-mail
+        const preview = buildPreviewRows(file.rows, m);
+        assert.equal(JSON.stringify(preview).includes("example.test"), false, "e-mail není v náhledu");
+        assert.equal(preview[0].label, SEMAFOR_TEXTS.matchLabels.email);
+      }
+      // bez sloupce e-mailu: jen částečná shoda jména
+      const plain = analyzeFile(await buildXlsx([HEADER, dataRow("Marta Vzorná Pokusná", 60)]));
+      assert.equal(plain.rows[0].email, null);
+      assert.equal(matchFile(plain.rows, ms, new Map())[0].kind, "partial");
+      // dva sloupce e-mailu = zdvojená hlavička
+      await expectFileError(async () => analyzeFile(await buildXlsx([[...HEADER, "Email", "E-mail"]])), "dupColumn");
+      // uložení: plán se řádky spárovanými podle e-mailu a částečné shody
+      const file = analyzeFile(await buildXlsx(mkRows("Email")));
+      const plan = buildSavePlan(file, ms, new Map(), new Map());
+      assert.ok(plan.ok);
+      if (plan.ok) {
+        assert.deepEqual(plan.plan.rows.map((x) => x.member_id), [M(1), M(2)]);
+        assert.deepEqual(plan.plan.aliases, [], "shoda podle e-mailu ani exact se neukládá jako alias");
+        assert.equal(JSON.stringify(plan.plan).includes("example.test"), false, "plán uložení neobsahuje e-mail");
+      }
+    },
+  },
+  {
+    name: "40. e-mail se nedostane ven: listMembersForMatch jen na serveru, props stránky importu, DTO náhledu, události a logy bez e-mailu",
+    run: () => {
+      const queries = stripComments(read("lib/db/queries/semafor.ts"));
+      const body = queries.slice(queries.indexOf("export async function listMembersForMatch"), queries.indexOf("export interface AliasRow"));
+      assert.ok(body.includes("m.email"), "dotaz čte e-mail pro párování");
+      // volající: akce a nikdo jiný (stránky a komponenty ho nevolají)
+      const users: string[] = [];
+      for (const dir of ["app", "components", "actions", "lib"]) {
+        for (const f of walk(dir)) {
+          if (!/\.(ts|tsx)$/.test(f)) continue;
+          if (read(f).includes("listMembersForMatch")) users.push(f);
+        }
+      }
+      assert.deepEqual(users.sort(), ["actions/semafor.ts", "lib/db/queries/semafor.ts"]);
+      const page = stripComments(read("app/(app)/semafor/import/page.tsx"));
+      assert.equal(/email/i.test(page), false, "stránka importu nezná e-mail");
+      assert.equal(/email/i.test(stripComments(read("components/semafor/ImportSemaforForm.tsx"))), false, "formulář nezná e-mail");
+      const act = stripComments(read("actions/semafor.ts"));
+      assert.ok(act.includes("members: members.map((m) => ({ id: m.id, name: m.name, active: m.active }))"), "klient dostane jen id, jméno, aktivitu");
+      assert.equal(/email/i.test(act), false, "akce e-mail nikam nepředává ani nelogují");
+      const imp = stripComments(read("lib/semafor/import.ts"));
+      const dto = imp.slice(imp.indexOf("export interface PreviewRowDto"), imp.indexOf("export function matchFile"));
+      assert.equal(/email/i.test(dto), false, "DTO náhledu bez e-mailu");
+      assert.equal(/email/i.test(stripComments(read("lib/semafor/events.ts"))), false, "události bez e-mailu");
+      assert.equal(/email/i.test(stripComments(read("lib/semafor/errors.ts"))), false);
+    },
+  },
 ];
 
 (async () => {
