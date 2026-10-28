@@ -3,6 +3,7 @@ import { getMeetingWithGuests } from "@/lib/db/queries/meetings";
 import { getVotingResults } from "@/lib/db/queries/votes";
 import { getNotesForGuest } from "@/lib/db/queries/notes";
 import { getManagementRecipients } from "@/lib/db/queries/members";
+import { passwordResetEmailContent } from "@/lib/email/password-reset-template";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -717,6 +718,40 @@ export async function sendSetPasswordLinkEmail(opts: {
       footer,
     }),
     text,
+    url: opts.url,
+  });
+}
+
+/**
+ * iter-043: odkaz na nové heslo ze samoobsluhy „Zapomněl(a) jsem heslo".
+ * Volá se uvnitř `waitUntil`, odpověď na /login na mail nečeká.
+ */
+export async function sendPasswordResetEmail(opts: {
+  memberId: string;
+  to: string;
+  name: string;
+  url: string;
+  appUrl: string;
+}): Promise<AccessEmailResult> {
+  const c = passwordResetEmailContent({
+    name: opts.name,
+    to: opts.to,
+    url: opts.url,
+    appUrl: opts.appUrl,
+  });
+  return sendAccessEmail({
+    logTag: "sendPasswordResetEmail",
+    memberId: opts.memberId,
+    to: opts.to,
+    subject: c.subject,
+    html: accessEmailHtml({
+      heading: "BNI Plzeň",
+      paragraphs: c.lines,
+      buttonLabel: c.buttonLabel,
+      url: opts.url,
+      footer: c.footer,
+    }),
+    text: c.text,
     url: opts.url,
   });
 }

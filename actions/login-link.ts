@@ -17,6 +17,7 @@ import {
   consumeSetPasswordLink,
   requestLoginLink,
 } from "@/lib/auth/login-link";
+import { requestPasswordReset } from "@/lib/auth/password-reset";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import type { OpsEventInput } from "@/lib/ops/types";
 import { randomUUID } from "node:crypto";
@@ -31,6 +32,20 @@ export async function requestLoginLinkAction(
 ): Promise<ActionResult<{ message: string }>> {
   const ip = getClientIp(await headers());
   const result = await requestLoginLink(email, ip);
+  if (!result.ok) return { success: false, error: result.error };
+  return { success: true, data: { message: result.message } };
+}
+
+/**
+ * iter-043: „Zapomněl(a) jsem heslo" v kroku hesla na /login. Vždy stejná
+ * odpověď a doba aspoň 2,5 s (logika v lib/auth/password-reset-request.ts).
+ * Žádost nemění heslo ani session.
+ */
+export async function requestPasswordResetAction(
+  email: string
+): Promise<ActionResult<{ message: string }>> {
+  const ip = getClientIp(await headers());
+  const result = await requestPasswordReset(email, ip);
   if (!result.ok) return { success: false, error: result.error };
   return { success: true, data: { message: result.message } };
 }

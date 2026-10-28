@@ -1,5 +1,5 @@
 /**
- * iter-032 (arch T-001, sekce 5.2, 6) — přihlášení člena odkazem z mailu a
+ * iter-032 (arch T-001, sekce 5.2, 6), přihlášení člena odkazem z mailu a
  * odkaz „nastav si heslo" pro vedení. Čistá rozhodnutí jsou v
  * login-link-core.ts, tady je DB, mail a session.
  *
@@ -12,7 +12,9 @@ import { z } from "zod";
 import { getMemberByEmail, getMemberById, setOwnPassword } from "@/lib/db/queries/members";
 import {
   consumeLinkByHash,
+  consumePasswordLinkByHash,
   findActiveLinkMemberId,
+  findActivePasswordLinkMemberId,
   insertLoginLink,
   rotateSetPasswordLink,
   upsertSetPasswordLink,
@@ -210,7 +212,8 @@ export async function consumeLoginLink(
 }
 
 /**
- * Odkaz „nastav si heslo" (5.2 body 1 až 6). Pořadí kroků je v
+ * Odkaz „nastav si heslo" (5.2 body 1 až 6), od admina (`set-password`) i ze
+ * samoobsluhy (`password-reset`, iter-043). Pořadí kroků je v
  * `runSetPasswordConsume` (set-password-consume.ts): levné ověření odkazu,
  * pak validace hesla, bcrypt a teprve potom atomické spotřebování
  * (security L-1). Session vedení dostane jen člen, který roli v DB má.
@@ -229,9 +232,9 @@ export async function consumeSetPasswordLink(
       {
         isBlocked: () => linkUseBlocked(ip),
         recordFailure: () => recordLinkUseFailure(ip),
-        findActiveLink: (tokenHash) => findActiveLinkMemberId(tokenHash, "set-password"),
+        findActiveLink: (tokenHash) => findActivePasswordLinkMemberId(tokenHash),
         hashPassword: (pw) => hash(pw, 12),
-        consumeLink: (tokenHash) => consumeLinkByHash(tokenHash, "set-password"),
+        consumeLink: (tokenHash) => consumePasswordLinkByHash(tokenHash),
         setPassword: (memberId, passwordHash) => setOwnPassword(memberId, passwordHash),
       },
       { token, password, confirm }

@@ -651,7 +651,8 @@ const cases: TestCase[] = [
       const src = readSrc("lib/auth/login-link.ts");
       const body = declaration(src, "consumeSetPasswordLink");
       assert.ok(body.includes("runSetPasswordConsume("));
-      assert.ok(body.includes("findActiveLinkMemberId("));
+      // iter-043: předfiltr i spotřebování jdou přes oba účely odkazu pro heslo.
+      assert.ok(body.includes("findActivePasswordLinkMemberId("));
       assert.equal((src.match(/\bhash\(/g) ?? []).length, 1, "hash( jen v deps");
     },
   },
@@ -674,11 +675,13 @@ const cases: TestCase[] = [
       const src = readSrc("lib/db/queries/members.ts");
       const reset = declaration(src, "resetPasswordGuarded");
       assert.equal((reset.match(/getDb\(\)/g) ?? []).length, 1);
-      assert.ok(/UPDATE member_login_link SET used_at = now\(\)[\s\S]*purpose = 'set-password'/.test(reset));
+      assert.ok(/UPDATE member_login_link SET used_at = now\(\)[\s\S]*purpose IN \('set-password', 'password-reset'\)/.test(reset));
       const role = declaration(src, "setMemberRoleGuarded");
       assert.equal((role.match(/getDb\(\)/g) ?? []).length, 1);
       assert.ok(/password\.mode === "keep"\s*\?\s*sql``/.test(role), "keep bez zneplatnění");
-      assert.ok(/UPDATE member_login_link SET used_at = now\(\)[\s\S]*purpose = 'set-password'/.test(role));
+      // iter-043 (review M-2): demote i clear zneplatní i čekající password-reset
+      assert.ok(/UPDATE member_login_link SET used_at = now\(\)[\s\S]*purpose IN \('set-password', 'password-reset'\)/.test(role));
+      assert.ok(!/purpose = 'set-password'/.test(role), "žádné zneplatnění jen set-password");
     },
   },
   {
@@ -931,7 +934,10 @@ const cases: TestCase[] = [
       const link = declaration(src, "handleSendLink");
       assert.ok(link.includes("setMessage(null)") && link.includes("setFormError(null)"));
       // L-2: nápověda pod heslem.
-      assert.ok(src.includes("Heslo ještě nemáš? Nastav si ho odkazem z mailu"));
+      // iter-043: nápověda nově nabízí „Zapomněl(a) jsem heslo“.
+      assert.ok(src.includes("Heslo ještě nemáš nebo jsi ho zapomněl(a)?"));
+      const forgot = declaration(src, "handleForgotPassword");
+      assert.ok(forgot.includes("setMessage(null)") && forgot.includes("setFormError(null)"));
       // iter-037 (T-003b): stránka /magic je smazaná (mrtvá, nic na ni nevedlo),
       // test 12d v test-iter-037-members.ts hlídá, že neexistuje.
     },

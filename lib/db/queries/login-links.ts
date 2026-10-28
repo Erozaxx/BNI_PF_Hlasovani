@@ -1,15 +1,15 @@
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { memberLoginLink } from "@/lib/db/schema";
-import type { LoginLinkPurpose } from "@/lib/auth/login-link-core";
+import { PASSWORD_LINK_PURPOSES, type LoginLinkPurpose } from "@/lib/auth/login-link-core";
 
 function getDb() {
   return drizzle(getSql());
 }
 
 /**
- * iter-032 (arch 6, 5.2, 8.1) — jednorázové odkazy `member_login_link`.
+ * iter-032 (arch 6, 5.2, 8.1), jednorázové odkazy `member_login_link`.
  * Do DB jde jen SHA-256 hash tokenu. Bez transakcí (LL-003).
  */
 export async function insertLoginLink(input: {
@@ -73,6 +73,76 @@ export async function findActiveLinkMemberId(
     )
     .limit(1);
   return rows[0]?.memberId ?? null;
+}
+
+/**
+ * iter-043: atomické spotřebování odkazu pro heslo, účel `set-password` NEBO
+ * `password-reset` (`PASSWORD_LINK_PURPOSES`). Odkaz člena (`login`) tudy
+ * heslo nenastaví. Vrací `member_id`, nebo `null`.
+ */
+export async function consumePasswordLinkByHash(tokenHash: string): Promise<string | null> {
+  const rows = await getDb()
+    .update(memberLoginLink)
+    .set({ usedAt: sql`now()` })
+    .where(
+      and(
+        eq(memberLoginLink.tokenHash, tokenHash),
+        inArray(memberLoginLink.purpose, [...PASSWORD_LINK_PURPOSES]),
+        isNull(memberLoginLink.usedAt),
+        sql`${memberLoginLink.expiresAt} > now()`
+      )
+    )
+    .returning({ memberId: memberLoginLink.memberId });
+  return rows[0]?.memberId ?? null;
+}
+
+/** iter-043: levný předfiltr před bcrypt pro oba účely odkazu pro heslo. */
+export async function findActivePasswordLinkMemberId(tokenHash: string): Promise<string | null> {
+  const rows = await getDb()
+    .select({ memberId: memberLoginLink.memberId })
+    .from(memberLoginLink)
+    .where(
+      and(
+        eq(memberLoginLink.tokenHash, tokenHash),
+        inArray(memberLoginLink.purpose, [...PASSWORD_LINK_PURPOSES]),
+        isNull(memberLoginLink.usedAt),
+        sql`${memberLoginLink.expiresAt} > now()`
+      )
+    )
+    .limit(1);
+  return rows[0]?.memberId ?? null;
+}
+
+/**
+ * iter-043: vystavení odkazu `password-reset` jedním příkazem. Částečný
+ * unikátní index `mll_one_active_password_reset` drží nejvýš jeden nepoužitý
+ * odkaz na člena, další žádost vymění token a platnost (starý mail přestane
+ * platit v tomtéž příkazu). Bez migrace spadne (23514 nebo 42P10), volající
+ * to chytí. Odkaz `set-password` od admina se nemění.
+ *
+ * Security M-1b: nepoužitý odkaz mladší než `freshMinutes` se nepřepisuje
+ * (podmínka `DO UPDATE ... WHERE` ve stejném příkazu, žádné okno mezi čtením a
+ * zápisem). Vrací `true`, když byl odkaz vystaven nebo vyměněn, `false` když
+ * zůstal čerstvý odkaz. Bez nové migrace (`created_at` už sloupec je).
+ */
+export async function upsertPasswordResetLink(input: {
+  memberId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  freshMinutes: number;
+}): Promise<boolean> {
+  const result = await getDb().execute<{ member_id: string }>(sql`
+    INSERT INTO member_login_link (member_id, purpose, token_hash, expires_at)
+    VALUES (${input.memberId}::uuid, 'password-reset', ${input.tokenHash}, ${input.expiresAt.toISOString()}::timestamptz)
+    ON CONFLICT (member_id) WHERE purpose = 'password-reset' AND used_at IS NULL
+    DO UPDATE SET
+      token_hash = EXCLUDED.token_hash,
+      created_at = now(),
+      expires_at = EXCLUDED.expires_at
+    WHERE member_login_link.created_at < now() - make_interval(mins => ${input.freshMinutes}::int)
+    RETURNING member_id
+  `);
+  return result.rows.length > 0;
 }
 
 /**

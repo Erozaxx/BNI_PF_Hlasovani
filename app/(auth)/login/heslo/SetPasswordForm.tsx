@@ -36,7 +36,7 @@ export function SetPasswordForm({ token }: { token: string }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {linkDead ? "Odkaz už neplatí. Požádej admina o nový." : error}
+          {linkDead ? "Odkaz už neplatí. Nový si vyžádej na přihlášení přes Zapomněl(a) jsem heslo, nebo napiš adminovi." : error}
         </div>
       )}
       <div>

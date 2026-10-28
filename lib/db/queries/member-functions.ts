@@ -225,7 +225,7 @@ export async function removeMemberFunctionGuarded(input: {
     ), revoked AS (
       UPDATE member_login_link SET used_at = now()
       WHERE member_id IN (SELECT id FROM upd)
-        AND purpose = 'set-password'
+        AND purpose IN ('set-password', 'password-reset')
         AND used_at IS NULL
     )
     SELECT ok.id, ok.name, ok.email,

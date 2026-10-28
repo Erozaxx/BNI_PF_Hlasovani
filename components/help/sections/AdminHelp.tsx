@@ -97,7 +97,7 @@ export function AdminHelp({
         faq={canManageAccess ? [
           {
             q: "Člen zapomněl heslo.",
-            a: "Na stránce člena „Poslat odkaz pro nové heslo“. Staré heslo hned přestane platit. Když mail nedorazí, „Zobrazit odkaz ke zkopírování“ a pošlete mu ho jinak.",
+            a: "Člen si může odkaz poslat sám na přihlášení přes „Zapomněl(a) jsem heslo“, staré heslo mu přitom platí dál. Jinak na stránce člena „Poslat odkaz pro nové heslo“. Staré heslo hned přestane platit. Když mail nedorazí, „Zobrazit odkaz ke zkopírování“ a pošlete mu ho jinak.",
           },
           {
             q: "Jak funkci a roli odeberu?",

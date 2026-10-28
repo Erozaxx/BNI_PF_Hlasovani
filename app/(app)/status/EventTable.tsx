@@ -53,6 +53,7 @@ export const KIND_LABELS: Record<string, string> = {
   "access.role-changed": "Změna role",
   "access.password-reset": "Heslo zrušeno",
   "access.password-set": "Heslo nastaveno",
+  "access.password-reset-requested": "Žádost o nové heslo",
   "access.password-link-copied": "Odkaz ke zkopírování",
   "access.password-link-resent": "Odkaz poslán znovu",
   // iter-037 (gate sekce 5)

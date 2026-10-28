@@ -68,7 +68,7 @@ export async function getMemberById(id: string) {
  * joinedAt (iter-020, MAJOR-3): optional "YYYY-MM-DD" entry date, normally
  * sourced from the XLSX import's "Datum vstupu" column. When omitted/null the
  * column is left out of the insert values entirely so the schema's own
- * default (CURRENT_DATE) applies — the import must never be blocked by a
+ * default (CURRENT_DATE) applies, the import must never be blocked by a
  * missing entry date.
  */
 export async function createMember(data: {
@@ -174,7 +174,7 @@ export async function updateMemberEmail(
 
 /**
  * Update the joined_at (entry date) for a member. Admin-only at the action
- * layer (arch 7.1) — this query itself has no guard, callers must enforce it.
+ * layer (arch 7.1), this query itself has no guard, callers must enforce it.
  * `joinedAt` is a "YYYY-MM-DD" string (DATE column, no timezone).
  */
 export async function updateMemberJoinedAt(
@@ -273,7 +273,7 @@ export async function getMemberByTokenHash(tokenHash: string) {
   const m = results[0] ?? null;
   if (!m) return null;
 
-  // Check expiry only — token is valid for its full 7-day lifetime
+  // Check expiry only, token is valid for its full 7-day lifetime
   if (!m.tokenExpiresAt || m.tokenExpiresAt < new Date()) return null;
 
   return m;
@@ -477,7 +477,7 @@ export async function setMemberRoleGuarded(input: {
           AND (SELECT count(*) FROM managers WHERE managers.id <> member.id) = 0
         )`;
 
-  // `clear`: odkazy `set-password` se zneplatní jen tomu, komu se heslo
+  // `clear`: odkazy pro heslo (`set-password`, `password-reset`) se zneplatní jen tomu, komu se heslo
   // opravdu smazalo (bez funkce). Držitel funkce si heslo i odkaz ponechává.
   const revokeLinks =
     password.mode === "keep"
@@ -486,7 +486,7 @@ export async function setMemberRoleGuarded(input: {
         ? sql`, revoked AS (
           UPDATE member_login_link SET used_at = now()
           WHERE member_id IN (SELECT id FROM upd)
-            AND purpose = 'set-password'
+            AND purpose IN ('set-password', 'password-reset')
             AND used_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM member_function mf WHERE mf.member_id = member_login_link.member_id
@@ -495,7 +495,7 @@ export async function setMemberRoleGuarded(input: {
         : sql`, revoked AS (
           UPDATE member_login_link SET used_at = now()
           WHERE member_id IN (SELECT id FROM upd)
-            AND purpose = 'set-password'
+            AND purpose IN ('set-password', 'password-reset')
             AND used_at IS NULL
         )`;
 
@@ -557,7 +557,8 @@ export async function deleteMemberGuarded(
  *
  * Security L-5: nepoužité odkazy `set-password` přestanou platit v tomtéž
  * příkazu. Reset tak funguje jako nouzové zablokování i tehdy, když
- * následné vystavení odkazu nebo mail selže.
+ * následné vystavení odkazu nebo mail selže. iter-043 (gate K5): zneplatní
+ * i čekající `password-reset` ze samoobsluhy.
  */
 export async function resetPasswordGuarded(
   targetId: string,
@@ -580,7 +581,7 @@ export async function resetPasswordGuarded(
     ), revoked AS (
       UPDATE member_login_link SET used_at = now()
       WHERE member_id IN (SELECT id FROM upd)
-        AND purpose = 'set-password'
+        AND purpose IN ('set-password', 'password-reset')
         AND used_at IS NULL
     )
     SELECT id, email, name FROM upd
@@ -600,29 +601,40 @@ export async function setOwnPassword(
   memberId: string,
   passwordHash: string
 ): Promise<{ sessionVersion: number; managementRole: string | null; name: string } | null> {
-  const rows = await getDb()
-    .update(member)
-    .set({
-      passwordHash,
-      sessionVersion: sql`${member.sessionVersion} + 1`,
-    })
-    .where(
-      and(
-        eq(member.id, memberId),
-        memberActiveSql("member"),
-        sql`(${member.managementRole} IS NOT NULL OR EXISTS (
+  // iter-043: jeden příkaz s CTE (LL-003, bez transakce). Uložení hesla a
+  // zneplatnění ostatních nepoužitých odkazů pro heslo (`set-password` i
+  // `password-reset`), ať po nastavení nezůstane čekající odkaz od admina
+  // (jinak by `hasRealPassword` hlásil „bez hesla").
+  const result = await getDb().execute<{
+    session_version: number;
+    management_role: string | null;
+    name: string;
+  }>(sql`
+    WITH upd AS (
+      UPDATE member SET
+        password_hash   = ${passwordHash}::text,
+        session_version = session_version + 1
+      WHERE id = ${memberId}::uuid
+        AND ${memberActiveSql("member")}
+        AND (management_role IS NOT NULL OR EXISTS (
           SELECT 1 FROM member_function mf WHERE mf.member_id = ${memberId}::uuid
-        ))`
-      )
+        ))
+      RETURNING id, session_version, management_role, name
+    ), revoked AS (
+      UPDATE member_login_link SET used_at = now()
+      WHERE member_id IN (SELECT id FROM upd)
+        AND purpose IN ('set-password', 'password-reset')
+        AND used_at IS NULL
     )
-    .returning({
-      sessionVersion: member.sessionVersion,
-      managementRole: member.managementRole,
-      name: member.name,
-    });
-  const row = rows[0];
+    SELECT session_version, management_role, name FROM upd
+  `);
+  const row = result.rows[0];
   if (!row) return null;
-  return { sessionVersion: row.sessionVersion, managementRole: row.managementRole, name: row.name };
+  return {
+    sessionVersion: Number(row.session_version),
+    managementRole: row.management_role,
+    name: row.name,
+  };
 }
 
 /**
@@ -729,14 +741,14 @@ export async function updateMagicTokenAs(
 }
 
 /**
- * Get admin and moderator members with a non-null, non-empty email —
+ * Get admin and moderator members with a non-null, non-empty email,
  * recipients for the čtvrteční varovný mail (iter-026, arch 7.2) and, since
  * it filters in SQL and returns name + role too, the new backing
  * implementation for `getManagementEmails()` in lib/email/resend.ts (which
- * used to load *every* member via getMembers() and filter in JS — two
+ * used to load *every* member via getMembers() and filter in JS, two
  * definitions of "management" would otherwise drift apart).
  *
- * `ne(member.email, "")` alongside `isNotNull` — review MINOR-2 (T-006r):
+ * `ne(member.email, "")` alongside `isNotNull`, review MINOR-2 (T-006r):
  * bez něj by jeden admin/moderátor s prázdným řetězcem místo NULL prošel do
  * `to` pole volání Resendu a mohl shodit celý varovný mail pro všechny
  * příjemce. Stejná podmínka jako `voting-dispatch.ts` (`!!m.email`) a

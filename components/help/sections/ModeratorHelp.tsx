@@ -122,7 +122,7 @@ export function ModeratorHelp({
           },
           {
             q: "Zapomněl(a) jsem heslo.",
-            a: "Napište adminovi, pošle vám nový odkaz pro nastavení hesla.",
+            a: "Na přihlášení zadejte e-mail a v kroku hesla klikněte na „Zapomněl(a) jsem heslo“. Přijde mail s odkazem, platí 24 hodin. Dosavadní heslo platí, dokud si nastavíte nové.",
           },
         ]}
       />
