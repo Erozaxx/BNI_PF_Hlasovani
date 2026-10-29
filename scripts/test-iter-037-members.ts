@@ -1060,7 +1060,7 @@ const tests: TestCase[] = [
       const fns = stripComments(read("lib/db/queries/member-functions.ts"));
       const rem = fns.slice(fns.indexOf("export async function removeMemberFunctionGuarded"));
       assert.ok(/password_hash = NULL, session_version = t\.session_version \+ 1/.test(rem));
-      assert.ok(rem.includes("cur.management_role IS NULL") && rem.includes("purpose IN ('set-password', 'password-reset')"));
+      assert.ok(rem.includes("cur.management_role IS NULL") && rem.includes("purpose = 'set-password'"));
       // první funkce člena bez hesla: zámkový hash + verze + odkaz, člen s heslem si ho nechává
       const ass = fns.slice(fns.indexOf("export async function assignMemberFunctionGuarded"), fns.indexOf("export async function removeMemberFunctionGuarded"));
       assert.ok(ass.includes("cur.password_hash IS NULL") && ass.includes("AS needs_lock") && ass.includes("ON CONFLICT (member_id) DO UPDATE"));

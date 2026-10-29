@@ -50,8 +50,6 @@ export type OpsEventKind =
   | "access.role-changed"
   | "access.password-reset"
   | "access.password-set"
-  // iter-043: žádost o nové heslo z /login (samoobsluha). Bez e-mailu a bez odkazu.
-  | "access.password-reset-requested"
   | "access.password-link-copied"
   // T-006r (review F-02): „Poslat znovu" jen vymění token nepoužitého odkazu.
   | "access.password-link-resent"
@@ -125,7 +123,6 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "access.role-changed",
   "access.password-reset",
   "access.password-set",
-  "access.password-reset-requested",
   "access.password-link-copied",
   "access.password-link-resent",
   "access.member-deactivated",

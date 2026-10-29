@@ -1,5 +1,5 @@
 /**
- * iter-032 (arch T-001, sekce 6, 9.3, 10.1), čisté jádro přihlašovacích
+ * iter-032 (arch T-001, sekce 6, 9.3, 10.1) — čisté jádro přihlašovacích
  * odkazů a throttle klíčů.
  *
  * Čistý modul: žádný import drizzle-orm, @/lib/db/*, next/* ani resend, jen
@@ -15,12 +15,6 @@ import { hasPasswordAccess } from "@/lib/auth/permissions";
 export const LOGIN_LINK_TTL_MINUTES = 15;
 /** Platnost odkazu „nastav si heslo" pro vedení (5.2, K12 B). */
 export const SET_PASSWORD_LINK_TTL_HOURS = 24;
-/**
- * iter-043 (gate K6, Z1): odkaz `password-reset` platí 24 h, stejně jako
- * odkaz od admina (maily z aplikace padají do spamu, lidé je najdou později).
- * Jedna hodnota pro oba účely.
- */
-export const PASSWORD_RESET_LINK_TTL_HOURS = SET_PASSWORD_LINK_TTL_HOURS;
 /** Session z odkazu člena, pevná, neprodlužuje se (6.3, K7 A). */
 export const EMAIL_LINK_SESSION_HOURS = 12;
 /** Doplnění doby odpovědi na žádost o odkaz (6.1 bod 6). */
@@ -43,22 +37,7 @@ export const THROTTLE_LIMITS = {
   loginStartPair: 10,
   loginStartIp: 20,
   loginStartEmail: 50,
-  /** iter-043 (gate K8): samoobsluha „Zapomněl(a) jsem heslo", vlastní klíče. */
-  pwResetEmail: 3,
-  pwResetIp: 10,
-  /** iter-043 (security M-1a): denní strop žádostí o reset na e-mail (okno PASSWORD_RESET_DAY_WINDOW_MINUTES). */
-  pwResetEmailDay: 5,
 } as const;
-
-/** iter-043 (security M-1a): okno denního stropu žádostí o reset, 24 h. */
-export const PASSWORD_RESET_DAY_WINDOW_MINUTES = 24 * 60;
-
-/**
- * iter-043 (security M-1b): nepoužitý a neprošlý odkaz `password-reset` mladší
- * než tento počet minut se nenahrazuje a mail neodejde, aby čerstvý odkaz
- * zůstal platný.
- */
-export const PASSWORD_RESET_FRESH_LINK_MINUTES = 5;
 
 /** Vždy stejná odpověď na žádost o odkaz (6.1 bod 7), ve všech větvích. */
 export const LOGIN_LINK_RESPONSE_TEXT =
@@ -67,22 +46,7 @@ export const LOGIN_LINK_RESPONSE_TEXT =
 export const LINK_INVALID_TEXT = "Odkaz už neplatí. Požádej o nový.";
 export const THROTTLE_BLOCKED_TEXT = `Příliš mnoho pokusů, zkus to za ${THROTTLE_WINDOW_MINUTES} minut.`;
 
-export type LoginLinkPurpose = "login" | "set-password" | "password-reset";
-
-/**
- * iter-043: účely odkazu, kterým se nastavuje heslo. `/login/heslo` je
- * spotřebuje oba, `login` nikdy. POZOR: nový účel odkazu pro heslo musí být
- * i v revoke v `setOwnPassword` a `resetPasswordGuarded` (members.ts), hlídá
- * to test-iter-043-heslo.
- */
-export const PASSWORD_LINK_PURPOSES = ["set-password", "password-reset"] as const;
-
-/**
- * iter-043 (gate K9, Z1): vždy stejná odpověď na „Zapomněl(a) jsem heslo",
- * ve všech větvích včetně blokace a chyby.
- */
-export const PASSWORD_RESET_RESPONSE_TEXT =
-  "Pokud e-mail patří členovi vedení, poslali jsme na něj odkaz na nové heslo. Platí 24 hodin. Dosavadní heslo platí, dokud si nové nenastavíš. Když mail nedorazí, mrkni do spamu.";
+export type LoginLinkPurpose = "login" | "set-password";
 
 // ── Token ──
 
@@ -106,9 +70,7 @@ export function linkExpiresAt(purpose: LoginLinkPurpose, now: Date): Date {
   const ms =
     purpose === "login"
       ? LOGIN_LINK_TTL_MINUTES * 60 * 1000
-      : purpose === "password-reset"
-        ? PASSWORD_RESET_LINK_TTL_HOURS * 3600 * 1000
-        : SET_PASSWORD_LINK_TTL_HOURS * 3600 * 1000;
+      : SET_PASSWORD_LINK_TTL_HOURS * 3600 * 1000;
   return new Date(now.getTime() + ms);
 }
 
@@ -119,7 +81,6 @@ export function buildLinkUrl(
   token: string
 ): string {
   const base = appUrl.replace(/\/+$/, "");
-  // `set-password` i `password-reset` vedou na /login/heslo.
   const path = purpose === "login" ? "/login/odkaz" : "/login/heslo";
   return `${base}${path}?t=${encodeURIComponent(token)}`;
 }
@@ -155,8 +116,6 @@ export interface ThrottleRule {
   key: string;
   max: number;
   scope: "pair" | "email" | "ip";
-  /** Okno pravidla v minutách; bez pole platí THROTTLE_WINDOW_MINUTES. */
-  windowMinutes?: number;
 }
 
 export interface ThrottleCount {
@@ -246,52 +205,6 @@ export function loginStartThrottleRules(
   return rules;
 }
 
-/**
- * iter-043: „Zapomněl(a) jsem heslo", e-mail a IP. Klíče `pw-reset-*` nesdílí
- * žádná jiná cesta (reset nevyčerpá přihlášení a naopak). Počítá se každý
- * pokus, i pro neexistující e-mail.
- */
-export function passwordResetThrottleRules(
-  normalizedEmail: string,
-  ip: string
-): ThrottleRule[] {
-  const rules: ThrottleRule[] = [
-    {
-      key: `pw-reset-email:${hashEmailForKey(normalizedEmail)}`,
-      max: THROTTLE_LIMITS.pwResetEmail,
-      scope: "email",
-    },
-    {
-      // M-1a: vlastní klíč s 24h oknem, nesdílí řádek s 10min klíčem.
-      key: `pw-reset-email-day:${hashEmailForKey(normalizedEmail)}`,
-      max: THROTTLE_LIMITS.pwResetEmailDay,
-      scope: "email",
-      windowMinutes: PASSWORD_RESET_DAY_WINDOW_MINUTES,
-    },
-  ];
-  if (isKnownIp(ip)) {
-    rules.unshift({ key: `pw-reset-ip:${ip}`, max: THROTTLE_LIMITS.pwResetIp, scope: "ip" });
-  }
-  return rules;
-}
-
-/**
- * Rozdělí pravidla podle okna (každé okno = jedno volání throttleHit).
- * Pořadí oken i pravidel uvnitř zůstává podle prvního výskytu.
- */
-export function groupRulesByWindow(
-  rules: ThrottleRule[]
-): { windowMinutes: number; keys: string[] }[] {
-  const groups = new Map<number, string[]>();
-  for (const r of rules) {
-    const w = r.windowMinutes ?? THROTTLE_WINDOW_MINUTES;
-    const keys = groups.get(w) ?? [];
-    keys.push(r.key);
-    groups.set(w, keys);
-  }
-  return [...groups].map(([windowMinutes, keys]) => ({ windowMinutes, keys }));
-}
-
 /** Neplatné spotřebování odkazu (throttleCheck/throttleFail), `null` bez IP. */
 export function linkUseThrottleKey(ip: string): string | null {
   return isKnownIp(ip) ? `link-use-ip:${ip}` : null;
@@ -374,56 +287,6 @@ export function planLoginLinkRequest(input: {
     isManagement: !!input.member.managementRole || !!input.member.hasFunction,
     message,
   };
-}
-
-// ── Plán žádosti o nové heslo (iter-043, arch T-001b bod 5) ──
-
-export type PasswordResetPlan =
-  | {
-      send: false;
-      reason:
-        | "ip-blocked"
-        | "email-blocked"
-        | "no-member"
-        | "no-access"
-        | "inactive"
-        | "no-email";
-      message: string;
-    }
-  | {
-      send: true;
-      reason: "send";
-      memberId: string;
-      memberName: string;
-      email: string;
-      message: string;
-    };
-
-/**
- * Rozhodnutí žádosti o nové heslo. `message` je ve všech větvích tentýž
- * řetězec. `passwordHash` se nezkoumá: kdo má přístup (role NEBO funkce), smí
- * si heslo nastavit, i když ho ještě nemá (prošlý odkaz od admina).
- */
-export function planPasswordResetRequest(input: {
-  blocked: ThrottleRule | null;
-  member: LoginLinkMemberMatch | null;
-}): PasswordResetPlan {
-  const message = PASSWORD_RESET_RESPONSE_TEXT;
-  if (input.blocked) {
-    return {
-      send: false,
-      reason: input.blocked.scope === "email" ? "email-blocked" : "ip-blocked",
-      message,
-    };
-  }
-  const m = input.member;
-  if (!m) return { send: false, reason: "no-member", message };
-  if (!hasPasswordAccess({ managementRole: m.managementRole, hasFunction: !!m.hasFunction })) {
-    return { send: false, reason: "no-access", message };
-  }
-  if (m.active === false) return { send: false, reason: "inactive", message };
-  if (!m.email) return { send: false, reason: "no-email", message };
-  return { send: true, reason: "send", memberId: m.id, memberName: m.name, email: m.email, message };
 }
 
 /** Kolik ms ještě počkat, aby odpověď trvala aspoň MIN_RESPONSE_MS. */

@@ -1089,7 +1089,7 @@ export const memberLoginLink = pgTable(
   (table) => ({
     purposeCheck: check(
       "mll_purpose_check",
-      sql`${table.purpose} IN ('login', 'set-password', 'password-reset')`
+      sql`${table.purpose} IN ('login', 'set-password')`
     ),
     tokenHashUnique: unique("mll_token_hash_unique").on(table.tokenHash),
     expiresAfterCreated: check(
@@ -1103,11 +1103,6 @@ export const memberLoginLink = pgTable(
     oneActiveSetPassword: uniqueIndex("mll_one_active_set_password")
       .on(table.memberId)
       .where(sql`${table.purpose} = 'set-password' AND ${table.usedAt} IS NULL`),
-    // iter-043: nejvýš jeden nepoužitý odkaz `password-reset` na člena
-    // (UPSERT v login-links.ts, migrace migrate-iter-043-heslo.ts).
-    oneActivePasswordReset: uniqueIndex("mll_one_active_password_reset")
-      .on(table.memberId)
-      .where(sql`${table.purpose} = 'password-reset' AND ${table.usedAt} IS NULL`),
   })
 );
 

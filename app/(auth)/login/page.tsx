@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, Suspense } from "react";
 import { loginAction } from "@/actions/auth";
-import { requestLoginLinkAction, requestPasswordResetAction, startLoginAction } from "@/actions/login-link";
+import { requestLoginLinkAction, startLoginAction } from "@/actions/login-link";
 
 /**
  * iter-032 T-011: dvoukrokové přihlášení (rozhodnutí uživatele 15. 10. 2026).
@@ -132,23 +132,6 @@ function LoginFormInner() {
     });
   }
 
-  function handleForgotPassword() {
-    setFormError(null);
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await requestPasswordResetAction(email);
-        if (result.success) {
-          setMessage(result.data?.message ?? null);
-        } else {
-          setFormError(result.error);
-        }
-      } catch {
-        setFormError("Odeslání se nepovedlo, zkus to znovu.");
-      }
-    });
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
@@ -231,21 +214,12 @@ function LoginFormInner() {
                   readOnly={isPending}
                 />
                 <p className="mt-2 text-sm text-gray-600">
-                  Heslo ještě nemáš nebo jsi ho zapomněl(a)? Klikni na Zapomněl(a)
-                  jsem heslo a pošleme ti odkaz na nové. Nebo se přihlas odkazem
-                  níž.
+                  Heslo ještě nemáš? Nastav si ho odkazem z mailu, který ti
+                  poslal admin. Nebo se přihlas odkazem níž.
                 </p>
               </div>
               <button type="submit" disabled={isPending} className={PRIMARY_BUTTON}>
                 {isPending ? "Přihlašuji..." : "Přihlásit se"}
-              </button>
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                disabled={isPending}
-                className={LINK_BUTTON}
-              >
-                {isPending ? "Posílám..." : "Zapomněl(a) jsem heslo"}
               </button>
               <button
                 type="button"
