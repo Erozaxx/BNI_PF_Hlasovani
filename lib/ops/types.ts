@@ -59,6 +59,8 @@ export type OpsEventKind =
   | "access.member-reactivated"
   | "access.magic-link-revoked"
   | "access.functions-changed"
+  // iter-043 (security M-2): změna e-mailu člena vedení. Bez starého i nového e-mailu.
+  | "access.email-changed"
   // iter-038 (T-003a, arch 14): přidání a odebrání příznaku Správce docházky.
   // Jednorázová událost s vlastním runId. Bez e-mailu a bez odkazu.
   | "access.attendance-manager-changed"
@@ -129,6 +131,7 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "access.member-reactivated",
   "access.magic-link-revoked",
   "access.functions-changed",
+  "access.email-changed",
   "access.attendance-manager-changed",
   "attendance.history-edited",
   "attendance.internal-created",

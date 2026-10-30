@@ -20,7 +20,8 @@ export default async function AppLayout({
   const session = await requirePageSession();
   // iter-037 (arch 6.3): menu podle práv. Dnešní moderátor vidí totéž co
   // před iter-037 (Akce, Časovače, Pohovory, Provoz, Heslo), Členové a
-  // Kategorie jen admin (`members.manage`, `categories.manage`).
+  // Kategorie jen admin (`categories.manage`). Členové: `members.manage`, nebo
+  // iter-043 `access.password_reset` (moderátor vidí zúžený seznam hesel vedení).
   // iter-042: vypnuté části (Master mind, Burza, Semafor) zmizí z menu.
   const settings = await getChapterSettings();
   const show = {
@@ -32,7 +33,7 @@ export default async function AppLayout({
     timers: can(session, "timers.manage"),
     interviews: can(session, "interviews.manage"),
     status: can(session, "ops.view"),
-    members: can(session, "members.manage"),
+    members: can(session, "members.manage") || can(session, "access.password_reset"),
     categories: can(session, "categories.manage"),
     settings: hasPasswordSession(session),
   };

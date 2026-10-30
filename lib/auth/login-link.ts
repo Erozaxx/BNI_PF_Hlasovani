@@ -1,5 +1,5 @@
 /**
- * iter-032 (arch T-001, sekce 5.2, 6) — přihlášení člena odkazem z mailu a
+ * iter-032 (arch T-001, sekce 5.2, 6), přihlášení člena odkazem z mailu a
  * odkaz „nastav si heslo" pro vedení. Čistá rozhodnutí jsou v
  * login-link-core.ts, tady je DB, mail a session.
  *
@@ -18,6 +18,7 @@ import {
   upsertSetPasswordLink,
 } from "@/lib/db/queries/login-links";
 import { createSession } from "@/lib/auth/session";
+import type { Permission } from "@/lib/auth/permissions";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { throttleCheck, throttleFail, throttleHit } from "@/lib/auth/throttle";
 import {
@@ -279,7 +280,7 @@ export async function issueSetPasswordLink(memberId: string): Promise<string> {
  */
 export async function rotateSetPasswordLinkUrl(
   memberId: string,
-  opts: { allowExpired: boolean }
+  opts: { allowExpired: boolean; actorId: string; permission: Permission }
 ): Promise<string | null> {
   const token = generateLinkToken();
   const rotated = await rotateSetPasswordLink({
@@ -287,6 +288,8 @@ export async function rotateSetPasswordLinkUrl(
     tokenHash: hashLinkToken(token),
     expiresAt: linkExpiresAt("set-password", new Date()),
     allowExpired: opts.allowExpired,
+    actorId: opts.actorId,
+    permission: opts.permission,
   });
   return rotated ? buildLinkUrl(appUrl(), "set-password", token) : null;
 }

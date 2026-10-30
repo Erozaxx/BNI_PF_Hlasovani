@@ -9,6 +9,22 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { meetingGuest, guest, category } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { listSheetRows } from "@/lib/db/queries/attendance";
+import {
+  STYLE_COL_A,
+  addGreyStyles,
+  buildRowXml,
+  columnBWidth,
+  escapeXml,
+  memberMark,
+  memberRowXml,
+  needsTallRow,
+} from "@/lib/attendance/export-marks";
+
+/** Třída chyby do logu, bez zprávy a bez osobních údajů. */
+function errClass(err: unknown): string {
+  return err instanceof Error ? err.name : typeof err;
+}
 
 function getDb() {
   return drizzle(getSql());
@@ -19,21 +35,10 @@ function formatDateCzech(dateStr: string): string {
   return `${parseInt(day, 10)}.${parseInt(month, 10)}.${year}`;
 }
 
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 // Style indices from Vystup_schuzka_template.xlsx (xl/styles.xml)
 const S = {
-  colA: 9,
-  // Member rows: first / middle
-  memFirst_B: 13, memFirst_C: 14, memFirst_D: 15, memFirst_E: 16,
-  memMid_B: 17,   memMid_C: 18,   memMid_D: 19,   memMid_E: 16,
+  colA: STYLE_COL_A,
+  // Řádky členů (běžné i šedé) jsou v lib/attendance/export-marks.ts
   // "Hosté:" separator
   sepHoste_B: 30, sepHoste_C: 31, sepHoste_D: 31, sepHoste_E: 16,
   // Guest rows: first / middle / last
@@ -41,28 +46,6 @@ const S = {
   gstMid_B: 23,   gstMid_C: 25,   gstMid_D: 26,   gstMid_E: 16,
   gstLast_B: 42,  gstLast_C: 43,  gstLast_D: 44,  gstLast_E: 38,
 } as const;
-
-function inlineCell(col: string, row: number, styleIdx: number, value: string): string {
-  if (value === "") {
-    return `<c r="${col}${row}" s="${styleIdx}"/>`;
-  }
-  return `<c r="${col}${row}" s="${styleIdx}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
-}
-
-function buildRow(
-  rowNum: number,
-  bVal: string, bS: number,
-  cVal: string, cS: number,
-  dVal: string, dS: number,
-  eS: number
-): string {
-  const a = `<c r="A${rowNum}" s="${S.colA}"/>`;
-  const b = inlineCell("B", rowNum, bS, bVal);
-  const c = inlineCell("C", rowNum, cS, cVal);
-  const d = inlineCell("D", rowNum, dS, dVal);
-  const e = `<c r="E${rowNum}" s="${eS}"/>`;
-  return `<row r="${rowNum}" ht="19.5" customHeight="1">${a}${b}${c}${d}${e}</row>`;
-}
 
 export async function GET(
   _req: NextRequest,
@@ -80,6 +63,16 @@ export async function GET(
 
   // iter-037 (T-003b, arch 5.3): výstup schůzky jen s aktivními členy.
   const members = await getActiveMembers();
+
+  // iter-043 (arch 2): stav docházky na datum schůzky, jedno místo pravdy je listSheetRows.
+  let sheetRows: Awaited<ReturnType<typeof listSheetRows>>;
+  try {
+    sheetRows = await listSheetRows(meetingData.date);
+  } catch (err) {
+    console.error(`[export-list] attendance: ${errClass(err)}`);
+    return NextResponse.json({ error: "Docházku pro export se nepodařilo načíst." }, { status: 500 });
+  }
+  const rowByMember = new Map(sheetRows.map((r) => [r.memberId, r]));
 
   const meetingGuests = await getDb()
     .select({
@@ -103,27 +96,36 @@ export async function GET(
   let templateBuffer: Buffer;
   try {
     templateBuffer = fs.readFileSync(templatePath);
-  } catch {
+  } catch (err) {
+    console.error(`[export-list] template-missing: ${errClass(err)}`);
     return NextResponse.json({ error: "Šablona exportu nebyla nalezena." }, { status: 500 });
   }
 
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(templateBuffer);
-  } catch {
+  } catch (err) {
+    console.error(`[export-list] template-load: ${errClass(err)}`);
     return NextResponse.json({ error: "Šablonu exportu se nepodařilo načíst." }, { status: 500 });
   }
 
   // Scale font sizes in styles.xml by ~12%
   const stylesFile = zip.file("xl/styles.xml");
-  if (stylesFile) {
-    const stylesXml = await stylesFile.async("text");
-    const scaledStyles = stylesXml.replace(/<sz val="([0-9]+(?:\.[0-9]+)?)"\s*\/>/g, (_m, v) => {
-      const scaled = Math.round(parseFloat(v) * 1.12);
-      return `<sz val="${scaled}"/>`;
-    });
-    zip.file("xl/styles.xml", scaledStyles);
+  if (!stylesFile) {
+    return NextResponse.json({ error: "V šabloně exportu chybí styly." }, { status: 500 });
   }
+  let stylesXml = await stylesFile.async("text");
+  try {
+    stylesXml = addGreyStyles(stylesXml);
+  } catch (err) {
+    console.error(`[export-list] template-corrupt: ${errClass(err)}`);
+    return NextResponse.json({ error: "Šablona exportu je poškozená." }, { status: 500 });
+  }
+  const scaledStyles = stylesXml.replace(/<sz val="([0-9]+(?:\.[0-9]+)?)"\s*\/>/g, (_m, v) => {
+    const scaled = Math.round(parseFloat(v) * 1.12);
+    return `<sz val="${scaled}"/>`;
+  });
+  zip.file("xl/styles.xml", scaledStyles);
 
   // Read sheet1.xml
   const sheet1File = zip.file("xl/worksheets/sheet1.xml");
@@ -186,17 +188,17 @@ export async function GET(
   const rows: string[] = [];
   let rowNum = 5;
 
+  // Označení členů (iter-043) a šířka sloupce B se stropem (gate K4)
+  const marks = members.map((m) => memberMark(rowByMember.get(m.id), m.name));
+  const widthB = columnBWidth([
+    ...marks.map((k) => k.nameCell),
+    ...meetingGuests.map((g) => g.name),
+    "Jméno a příjmení",
+  ]);
+
   // Member rows
   for (let i = 0; i < members.length; i++) {
-    const m = members[i];
-    const first = i === 0;
-    rows.push(buildRow(
-      rowNum,
-      m.name,         first ? S.memFirst_B : S.memMid_B,
-      m.company ?? "", first ? S.memFirst_C : S.memMid_C,
-      m.obor ?? "",   first ? S.memFirst_D : S.memMid_D,
-      first ? S.memFirst_E : S.memMid_E,
-    ));
+    rows.push(memberRowXml(rowNum, members[i], marks[i], i === 0, widthB));
     rowNum++;
   }
 
@@ -216,7 +218,7 @@ export async function GET(
   const guestCount = meetingGuests.length;
   if (guestCount === 0) {
     // Empty placeholder row with closing border
-    rows.push(buildRow(rowNum, "", S.gstLast_B, "", S.gstLast_C, "", S.gstLast_D, S.gstLast_E));
+    rows.push(buildRowXml(rowNum, { b: "", c: "", d: "", e: "" }, { b: S.gstLast_B, c: S.gstLast_C, d: S.gstLast_D, e: S.gstLast_E }, false));
     rowNum++;
   } else {
     for (let i = 0; i < guestCount; i++) {
@@ -234,7 +236,7 @@ export async function GET(
         bS = S.gstMid_B; cS = S.gstMid_C; dS = S.gstMid_D; eS = S.gstMid_E;
       }
 
-      rows.push(buildRow(rowNum, g.name, bS, g.company ?? "", cS, obor, dS, eS));
+      rows.push(buildRowXml(rowNum, { b: g.name, c: g.company ?? "", d: obor, e: "" }, { b: bS, c: cS, d: dS, e: eS }, needsTallRow(g.name, widthB)));
       rowNum++;
     }
   }
@@ -249,11 +251,6 @@ export async function GET(
   );
 
   // Update <cols> with dynamic widths
-  const allNames = [
-    ...members.map((m) => m.name),
-    ...meetingGuests.map((g) => g.name),
-    "Jméno a příjmení",
-  ];
   const allCompanies = [
     ...members.map((m) => m.company ?? ""),
     ...meetingGuests.map((g) => g.company ?? ""),
@@ -266,7 +263,7 @@ export async function GET(
   ];
 
   const maxLen = (arr: string[]) => Math.max(...arr.map((s) => s.length), 1);
-  const maxB = Math.max(12, maxLen(allNames) * 1.44);
+  const maxB = widthB;
   const maxC = Math.max(12, maxLen(allCompanies) * 1.44);
   const maxD = Math.max(10, maxLen(allObors) * 1.2);
   const maxE = 42;

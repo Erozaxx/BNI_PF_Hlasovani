@@ -7,6 +7,8 @@ import { autostartHelp, closeVotingHelp, warningMailHelp } from "@/components/he
 interface ModeratorHelpProps {
   /** Funkce vedení (session s heslem). Správce docházky přihlášený odkazem je nemá. */
   showLeadership?: boolean;
+  /** iter-043: právo `access.password_reset`: otázka, jak členovi vedení poslat odkaz pro nové heslo. */
+  passwordReset?: boolean;
   /** Právo `attendance.view_all`: sekce „Docházka pro správce“. */
   attendance?: boolean;
   /** Právo `attendance.edit_history`: sekce „Opravy po uzávěrce“. */
@@ -23,6 +25,7 @@ interface ModeratorHelpProps {
 
 export function ModeratorHelp({
   showLeadership = true,
+  passwordReset = false,
   attendance = false,
   attendanceHistory = false,
   internalMeetings = false,
@@ -122,8 +125,16 @@ export function ModeratorHelp({
           },
           {
             q: "Zapomněl(a) jsem heslo.",
-            a: "Napište adminovi, pošle vám nový odkaz pro nastavení hesla.",
+            a: "Napište adminovi nebo moderátorovi. V menu Členové vám pošle nový odkaz pro nastavení hesla.",
           },
+          ...(passwordReset
+            ? [
+                {
+                  q: "Člen vedení zapomněl heslo.",
+                  a: "V menu Členové u něj dejte „Poslat odkaz pro nové heslo“. Jeho dosavadní heslo hned přestane platit a odhlásí se. Odkaz platí 24 hodin, může skončit ve spamu. Účet admina ani vlastní heslo tudy nezměníte. Prezident a Viceprezident to dělají na stránce člena, karta Heslo.",
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -393,7 +404,7 @@ export function ModeratorHelp({
 
       <HelpSection
         title="Co dělá jen admin"
-        intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemění cizí hesla, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. To dělá admin, Prezident a Viceprezident. Sekci Admin s položkami Členové, Kategorie a Nastavení chapteru vidí v menu jen oni. Přidělování admina, funkcí a hesel a změny v účtu admina dělá jen admin."
+        intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. Z hesel mohou jen členovi vedení poslat odkaz pro nové heslo. To dělá admin, Prezident a Viceprezident. V sekci Admin vidí moderátor a Člen výboru jen Členové, a v nich seznam Hesla vedení. Kategorie a Nastavení chapteru vidí jen admin, Prezident a Viceprezident. Přidělování admina a funkcí, odkaz ke zkopírování a změny v účtu admina dělá jen admin."
       />
       </>
       )}

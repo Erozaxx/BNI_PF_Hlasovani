@@ -268,6 +268,18 @@ export function announcedText(
   return `${head}: počítá se jako ${effective === "substitute" ? "náhradník" : "omluven(a)"}.`;
 }
 
+/**
+ * iter-043: efektivní stav řádku tak, jak se den uzavře. Zápis správce má
+ * přednost; bez zápisu je řádek přítomen, s omluvou bez jména náhradníka
+ * omluvený (`absent`) a s ohlášeným náhradníkem náhradník. Jedno místo pravdy
+ * pro souhrn dne i pro export seznamu schůzky.
+ */
+export function effectiveStatus(
+  row: Pick<SheetRow, "status" | "excused"> & { announcedName?: string | null }
+): PresenceStatus {
+  return row.status ?? (row.excused ? (row.announcedName ? "substitute" : "absent") : "present");
+}
+
 export interface SheetSummary {
   total: number;
   present: number;
@@ -289,8 +301,7 @@ export function summarizeSheet(
   let substitutes = 0;
   let excused = 0;
   for (const r of rows) {
-    const status: PresenceStatus =
-      r.status ?? (r.excused ? (r.announcedName ? "substitute" : "absent") : "present");
+    const status = effectiveStatus(r);
     if (status === "present" || status === "substitute") {
       present++;
       if (status === "substitute") substitutes++;

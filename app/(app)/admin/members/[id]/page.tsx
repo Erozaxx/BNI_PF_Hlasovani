@@ -30,6 +30,7 @@ import { EditMemberJoinedAtForm } from "../EditMemberJoinedAtForm";
 import { MemberAccessControls } from "../MemberAccessControls";
 import { MemberStatusControls } from "../MemberStatusControls";
 import { AttendanceManagerToggle } from "../AttendanceManagerToggle";
+import { PasswordResetControls } from "../PasswordResetControls";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -164,6 +165,24 @@ export default async function AdminMemberPage({ params }: { params: { id: string
           />
         </Card>
       )}
+
+      {/* iter-043 (K13 A, K15 A): Prezident a Viceprezident (`members.manage`, bez `access.manage`)
+          resetují heslo člena vedení, odkaz ke zkopírování tu není. Admin to má v kartě výše. */}
+      {!locked &&
+        !isSelf &&
+        can(session, "access.password_reset") &&
+        !can(session, "access.manage") &&
+        (managementRole !== null || currentFunctionId !== null) && (
+          <Card>
+            <h2 className="text-lg font-semibold mb-3">Heslo</h2>
+            <PasswordResetControls
+              memberId={m.id}
+              memberName={m.name}
+              email={m.email ?? null}
+              isInactive={!active}
+            />
+          </Card>
+        )}
 
       {/* iter-038 (arch 5.3, 15.3): příznak Správce docházky přiděluje, kdo spravuje členy */}
       {!locked && can(session, "members.manage") && (

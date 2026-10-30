@@ -286,12 +286,33 @@ export async function updateMemberEmailAction(
       return { success: false, error: "Člen nebyl nalezen." };
     }
 
+    // iter-043 (security M-2): změna e-mailu člena vedení je dohledatelná na /status.
+    // Bez starého i nového e-mailu v textu. LL-011: vstup se sestaví uvnitř try.
+    const isManagement = !!memberData.managementRole || hasFunction;
+    if (isManagement && (email ?? "").trim().toLowerCase() !== (memberData.email ?? "").trim().toLowerCase()) {
+      try {
+        await logOpsEvent({
+          runId: randomUUID(),
+          seq: 1,
+          source: "gui",
+          kind: "access.email-changed",
+          severity: "info",
+          actor: auth.session.name,
+          memberId: memberData.id,
+          memberName: memberData.name,
+          message: "E-mail člena vedení změněn.",
+        });
+      } catch (err) {
+        console.error(`[updateMemberEmailAction] ops log failed: ${err instanceof Error ? err.name : typeof err}`);
+      }
+    }
+
     revalidatePath("/admin/members");
     return {
       success: true,
       data: {
         revokedLinks: updated.revokedLinks,
-        isManagement: !!memberData.managementRole || hasFunction,
+        isManagement,
       },
     };
   } catch (error) {

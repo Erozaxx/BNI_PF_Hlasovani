@@ -3,13 +3,15 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { memberLoginLink } from "@/lib/db/schema";
 import type { LoginLinkPurpose } from "@/lib/auth/login-link-core";
+import type { Permission } from "@/lib/auth/permissions";
+import { actorHasPermissionSql, actorMayChangeSql } from "@/lib/db/queries/member-active";
 
 function getDb() {
   return drizzle(getSql());
 }
 
 /**
- * iter-032 (arch 6, 5.2, 8.1) — jednorázové odkazy `member_login_link`.
+ * iter-032 (arch 6, 5.2, 8.1), jednorázové odkazy `member_login_link`.
  * Do DB jde jen SHA-256 hash tokenu. Bez transakcí (LL-003).
  */
 export async function insertLoginLink(input: {
@@ -116,6 +118,9 @@ export async function rotateSetPasswordLink(input: {
   tokenHash: string;
   expiresAt: Date;
   allowExpired: boolean;
+  /** Volající a právo, které v tomtéž příkazu znovu ověří SQL (security L-1, LL-003). */
+  actorId: string;
+  permission: Permission;
 }): Promise<boolean> {
   const rows = await getDb()
     .update(memberLoginLink)
@@ -129,7 +134,9 @@ export async function rotateSetPasswordLink(input: {
         eq(memberLoginLink.memberId, input.memberId),
         eq(memberLoginLink.purpose, "set-password"),
         isNull(memberLoginLink.usedAt),
-        input.allowExpired ? undefined : sql`${memberLoginLink.expiresAt} > now()`
+        input.allowExpired ? undefined : sql`${memberLoginLink.expiresAt} > now()`,
+        sql`EXISTS (SELECT 1 FROM member t WHERE t.id = ${memberLoginLink.memberId} AND ${actorMayChangeSql("t", input.actorId)})`,
+        actorHasPermissionSql(input.actorId, input.permission)
       )
     )
     .returning({ id: memberLoginLink.id });
@@ -154,6 +161,18 @@ export async function hasPendingSetPasswordLink(memberId: string): Promise<boole
     )
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * iter-043: id členů, kteří čekají na odkaz „nastav si heslo“ (nepoužitý
+ * `set-password`). Jeden SELECT pro seznam „Hesla vedení“.
+ */
+export async function listPendingSetPasswordMemberIds(): Promise<string[]> {
+  const rows = await getDb()
+    .selectDistinct({ memberId: memberLoginLink.memberId })
+    .from(memberLoginLink)
+    .where(and(eq(memberLoginLink.purpose, "set-password"), isNull(memberLoginLink.usedAt)));
+  return rows.map((r) => r.memberId);
 }
 
 /** Úklid ve fázi 6 cronu (6.6): odkazy prošlé víc než 1 den. */

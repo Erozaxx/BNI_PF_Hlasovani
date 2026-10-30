@@ -68,6 +68,10 @@ export const PERMISSIONS = [
   // `NON_DELEGABLE`, takže ho přes značku dostane Prezident a Viceprezident.
   // Není v sadě moderátora ani Člena výboru.
   "chapter.settings",
+  // iter-043 (gate K13 A): reset hesla člena vedení. Delegovatelné, je v sadě
+  // role moderátor, takže ho má i Člen výboru, Prezident a Viceprezident.
+  // `access.manage` (role, funkce, odkaz ke zkopírování) zůstává jen adminovi.
+  "access.password_reset",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -92,7 +96,14 @@ export const MODERATOR_ROLE_PERMISSIONS: readonly Permission[] = [
   "mastermind.manage",
   "burza.manage",
   "attendance.internal_manage",
+  // iter-043 (gate K13 A): reset hesla člena vedení.
+  "access.password_reset",
 ];
+
+/** Role `moderator` dává právo `permission` (SQL pojistka čte sadu role odsud, ne z opsaného seznamu). */
+export function roleGrants(role: "moderator", permission: Permission): boolean {
+  return role === "moderator" && MODERATOR_ROLE_PERMISSIONS.includes(permission);
+}
 
 /**
  * Výchozí sada FUNKCE (`chapter_function.permissions = NULL`, tedy Člen výboru):
@@ -121,7 +132,7 @@ export const ATTENDANCE_MANAGER_PERMISSIONS: readonly Permission[] = [
 
 /**
  * Práva, která funkce nikdy nedostane (rozhodnutí Toma 19. 10., M-1): přidělování
- * role admin, funkcí a hesel patří jen roli admin. Jediné místo, kde se to
+ * role admin a funkcí patří jen roli admin (reset hesla je samostatné delegovatelné právo). Jediné místo, kde se to
  * rozhoduje, `permissionsFor` filtruje funkce přes tenhle seznam.
  */
 export const NON_DELEGABLE: readonly Permission[] = ["access.manage", "functions.manage"];
@@ -189,6 +200,34 @@ export function mayChangeMember(actorIsAdmin: boolean, targetRole: string | null
 }
 
 export const ADMIN_ONLY_MESSAGE = "Účet admina může měnit jen admin.";
+
+export type PasswordResetDenied =
+  | "no-permission"
+  | "self"
+  | "admin-target"
+  | "not-found"
+  | "no-access";
+
+/**
+ * iter-043 (gate změna 3): jediné místo pravdy pro „smí volající resetovat
+ * heslo cíli“. Pořadí kontrol: právo, sebe, cíl existuje, účet admina, cíl má
+ * přístup k heslu (role nebo funkce). Hlášky zůstávají v akcích.
+ */
+export function decidePasswordReset(input: {
+  actorId: string;
+  actorIsAdmin: boolean;
+  actorMayReset: boolean;
+  target: { id: string; managementRole: string | null; hasPasswordAccess: boolean } | null;
+}): { ok: true } | { ok: false; reason: PasswordResetDenied } {
+  if (!input.actorMayReset) return { ok: false, reason: "no-permission" };
+  if (input.target && input.target.id === input.actorId) return { ok: false, reason: "self" };
+  if (!input.target) return { ok: false, reason: "not-found" };
+  if (!mayChangeMember(input.actorIsAdmin, input.target.managementRole)) {
+    return { ok: false, reason: "admin-target" };
+  }
+  if (!input.target.hasPasswordAccess) return { ok: false, reason: "no-access" };
+  return { ok: true };
+}
 
 /** Funkce člena tak, jak ji čte `getMemberAuthState`. */
 export interface MemberFunctionInfo {

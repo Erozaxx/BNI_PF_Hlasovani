@@ -11,9 +11,45 @@ import { CreateMemberForm } from "./CreateMemberForm";
 import { ImportMembersForm } from "./ImportMembersForm";
 import { SortableMemberList } from "./SortableMemberList";
 import { requirePageSession } from "@/lib/auth/page-guard";
+import { can, hasRealPassword } from "@/lib/auth/permissions";
+import { listPendingSetPasswordMemberIds } from "@/lib/db/queries/login-links";
+import { roleLabel } from "@/lib/members/labels";
+import { LeadershipPasswordList } from "./LeadershipPasswordList";
 
 export default async function AdminMembersPage() {
-  const session = await requirePageSession({ permission: "members.manage" });
+  // iter-043 (K16 A): s `members.manage` dnešní stránka, jen s `access.password_reset`
+  // (moderátor, Člen výboru) zúžený seznam „Hesla vedení“.
+  const session = await requirePageSession({
+    anyOf: ["members.manage", "access.password_reset"],
+  });
+
+  if (!can(session, "members.manage")) {
+    const [allMembers, functions, pendingIds] = await Promise.all([
+      getMembers(),
+      getMemberFunctionMap(),
+      listPendingSetPasswordMemberIds(),
+    ]);
+    const todayPrague = pragueToday();
+    const pending = new Set(pendingIds);
+    const rows = allMembers
+      .filter((m) => m.managementRole !== null || functions.has(m.id))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        email: m.email ?? null,
+        functionName: functions.get(m.id)?.name ?? null,
+        roleLabel: roleLabel(m.managementRole),
+        isAdmin: m.managementRole === "admin",
+        hasPassword: hasRealPassword({
+          hasHash: Boolean(m.passwordHash),
+          pendingSetPasswordLink: pending.has(m.id),
+        }),
+        isInactive: !isMemberActive(m, todayPrague),
+        isSelf: m.id === session.memberId,
+      }));
+    return <LeadershipPasswordList rows={rows} />;
+  }
+
   const [members, interviewCounts, dueList, functionMap] = await Promise.all([
     getMembers(),
     getInterviewCountsByMember(),
