@@ -5,6 +5,7 @@ import { member, memberFunction, chapterFunction } from "@/lib/db/schema";
 import type { MemberAuthState } from "@/lib/auth/session-check";
 import { normalizeEmailForStorage } from "@/lib/auth/login-link-core";
 import {
+  actorHasPermissionSql,
   actorIsAdminSql,
   actorMayChangeSql,
   memberActiveSql,
@@ -68,7 +69,7 @@ export async function getMemberById(id: string) {
  * joinedAt (iter-020, MAJOR-3): optional "YYYY-MM-DD" entry date, normally
  * sourced from the XLSX import's "Datum vstupu" column. When omitted/null the
  * column is left out of the insert values entirely so the schema's own
- * default (CURRENT_DATE) applies — the import must never be blocked by a
+ * default (CURRENT_DATE) applies, the import must never be blocked by a
  * missing entry date.
  */
 export async function createMember(data: {
@@ -174,7 +175,7 @@ export async function updateMemberEmail(
 
 /**
  * Update the joined_at (entry date) for a member. Admin-only at the action
- * layer (arch 7.1) — this query itself has no guard, callers must enforce it.
+ * layer (arch 7.1), this query itself has no guard, callers must enforce it.
  * `joinedAt` is a "YYYY-MM-DD" string (DATE column, no timezone).
  */
 export async function updateMemberJoinedAt(
@@ -273,7 +274,7 @@ export async function getMemberByTokenHash(tokenHash: string) {
   const m = results[0] ?? null;
   if (!m) return null;
 
-  // Check expiry only — token is valid for its full 7-day lifetime
+  // Check expiry only, token is valid for its full 7-day lifetime
   if (!m.tokenExpiresAt || m.tokenExpiresAt < new Date()) return null;
 
   return m;
@@ -552,8 +553,9 @@ export async function deleteMemberGuarded(
 }
 
 /**
- * Reset hesla vedení (5.3): zámkový hash, nová verze session. Jen člen
- * s rolí, nikdy volající. Staré heslo i všechny session končí hned.
+ * Reset hesla vedení (5.3): zámkový hash, nová verze session. Volající
+ * s právem `access.password_reset` (iter-043), cíl člen s rolí nebo funkcí,
+ * nikdy volající a účet admina jen pro admina. Staré heslo i všechny session končí hned.
  *
  * Security L-5: nepoužité odkazy `set-password` přestanou platit v tomtéž
  * příkazu. Reset tak funguje jako nouzové zablokování i tehdy, když
@@ -572,7 +574,7 @@ export async function resetPasswordGuarded(
       WHERE id = ${targetId}::uuid
         AND id <> ${actorId}::uuid
         AND ${actorMayChangeSql("member", actorId)}
-        AND ${actorIsAdminSql(actorId)}
+        AND ${actorHasPermissionSql(actorId, "access.password_reset")}
         AND (management_role IS NOT NULL OR EXISTS (
           SELECT 1 FROM member_function mf WHERE mf.member_id = ${targetId}::uuid
         ))
@@ -729,14 +731,14 @@ export async function updateMagicTokenAs(
 }
 
 /**
- * Get admin and moderator members with a non-null, non-empty email —
+ * Get admin and moderator members with a non-null, non-empty email,
  * recipients for the čtvrteční varovný mail (iter-026, arch 7.2) and, since
  * it filters in SQL and returns name + role too, the new backing
  * implementation for `getManagementEmails()` in lib/email/resend.ts (which
- * used to load *every* member via getMembers() and filter in JS — two
+ * used to load *every* member via getMembers() and filter in JS, two
  * definitions of "management" would otherwise drift apart).
  *
- * `ne(member.email, "")` alongside `isNotNull` — review MINOR-2 (T-006r):
+ * `ne(member.email, "")` alongside `isNotNull`, review MINOR-2 (T-006r):
  * bez něj by jeden admin/moderátor s prázdným řetězcem místo NULL prošel do
  * `to` pole volání Resendu a mohl shodit celý varovný mail pro všechny
  * příjemce. Stejná podmínka jako `voting-dispatch.ts` (`!!m.email`) a

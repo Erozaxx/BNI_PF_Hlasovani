@@ -12,11 +12,12 @@ import {
   ADMIN_DELEGABLE_MARKER,
   DEFAULT_FUNCTION_PERMISSIONS,
   NON_DELEGABLE,
+  roleGrants,
   type Permission,
 } from "@/lib/auth/permissions";
 
 /** Povolené aliasy tabulky `member` v dotazech. Přidávat jen pevné literály. */
-export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o" | "gm";
+export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o" | "gm" | "act";
 
 export function memberActiveSql(alias: MemberAlias): SQL {
   const a = sql.raw(alias);
@@ -67,6 +68,34 @@ export function actorMayChangeSql(alias: MemberAlias, actorId: string): SQL {
 /** Volající je v DB admin (jen role admin dává `access.manage`, tohle je druhá pojistka v SQL). */
 export function actorIsAdminSql(actorId: string): SQL {
   return sql`EXISTS (SELECT 1 FROM member adm WHERE adm.id = ${actorId}::uuid AND adm.management_role = 'admin')`;
+}
+
+/**
+ * iter-043 (gate změna 4): volající má v DB právo `permission`. Admin vždy,
+ * jinak aktivní člen s heslem, jehož role moderátor (sada z `roleGrants`) nebo
+ * funkce (`functionGrantsSql`) právo dává. SQL protějšek `permissionsFor`,
+ * sady se berou z TS konstant a test R6 renderuje výsledné SQL. Druhá pojistka
+ * v SQL vedle kontroly v akci, přihlášení odkazem se tu nerozlišuje (práva
+ * odkazem jsou prázdná už v `permissionsFor`, akce se ptá přes `requirePermission`).
+ */
+export function actorHasPermissionSql(actorId: string, permission: Permission): SQL {
+  const viaRole = roleGrants("moderator", permission)
+    ? sql` OR act.management_role = 'moderator'`
+    : sql``;
+  return sql`EXISTS (
+    SELECT 1 FROM member act
+    WHERE act.id = ${actorId}::uuid
+      AND (act.management_role = 'admin' OR (
+        act.password_hash IS NOT NULL
+        AND ${memberActiveSql("act")}
+        AND (false${viaRole} OR EXISTS (
+          SELECT 1 FROM member_function mf
+          JOIN chapter_function cf ON cf.id = mf.function_id
+          WHERE mf.member_id = act.id
+            AND ${functionGrantsSql(sql`cf.permissions`, permission)}
+        ))
+      ))
+  )`;
 }
 
 /**

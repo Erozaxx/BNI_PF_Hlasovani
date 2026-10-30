@@ -501,10 +501,11 @@ const cases: TestCase[] = [
     run: () => {
       const pages = walk(join(ROOT, "app", "(app)", "admin")).filter((f) => f.endsWith("page.tsx"));
       assert.ok(pages.length >= 2, `nalezeno jen ${pages.length} admin stránek`);
-      const weak = pages.filter(
-        (f) =>
-          !/await requirePageSession\(\s*\{[^}]*permission:\s*"/.test(stripComments(readFileSync(f, "utf8")))
-      );
+      const weak = pages.filter((f) => {
+        // iter-043 (review F-03): `anyOf` jen pro /admin/members
+        const anyOf = relative(ROOT, f).split("\\").join("/").endsWith("admin/members/page.tsx") ? '|anyOf:\\s*\\[\\s*"' : "";
+        return !new RegExp(`await requirePageSession\\(\\s*\\{[^}]*(?:permission:\\s*"${anyOf})`).test(stripComments(readFileSync(f, "utf8")));
+      });
       assert.deepEqual(weak.map((f) => relative(ROOT, f)), []);
       // NIT-4: nejen jakékoli právo, ale právo odpovídající stránce
       const EXPECTED: Record<string, string> = {
@@ -517,8 +518,10 @@ const cases: TestCase[] = [
         const rel = relative(join(ROOT, "app", "(app)"), f).split("\\").join("/");
         const perm = EXPECTED[rel];
         assert.ok(perm, `stránka ${rel} nemá očekávané právo v tabulce`);
+        // iter-043 (review F-03): `anyOf` smí mít jen /admin/members (members.manage nebo access.password_reset)
+        const anyOfAllowed = rel === "admin/members/page.tsx" ? "|anyOf:\\s*\\[[^\\]]*" : "";
         assert.ok(
-          new RegExp(`await requirePageSession\\(\\s*\\{[^}]*permission:\\s*"${perm.replace(".", "\\.")}"`).test(
+          new RegExp(`await requirePageSession\\(\\s*\\{[^}]*(?:permission:\\s*${anyOfAllowed})"${perm.replace(".", "\\.")}"`).test(
             stripComments(readFileSync(f, "utf8"))
           ),
           `${rel}: očekáváno ${perm}`
@@ -712,7 +715,7 @@ const cases: TestCase[] = [
       const src = readSrc("actions/member-access.ts");
       const copy = declaration(src, "issueSetPasswordLinkForCopyAction");
       assert.ok(copy.includes('requirePermission("access.manage")'));
-      assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{ allowExpired: false \}\)/.test(copy));
+      assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{\s*allowExpired: false,/.test(copy));
       assert.ok(/if \(!url\) return \{ success: false/.test(copy));
       assert.ok(!copy.includes("issueSetPasswordLink("), "nový odkaz bez povýšení nebo resetu nevzniká");
       const rotate = declaration(readSrc("lib/db/queries/login-links.ts"), "rotateSetPasswordLink");
@@ -726,8 +729,8 @@ const cases: TestCase[] = [
     run: () => {
       const src = readSrc("actions/member-access.ts");
       const resend = declaration(src, "resendSetPasswordLinkAction");
-      assert.ok(resend.includes('requirePermission("access.manage")'));
-      assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{ allowExpired: true \}\)/.test(resend));
+      assert.ok(resend.includes('requirePermission("access.password_reset")'));
+      assert.ok(/rotateSetPasswordLinkUrl\(target\.id, \{\s*allowExpired: true,/.test(resend));
       for (const forbidden of ["lockHash(", "resetPasswordGuarded(", "setMemberRoleGuarded(", "issueSetPasswordLink("]) {
         assert.ok(!resend.includes(forbidden), forbidden);
       }

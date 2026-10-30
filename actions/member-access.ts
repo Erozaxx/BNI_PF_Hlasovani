@@ -27,10 +27,13 @@ import {
 import { decideFunctionChange, functionChangeErrorText } from "@/lib/auth/function-change";
 import {
   ADMIN_ONLY_MESSAGE,
+  decidePasswordReset,
   hasPasswordAccess,
   hasRealPassword,
   isAdminSession,
   mayChangeMember,
+  NO_PERMISSION_MESSAGE,
+  type PasswordResetDenied,
 } from "@/lib/auth/permissions";
 import { hasPendingSetPasswordLink } from "@/lib/db/queries/login-links";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
@@ -47,8 +50,11 @@ import type { ActionResult } from "@/lib/types";
 /**
  * iter-032 (arch 4, 5.2, 5.3; gate K1 A, K4 B, K9 A, K12 B, U1, U7).
  *
- * Roli a hesla vedení mění jen admin (rozhodnutí Toma 19. 10.: `access.manage`
+ * Roli vedení mění jen admin (rozhodnutí Toma 19. 10.: `access.manage`
  * nedostane žádná funkce, účet admina mění jen admin i přes ostatní práva).
+ * iter-043 (gate K13 A): reset hesla a „Poslat znovu“ smí i volající s právem
+ * `access.password_reset` (moderátor, Člen výboru, Prezident, Viceprezident),
+ * odkaz ke zkopírování zůstává jen adminovi (K15).
  * Bez transakcí (LL-003): každá
  * změna je jeden SQL příkaz s pojistkami ve WHERE, mail a log až po něm.
  * Heslo se mailem nikdy neposílá, jen odkaz „nastav si heslo" (24 h, jednou).
@@ -104,6 +110,22 @@ async function passwordAccessOf(target: {
     return null;
   }
   return { role: role ?? "function" };
+}
+
+/** Hlášky pro důvody z `decidePasswordReset` (texty stejné jako před iter-043). */
+function passwordResetDeniedText(reason: PasswordResetDenied): string {
+  switch (reason) {
+    case "no-permission":
+      return NO_PERMISSION_MESSAGE;
+    case "self":
+      return "Vlastní heslo změníš v Nastavení.";
+    case "admin-target":
+      return ADMIN_ONLY_MESSAGE;
+    case "not-found":
+      return "Člen nebyl nalezen.";
+    case "no-access":
+      return "Heslo mají jen členové vedení.";
+  }
 }
 
 /** LL-011: sestavení vstupu i zápis uvnitř try, nikdy neshodí akci. */
@@ -302,7 +324,7 @@ export async function setMemberRoleAction(
 export async function resetMemberPasswordAction(
   memberId: string
 ): Promise<ActionResult<{ mailSent: boolean; email: string | null }>> {
-  const auth = await requirePermission("access.manage");
+  const auth = await requirePermission("access.password_reset");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -317,11 +339,18 @@ export async function resetMemberPasswordAction(
     if (denied) return { success: false, error: denied };
 
     const target = await getMemberById(parsedId.data);
-    if (!target) return { success: false, error: "Člen nebyl nalezen." };
     // T-003b: heslo má držitel role NEBO funkce.
-    const access = await passwordAccessOf(target);
-    if (!access) {
-      return { success: false, error: "Heslo mají jen členové vedení." };
+    const access = target ? await passwordAccessOf(target) : null;
+    const decision = decidePasswordReset({
+      actorId: actor.memberId,
+      actorIsAdmin: isAdminSession(actor),
+      actorMayReset: true,
+      target: target
+        ? { id: target.id, managementRole: target.managementRole, hasPasswordAccess: !!access }
+        : null,
+    });
+    if (!decision.ok || !target || !access) {
+      return { success: false, error: passwordResetDeniedText(decision.ok ? "no-access" : decision.reason) };
     }
 
     const row = await resetPasswordGuarded(target.id, actor.memberId, await lockHash());
@@ -376,7 +405,7 @@ export type ResendSetPasswordResult =
 export async function resendSetPasswordLinkAction(
   memberId: string
 ): Promise<ActionResult<ResendSetPasswordResult>> {
-  const auth = await requirePermission("access.manage");
+  const auth = await requirePermission("access.password_reset");
   if (!auth.success) return auth;
   const actor = auth.session;
 
@@ -404,7 +433,11 @@ export async function resendSetPasswordLinkAction(
       return { success: false, error: INACTIVE_PASSWORD_LINK_TEXT };
     }
 
-    const url = await rotateSetPasswordLinkUrl(target.id, { allowExpired: true });
+    const url = await rotateSetPasswordLinkUrl(target.id, {
+      allowExpired: true,
+      actorId: actor.memberId,
+      permission: "access.password_reset",
+    });
     if (!url) return { success: true, data: { outcome: "no-active-link" } };
 
     const mailSent = await mailSetPasswordLink({
@@ -471,7 +504,11 @@ export async function issueSetPasswordLinkForCopyAction(
       return { success: false, error: INACTIVE_PASSWORD_LINK_TEXT };
     }
 
-    const url = await rotateSetPasswordLinkUrl(target.id, { allowExpired: false });
+    const url = await rotateSetPasswordLinkUrl(target.id, {
+      allowExpired: false,
+      actorId: actor.memberId,
+      permission: "access.manage",
+    });
     if (!url) return { success: false, error: NO_ACTIVE_LINK_COPY_TEXT };
 
     await safeLog(() => ({

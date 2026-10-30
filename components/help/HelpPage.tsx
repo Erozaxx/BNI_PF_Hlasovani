@@ -9,8 +9,10 @@ interface HelpPageProps {
   showLeadershipHelp: boolean;
   /** Záložka pro správu členů (právo `members.manage`: admin, Prezident, Viceprezident). */
   showAdminHelp: boolean;
-  /** Čtenář smí přidělovat admina, funkce a hesla (`access.manage`, jen admin). */
+  /** Čtenář smí přidělovat admina a funkce (`access.manage`, jen admin). */
   canManageAccess?: boolean;
+  /** iter-043: právo `access.password_reset` (nová otázka o zapomenutém hesle vedení v nápovědě pro vedení). */
+  canResetPassword?: boolean;
   /** iter-038: právo `attendance.view_all` (správce docházky, i přihlášený odkazem). */
   showAttendanceHelp?: boolean;
   /** iter-038: právo `attendance.edit_history` (zpětné opravy). */
@@ -34,6 +36,7 @@ export function HelpPage({
   showLeadershipHelp,
   showAdminHelp,
   canManageAccess = false,
+  canResetPassword = false,
   showAttendanceHelp = false,
   showAttendanceHistoryHelp = false,
   showInternalMeetingHelp = false,
@@ -57,6 +60,7 @@ export function HelpPage({
             content: (
               <ModeratorHelp
                 showLeadership={showLeadershipHelp}
+                passwordReset={canResetPassword}
                 attendance={showAttendanceHelp}
                 attendanceHistory={showAttendanceHistoryHelp}
                 internalMeetings={showInternalMeetingHelp}

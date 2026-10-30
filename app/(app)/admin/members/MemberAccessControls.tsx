@@ -317,7 +317,7 @@ export function MemberAccessControls({
         <div className="flex flex-col gap-4">
           <p className="text-xs text-text-muted">
             Funkce je pozice ve vedení chapteru. Člen výboru má práva moderátora, Prezident a
-            Viceprezident práva admina, jen nepřidělují admina, funkce a hesla. Role Moderátor a
+            Viceprezident práva admina, jen nepřidělují admina a funkce. Role Moderátor a
             Admin se nastavují zvlášť a práva se sčítají. Odkaz z mailu dává vždy jen práva
             člena, vedení se přihlašuje heslem.
           </p>

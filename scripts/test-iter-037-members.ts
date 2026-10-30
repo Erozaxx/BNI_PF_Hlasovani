@@ -99,6 +99,8 @@ const TODAY_MODERATOR: Permission[] = [
   "burza.manage",
   // iter-040: moderátor a Člen výboru zakládají a ruší interní schůzky v docházce (gate K1 A).
   "attendance.internal_manage",
+  // iter-043: reset hesla člena vedení (gate K13 A).
+  "access.password_reset",
 ];
 
 // Tabulka akce -> právo (arch 6.6, upravená o změny zadání).
@@ -162,8 +164,8 @@ const ACTION_TABLE: Array<[string, string, Permission]> = [
   ["actions/import-members.ts", "parseXlsxAction", "members.manage"],
   ["actions/import-members.ts", "importMembersAction", "members.manage"],
   ["actions/member-access.ts", "setMemberRoleAction", "access.manage"],
-  ["actions/member-access.ts", "resetMemberPasswordAction", "access.manage"],
-  ["actions/member-access.ts", "resendSetPasswordLinkAction", "access.manage"],
+  ["actions/member-access.ts", "resetMemberPasswordAction", "access.password_reset"],
+  ["actions/member-access.ts", "resendSetPasswordLinkAction", "access.password_reset"],
   ["actions/member-access.ts", "issueSetPasswordLinkForCopyAction", "access.manage"],
   // T-003b
   ["actions/member-access.ts", "setMemberFunctionAction", "access.manage"],
@@ -200,7 +202,7 @@ const PAGE_TABLE: Array<[string, string]> = [
   ["app/(app)/status/[runId]/page.tsx", 'permission: "ops.view"'],
   ["app/(app)/settings/page.tsx", "passwordSession: true"],
   ["app/(app)/burza/pomoc/page.tsx", 'permission: "burza.manage"'],
-  ["app/(app)/admin/members/page.tsx", 'permission: "members.manage"'],
+  ["app/(app)/admin/members/page.tsx", 'anyOf: ["members.manage", "access.password_reset"]'],
   ["app/(app)/admin/categories/page.tsx", 'permission: "categories.manage"'],
 ];
 
@@ -230,8 +232,8 @@ const tests: TestCase[] = [
       assert.equal(new Set(PERMISSIONS).size, PERMISSIONS.length, "katalog bez duplicit");
       // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
       // iter-040: +1 (attendance.internal_manage), iter-041: +2 (semafor.view_all, semafor.import).
-      // iter-042: +1 (chapter.settings).
-      assert.equal(PERMISSIONS.length, 28);
+      // iter-042: +1 (chapter.settings). iter-043: +1 (access.password_reset).
+      assert.equal(PERMISSIONS.length, 29);
     },
   },
   {
@@ -243,6 +245,7 @@ const tests: TestCase[] = [
         "actions/members.ts", // role CÍLE (smazání člena, e-mail)
         "app/(app)/admin/members/MemberAccessControls.tsx", // zobrazení (T-003c)
         "app/(app)/admin/members/SortableMemberList.tsx", // zobrazení (T-003c)
+        "app/(app)/admin/members/page.tsx", // iter-043: role CÍLE ve výpisu hesel vedení, ne session
         "app/(app)/admin/members/[id]/page.tsx", // štítek role a vlastní funkce jen adminu (server hlídá znovu)
         "lib/members/labels.ts", // text role v záhlaví
       ]);
@@ -1167,7 +1170,7 @@ const tests: TestCase[] = [
       const src = read("app/(app)/admin/members/[id]/page.tsx");
       assert.ok(src.includes('requirePageSession({ permission: "members.manage" })'));
       assert.ok(src.includes("notFound()") && src.includes("UUID_RE"));
-      for (const t of ["Údaje", "Funkce a přístup", "Stav", "Osobní odkaz", "Smazat"]) {
+      for (const t of ["Údaje", "Funkce a přístup", "Heslo", "Stav", "Osobní odkaz", "Smazat"]) {
         assert.ok(src.includes(`>${t}</h2>`), `sekce ${t}`);
       }
       assert.ok(src.includes('can(session, "access.manage")'));
@@ -1182,6 +1185,7 @@ const tests: TestCase[] = [
     run: () => {
       const ui = [
         "app/(app)/admin/members/MemberAccessControls.tsx",
+        "app/(app)/admin/members/PasswordResetControls.tsx",
         "app/(app)/admin/members/MemberStatusControls.tsx",
         "app/(app)/admin/members/MemberActions.tsx",
         "app/(app)/admin/members/DeleteMemberButton.tsx",
@@ -1319,7 +1323,7 @@ const tests: TestCase[] = [
         "Ne. Smazání je samostatné tlačítko a vrátit nejde.",
         "Odkaz přestane platit a člen se odhlásí, přihlásit se ale může dál přes nový odkaz z přihlašovací stránky. Když se přihlásit nemá, deaktivujte ho.",
         "Člen výboru má práva moderátora.",
-        "Prezident a Viceprezident mají práva admina kromě přidělování admina, funkcí a hesel, to dělá jen admin.",
+        "Prezident a Viceprezident mají práva admina kromě přidělování admina a funkcí, to dělá jen admin.",
         "Účet admina (roli, funkci, heslo, osobní odkaz, údaje, deaktivaci i smazání) mění jen admin.",
         "klikněte na „Uložit funkci“",
       ]) {
@@ -1330,7 +1334,7 @@ const tests: TestCase[] = [
       assert.ok(memberHelp.includes("Zkuste ji. Když nepřijde ani druhý mail, napište vedení chapteru."));
       assert.ok(!memberHelp.includes("Zkuste ji, nebo napište někomu z vedení. Když nepřijde ani druhý"), "zdvojená věta");
       assert.ok(!admin.includes("Uložit funkce"), "člen má nejvýš jednu funkci");
-      assert.ok(read("components/help/sections/ModeratorHelp.tsx").includes("Přidělování admina, funkcí a hesel a změny v účtu admina dělá jen admin."));
+      assert.ok(read("components/help/sections/ModeratorHelp.tsx").includes("Přidělování admina a funkcí, odkaz ke zkopírování a změny v účtu admina dělá jen admin."));
       assert.ok(read("components/help/sections/ModeratorHelp.tsx").includes("Člen výboru a moderátor nespravují členy ani funkce"));
     },
   },
@@ -1418,8 +1422,14 @@ const tests: TestCase[] = [
       // roli admin přidělí jen admin i v SQL
       const role = stripComments(functionBody(read("lib/db/queries/members.ts"), "setMemberRoleGuarded"));
       assert.ok(role.includes("const adminOnlyCond = sql`AND ${actorIsAdminSql(actorId)}`") && role.includes("${adminOnlyCond}"));
+      // iter-043: reset hesla hlídá v SQL právo `access.password_reset` (admin v něm je), ne jen roli admin.
+      assert.ok(
+        stripComments(functionBody(read("lib/db/queries/members.ts"), "resetPasswordGuarded")).includes(
+          'actorHasPermissionSql(actorId, "access.password_reset")'
+        ),
+        "resetPasswordGuarded: SQL pojistka podle práva"
+      );
       for (const [file, name] of [
-        ["lib/db/queries/members.ts", "resetPasswordGuarded"],
         ["lib/db/queries/member-functions.ts", "assignMemberFunctionGuarded"],
         ["lib/db/queries/member-functions.ts", "removeMemberFunctionGuarded"],
       ] as const) {
@@ -1598,7 +1608,7 @@ const tests: TestCase[] = [
       ]) assert.ok(imp.includes(t), `ImportMembersForm: ${t}`);
       assert.ok(!/preview<|zobrazit preview/.test(imp), "preview v textu");
       const acc = read("app/(app)/admin/members/MemberAccessControls.tsx").replace(/\s+/g, " ");
-      assert.ok(acc.includes("Funkce je pozice ve vedení chapteru. Člen výboru má práva moderátora, Prezident a Viceprezident práva admina, jen nepřidělují admina, funkce a hesla. Role Moderátor a Admin se nastavují zvlášť a práva se sčítají."));
+      assert.ok(acc.includes("Funkce je pozice ve vedení chapteru. Člen výboru má práva moderátora, Prezident a Viceprezident práva admina, jen nepřidělují admina a funkce. Role Moderátor a Admin se nastavují zvlášť a práva se sčítají."));
       assert.ok(acc.indexOf("Funkce je pozice") < acc.indexOf("htmlFor={`function-"), "vysvětlení je nad výběry");
       assert.ok(read("app/(app)/admin/categories/DeleteCategoryButton.tsx").includes("Smazat kategorii „${categoryName}“? Hosté v ní zůstanou bez kategorie."));
       assert.ok(read("app/(app)/admin/categories/page.tsx").includes("Vytvoř první ve formuláři výše."));

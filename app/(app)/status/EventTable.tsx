@@ -60,6 +60,7 @@ export const KIND_LABELS: Record<string, string> = {
   "access.member-reactivated": "Návrat člena",
   "access.magic-link-revoked": "Zneplatnění odkazu",
   "access.functions-changed": "Změna funkcí",
+  "access.email-changed": "Změna e-mailu vedení",
   // iter-038 (arch 14)
   "access.attendance-manager-changed": "Změna správce docházky",
   "attendance.history-edited": "Oprava docházky",

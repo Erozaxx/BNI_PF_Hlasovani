@@ -860,7 +860,10 @@ const tests: TestCase[] = [
       // SQL protějšek ve shodě s TS
       const sqlSrc = read("lib/db/queries/member-active.ts");
       assert.ok(sqlSrc.includes("DEFAULT_FUNCTION_PERMISSIONS.includes(permission)"), "functionGrantsSql čte výchozí sadu funkce");
-      assert.ok(!sqlSrc.includes("MODERATOR_ROLE_PERMISSIONS"), "SQL funkce nečte sadu role");
+      // iter-043: `actorHasPermissionSql` sadu role čte (přes `roleGrants`), `functionGrantsSql` ne.
+      const grantsStart = sqlSrc.indexOf("export function functionGrantsSql");
+      const grantsBody = sqlSrc.slice(grantsStart, sqlSrc.indexOf("\n}\n", grantsStart));
+      assert.ok(grantsBody.length > 0 && !grantsBody.includes("MODERATOR_ROLE_PERMISSIONS"), "SQL funkce nečte sadu role");
       const permSrc = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/managementRole === "moderator" \? MODERATOR_ROLE_PERMISSIONS/.test(permSrc), "basePermissions čte sadu role");
       assert.ok(!/ATTENDANCE_MANAGER_PERMISSIONS[^\]]*semafor/.test(permSrc));

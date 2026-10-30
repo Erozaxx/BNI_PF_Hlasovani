@@ -292,9 +292,9 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "7a. práva: 28 klíčů, chapter.settings není nedelegovatelné ani v sadě moderátora a Člena výboru",
+    name: "7a. práva: 29 klíčů, chapter.settings není nedelegovatelné ani v sadě moderátora a Člena výboru",
     run: () => {
-      assert.equal(PERMISSIONS.length, 28);
+      assert.equal(PERMISSIONS.length, 29);
       assert.ok((PERMISSIONS as readonly string[]).includes("chapter.settings"));
       assert.ok(!NON_DELEGABLE.includes("chapter.settings"));
       assert.ok(!MODERATOR_ROLE_PERMISSIONS.includes("chapter.settings"));
