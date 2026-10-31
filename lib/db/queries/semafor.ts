@@ -19,8 +19,15 @@ import { sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { memberActiveSql } from "@/lib/db/queries/member-active";
-import { bonusForMonth, type BonusEvent, type ScoreRecord } from "@/lib/semafor/mine";
-import { bonusWindow, filterBonusEvents, internalScore, type BonusSources } from "@/lib/semafor/bonus";
+import { bonusForMonth, eventsAfterSnapshot, type BonusEvent, type ScoreRecord } from "@/lib/semafor/mine";
+import { functionEventsSql, readPointEvents } from "@/lib/db/queries/semafor-points";
+import {
+  bonusWindow,
+  filterBonusEvents,
+  internalScore,
+  type BonusCategory,
+  type BonusSources,
+} from "@/lib/semafor/bonus";
 import { summarizeChapter, type ChapterCounts } from "@/lib/semafor/summary";
 import type { SaveRow } from "@/lib/semafor/import";
 import type { MatchMember } from "@/lib/semafor/names";
@@ -209,8 +216,12 @@ export function bonusEventsSql(opts: { after: string; to: string; memberId?: str
  * částí (`sources` z `bonusSources(await getChapterSettings())`, povinný
  * parametr, aby ho volající nemohl vynechat). Vypnutá část nedává bonus, data
  * v DB zůstávají a po zapnutí se bonus vrátí. Filtr je v TS
- * (`filterBonusEvents`), SQL zůstává beze změny. Modul nečte nastavení sám,
- * zůstává použitelný v holém Node (test PALMS importuje `bonusEventsSql`).
+ * (`filterBonusEvents`, mapa kategorie na zdroj), SQL zůstává beze změny.
+ *
+ * iter-044: tři dotazy, `Promise.all`. Master mind a Burza (`bonusEventsSql`,
+ * beze změny, importuje ho test PALMS), funkce (`functionEventsSql`, bez spodní
+ * meze okna) a ruční body (`readPointEvents`, při chybějící tabulce prázdné,
+ * R-04). Modul nečte nastavení sám, zůstává použitelný v holém Node.
  */
 export async function listBonusEvents(opts: {
   after: string;
@@ -218,10 +229,23 @@ export async function listBonusEvents(opts: {
   memberId?: string;
   sources: BonusSources;
 }): Promise<BonusEvent[]> {
-  const r = await getDb().execute<{ member_id: string; category: "mastermind" | "burza"; d: string }>(
-    bonusEventsSql(opts)
-  );
-  const events = r.rows.map((x) => ({ memberId: x.member_id, category: x.category, date: x.d }));
+  const [auto, fn, manual] = await Promise.all([
+    getDb().execute<{ member_id: string; category: BonusCategory; d: string }>(bonusEventsSql(opts)),
+    getDb().execute<{ member_id: string; category: BonusCategory; d: string }>(
+      functionEventsSql({ to: opts.to, memberId: opts.memberId })
+    ),
+    readPointEvents(opts),
+  ]);
+  const events: BonusEvent[] = [
+    ...auto.rows.map((x) => ({ memberId: x.member_id, category: x.category, date: x.d })),
+    ...fn.rows.map((x) => ({ memberId: x.member_id, category: x.category, date: x.d })),
+    ...manual.map((x) => ({
+      memberId: x.member_id,
+      category: x.category as BonusCategory,
+      date: x.d,
+      ...(x.points === null || x.points === undefined ? {} : { points: Number(x.points) }),
+    })),
+  ];
   return filterBonusEvents(events, opts.sources);
 }
 
@@ -247,7 +271,8 @@ export async function countMyEventsAfter(
 ): Promise<number> {
   if (today <= afterDate) return 0;
   const events = await listBonusEvents({ after: afterDate, to: today, memberId, sources });
-  return events.length;
+  // R-08: funkce nemá spodní mez okna, počítá se jen ta přidělená po konci měsíce snímku.
+  return eventsAfterSnapshot(events, afterDate).length;
 }
 
 // ── Souhrn chapteru a přehled vedení ──────────────────────────

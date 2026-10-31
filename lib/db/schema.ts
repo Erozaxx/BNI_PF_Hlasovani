@@ -438,6 +438,86 @@ export const semaforNameAlias = pgTable(
 );
 
 // ============================================================
+// SEMAFOR: VLASTNÍ BODY (iter-044, arch 5)
+// ============================================================
+// Zdroj pravdy pro DDL je lib/semafor/points-ddl.ts (čte ho migrace i test),
+// tohle je zrcadlo pro Drizzle. Funkce, Master mind a Burza se do těchto
+// tabulek nekopírují, bonus za ně se počítá živě (lib/semafor/bonus.ts).
+
+/** Akce chapteru (účast na akci dává každému účastníkovi řádek v `semafor_point`). */
+export const semaforActivity = pgTable(
+  "semafor_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    heldOn: date("held_on").notNull(),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    heldIdx: index("idx_sa_held_on").on(sql`${table.heldOn} DESC`),
+    titleLen: check("sa_title_len", sql`char_length(btrim(${table.title})) BETWEEN 3 AND 120`),
+    uqDup: uniqueIndex("uq_sa_dup").on(table.heldOn, sql`lower(btrim(${table.title}))`),
+  })
+);
+
+/** Ruční body: školení, poděkování, přivedený host, který se stal členem, akce, ostatní práce. */
+export const semaforPoint = pgTable(
+  "semafor_point",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    earnedOn: date("earned_on").notNull(),
+    earnedMonth: date("earned_month").notNull(),
+    points: smallint("points"),
+    note: text("note"),
+    refMemberId: uuid("ref_member_id").references(() => member.id, { onDelete: "cascade" }),
+    activityId: uuid("activity_id").references(() => semaforActivity.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    category: check("sp_category", sql`${table.category} IN ('training', 'thanks', 'host_member', 'activity', 'work')`),
+    month: check("sp_month", sql`${table.earnedMonth} = date_trunc('month', ${table.earnedOn}::timestamp)::date`),
+    points: check(
+      "sp_points",
+      sql`(${table.category} = 'work' AND ${table.points} IS NOT NULL AND ${table.points} BETWEEN 1 AND 20)
+        OR (${table.category} <> 'work' AND ${table.points} IS NULL)`
+    ),
+    noteLen: check("sp_note_len", sql`${table.note} IS NULL OR char_length(${table.note}) <= 300`),
+    noteRequired: check(
+      "sp_note_required",
+      sql`${table.category} NOT IN ('thanks', 'training', 'work') OR char_length(btrim(coalesce(${table.note}, ''))) >= 3`
+    ),
+    ref: check("sp_ref", sql`(${table.category} = 'host_member') = (${table.refMemberId} IS NOT NULL)`),
+    refNotSelf: check("sp_ref_not_self", sql`${table.refMemberId} IS NULL OR ${table.refMemberId} <> ${table.memberId}`),
+    activity: check("sp_activity", sql`(${table.category} = 'activity') = (${table.activityId} IS NOT NULL)`),
+    notSelf: check("sp_not_self", sql`${table.createdBy} IS NULL OR ${table.createdBy} <> ${table.memberId}`),
+    uqThanks: uniqueIndex("uq_sp_thanks")
+      .on(table.createdBy, table.memberId, table.earnedMonth)
+      .where(sql`${table.category} = 'thanks'`),
+    uqTraining: uniqueIndex("uq_sp_training")
+      .on(table.memberId, table.earnedOn)
+      .where(sql`${table.category} = 'training'`),
+    uqHostMember: uniqueIndex("uq_sp_host_member")
+      .on(table.refMemberId)
+      .where(sql`${table.category} = 'host_member'`),
+    uqActivity: uniqueIndex("uq_sp_activity")
+      .on(table.activityId, table.memberId)
+      .where(sql`${table.category} = 'activity'`),
+    uqWork: uniqueIndex("uq_sp_work")
+      .on(table.memberId, table.createdBy, table.earnedOn, sql`md5(lower(btrim(${table.note})))`)
+      .where(sql`${table.category} = 'work'`),
+    memberEarnedIdx: index("idx_sp_member_earned").on(table.memberId, table.earnedOn),
+    earnedIdx: index("idx_sp_earned").on(table.earnedOn),
+    createdByIdx: index("idx_sp_created_by").on(table.createdBy),
+  })
+);
+
+// ============================================================
 // GUEST
 // ============================================================
 export const guest = pgTable(

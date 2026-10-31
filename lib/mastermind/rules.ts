@@ -14,6 +14,7 @@
  */
 
 import { DEFAULT_CHAPTER_SETTINGS, weekdayOfDate } from "../chapter/settings";
+import { plural } from "../text/plural";
 
 export type CaseStatus = "proposed" | "scheduled" | "presented";
 
@@ -252,11 +253,6 @@ export function dayOptions(
 
 // ── Popisky (4.2) ──
 
-function plural(n: number, one: string, few: string, many: string): string {
-  if (n === 1) return one;
-  if (n >= 2 && n <= 4) return few;
-  return many;
-}
 
 export interface InterestLabels {
   /** Počet u karty, např. „3 zájemci“. */

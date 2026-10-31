@@ -9,6 +9,7 @@ import { KODEX_PAGE } from "@/content/pravidla/kodex";
 import { OBOR_PAGE } from "@/content/pravidla/obor";
 import { ROLE_PAGE } from "@/content/pravidla/role";
 import { SCHUZKA_PAGE } from "@/content/pravidla/schuzka";
+import { SEMAFOR_PAGE } from "@/content/pravidla/semafor";
 import { STIZNOSTI_PAGE } from "@/content/pravidla/stiznosti";
 import type { InfoPage } from "./types";
 
@@ -28,6 +29,8 @@ export const INFO_PAGES: InfoPage[] = [
   OBOR_PAGE as InfoPage,
   KODEX_PAGE as InfoPage,
   STIZNOSTI_PAGE as InfoPage,
+  // iter-044: návod celého semaforu, na konec (pořadí karet rozcestníku ostatních stránek se nemění).
+  SEMAFOR_PAGE as InfoPage,
 ];
 
 export function getInfoPage(slug: string): InfoPage | undefined {

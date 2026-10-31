@@ -297,6 +297,7 @@ export interface RightsItem {
   /** Kotva položky (`r1` …). */
   id: string;
   text: string;
+  /** Aspoň jeden zdroj; prázdné pole smí jen položka sekce `kind: "chapter"`. */
   sources: SourceRef[];
 }
 
@@ -324,6 +325,13 @@ export interface InfoReference {
  * před shrnutím. Kotvy sekcí i položek jsou ve stejné množině jako kroky.
  */
 export interface InfoListSection {
+  /**
+   * iter-044: `"chapter"` = pravidla našeho chapteru, která nejsou z manuálu BNI
+   * (interní semafor). Položky mají `sources: []`, sekce žádná `facts`, vykreslí
+   * se se štítkem „U nás v chapteru" a bez odkazů na role (`createRoleLinker`
+   * se nevolá). Bez hodnoty je sekce běžná a každá položka musí mít zdroj.
+   */
+  kind?: "chapter";
   /** Kotva sekce (H2). */
   id: string;
   title: string;

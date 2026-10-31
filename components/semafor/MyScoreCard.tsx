@@ -6,8 +6,6 @@ import {
   AREAS_LEGEND_TEXT,
   SEMAFOR_TEXTS,
   bonusNoneText,
-  bonusBurzaText,
-  bonusMastermindText,
   colorBadgeText,
   monthLabel,
   myBniText,
@@ -18,6 +16,7 @@ import {
 } from "@/lib/semafor/texts";
 import { ColorBadge } from "@/components/semafor/ColorBadge";
 import { AreaList } from "@/components/semafor/AreaList";
+import { BonusLines } from "@/components/semafor/BonusLines";
 
 /**
  * iter-041 (arch 6.2, gate Z8): karta „Můj semafor“. Hlavní štítek je interní
@@ -39,8 +38,6 @@ export function MyScoreCard({
   sources?: BonusSources;
 }) {
   const hasBonus = hasBonusSource(sources);
-  const mm = view.bonus.lines.find((l) => l.category === "mastermind");
-  const bz = view.bonus.lines.find((l) => l.category === "burza");
   return (
     <Card>
       <p className="text-sm text-text-muted">{monthLabel(view.month)}</p>
@@ -63,11 +60,7 @@ export function MyScoreCard({
           {view.bonus.raw === 0 ? (
             <p className="mt-1 text-sm text-text-muted">{bonusNoneText(sources)}</p>
           ) : (
-            <ul className="mt-1 space-y-1 text-sm text-text-main">
-              {sources.mastermind && mm && mm.count > 0 && <li>{bonusMastermindText(mm.count)}</li>}
-              {sources.burza && bz && bz.count > 0 && <li>{bonusBurzaText(bz.count)}</li>}
-              {view.bonus.capped && <li className="text-text-muted">{SEMAFOR_TEXTS.bonusCap}</li>}
-            </ul>
+            <BonusLines bonus={view.bonus} sources={sources} />
           )}
           {later && (
             <p className="mt-2 text-sm text-text-muted">

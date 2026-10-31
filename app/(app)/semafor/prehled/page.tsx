@@ -33,6 +33,7 @@ export default async function SemaforOverviewPage({
   if (await featureOff("semafor")) return <FeatureOff canManageSettings={can(session, "chapter.settings")} />;
   const sources = bonusSources(await getChapterSettings());
   const canImport = can(session, "semafor.import");
+  const canPoints = can(session, "semafor.points");
 
   const [months, latest] = await Promise.all([listMonths(), getLatestMonth()]);
   const requested = parseMonthParam(searchParams?.m);
@@ -54,14 +55,20 @@ export default async function SemaforOverviewPage({
     const items = buildOverview(month, rows, events, sort);
     content = (
       <Card>
-        <OverviewTable month={month} items={items} canDelete={canImport} showBonus={hasBonusSource(sources)} />
+        <OverviewTable
+          month={month}
+          items={items}
+          canDelete={canImport}
+          showBonus={hasBonusSource(sources)}
+          sources={sources}
+        />
       </Card>
     );
   }
 
   return (
     <div className="max-w-5xl space-y-6">
-      <SemaforTabs active="overview" canViewAll canImport={canImport} />
+      <SemaforTabs active="overview" canViewAll canImport={canImport} canPoints={canPoints} />
       <div>
         <h1 className="text-2xl font-bold text-text-main">{SEMAFOR_TEXTS.overviewTitle}</h1>
         <p className="mt-2 text-sm text-text-muted">{overviewLegendText(sources)}</p>

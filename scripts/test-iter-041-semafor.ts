@@ -84,6 +84,10 @@ import {
 import { UNEXCUSED_TEXTS } from "../lib/attendance/texts";
 import {
   aliasRemovedEvent,
+  activityAddedEvent,
+  activityDeletedEvent,
+  pointsAddedEvent,
+  pointsDeletedEvent,
   importedEvent,
   monthDeletedEvent,
   rowDeletedEvent,
@@ -850,7 +854,8 @@ const tests: TestCase[] = [
       // 23h konstanty
       assert.ok(!MODERATOR_ROLE_PERMISSIONS.some((p) => p.startsWith("semafor.")), "role moderátor bez semafor.*");
       assert.ok(!ATTENDANCE_MANAGER_PERMISSIONS.some((p) => p.startsWith("semafor.")));
-      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...MODERATOR_ROLE_PERMISSIONS, VIEW].sort());
+      // iter-044: výchozí sada funkce má navíc `semafor.points`.
+      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...MODERATOR_ROLE_PERMISSIONS, VIEW, "semafor.points"].sort());
       assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(IMP));
       assert.equal(functionGrants(null, VIEW), true);
       assert.equal(functionGrants(null, IMP), false);
@@ -878,6 +883,11 @@ const tests: TestCase[] = [
         monthDeletedEvent(ctx, { month: "2026-09-01", rows: 30 }),
         rowDeletedEvent(ctx, { month: "2026-09-01" }),
         aliasRemovedEvent(ctx),
+        // iter-044: vlastní body (bez příjemce, textu a názvu akce)
+        pointsAddedEvent(ctx, { category: "work", points: 5 }),
+        activityAddedEvent(ctx, { participants: 4 }),
+        pointsDeletedEvent(ctx, { category: "thanks", warn: true }),
+        activityDeletedEvent(ctx, { participants: 4 }),
       ];
       assert.deepEqual(events.map((e) => e.kind), [...SEMAFOR_EVENT_KINDS]);
       for (const e of events) {
@@ -895,7 +905,7 @@ const tests: TestCase[] = [
   {
     name: "26. texty: doslova podle gate, bez U+2014 v kódu semaforu a v nápovědě",
     run: () => {
-      assert.equal(SEMAFOR_TEXTS.myIntro, "Skóre počítá BNI za posledních 6 měsíců, vedení ho sem nahrává jednou měsíčně. Za Master mind a pomoc v Burze pomoci k němu dostaneš bonus.");
+      assert.equal(SEMAFOR_TEXTS.myIntro, "Skóre počítá BNI za posledních 6 měsíců, vedení ho sem nahrává jednou měsíčně. Bonus k němu dostaneš za Master mind, Burzu pomoci, funkci a za body od ostatních.");
       assert.equal(SEMAFOR_TEXTS.bonusCap, "Bonus je nejvýš 20 bodů, posune barvu nejvýš o jednu.");
       assert.equal(SEMAFOR_TEXTS.mmOwnCase, "Vlastní případ potvrdí jiný člen vedení.");
       assert.equal(SEMAFOR_TEXTS.errNotXlsx, "Soubor není xlsx. Ulož ho v Excelu jako .xlsx.");
@@ -917,9 +927,12 @@ const tests: TestCase[] = [
       assert.ok(importExistingText("2026-09-01", 3, "2026-10-03").includes("už jsou nahraní 3 členové"));
       assert.ok(importExistingText("2026-09-01", 1, "2026-10-03").includes("už je nahraný 1 člen "));
       assert.equal(monthLabel("2026-09-01"), "září 2026");
-      assert.equal(HELP_SEMAFOR_MEMBER.length, 5);
-      assert.equal(HELP_SEMAFOR_LEADERSHIP.length, 5);
-      assert.deepEqual(HELP_SEMAFOR_LEADERSHIP.map((h) => h.importOnly), [true, true, true, false, false]);
+      assert.equal(HELP_SEMAFOR_MEMBER.length, 9, "iter-044: devět otázek");
+      assert.equal(HELP_SEMAFOR_LEADERSHIP.length, 11, "iter-044: tři import, Master mind, šest o vlastních bodech, přehled");
+      assert.deepEqual(
+        HELP_SEMAFOR_LEADERSHIP.map((h) => h.importOnly),
+        [true, true, true, false, false, false, false, false, false, false, false]
+      );
       // tykání v UI, vykání v nápovědě: UI texty neobsahují "vás" ani "vaše"
       assert.ok(!/\bvaš|\bvás\b/i.test(JSON.stringify(SEMAFOR_TEXTS)), "UI tyká");
       assert.ok(/vaše skóre/.test(HELP_SEMAFOR_MEMBER[0]), "nápověda vyká");
@@ -940,7 +953,7 @@ const tests: TestCase[] = [
   {
     name: "28. computeBonus: 0 událostí = 0, Master mind 1x = 7, Burza pomoc + kontakt = 10, 2x + 2x = 24 -> 20",
     run: () => {
-      assert.deepEqual(BONUS_POINTS, { mastermind: 7, burza: 5 });
+      assert.deepEqual(BONUS_POINTS, { mastermind: 7, burza: 5, function: 5, training: 7, host_member: 10, activity: 2, thanks: 1 });
       assert.equal(BONUS_CAP, 20);
       assert.equal(computeBonus({ mastermind: 0, burza: 0 }).bonus, 0);
       assert.equal(computeBonus({ mastermind: 1, burza: 0 }).bonus, 7);
@@ -1182,7 +1195,7 @@ const tests: TestCase[] = [
     name: "25. statický: stránky semaforu volají requirePageSession jako první řádek s právem, RSC nepředává cizí řádky",
     run: () => {
       const pages = walk("app/(app)/semafor").filter((f) => f.endsWith("page.tsx"));
-      assert.deepEqual(pages.sort(), ["app/(app)/semafor/import/page.tsx", "app/(app)/semafor/page.tsx", "app/(app)/semafor/prehled/page.tsx"]);
+      assert.deepEqual(pages.sort(), ["app/(app)/semafor/body/page.tsx", "app/(app)/semafor/import/page.tsx", "app/(app)/semafor/page.tsx", "app/(app)/semafor/prehled/page.tsx"]);
       for (const f of pages) {
         const src = stripComments(read(f));
         assert.ok(src.includes('export const dynamic = "force-dynamic"') || read(f).includes('export const dynamic = "force-dynamic"'), `${f} force-dynamic`);
@@ -1422,24 +1435,26 @@ const tests: TestCase[] = [
     name: "40. iter-042 (BK2, Z3): bonus jen ze zapnutých částí; texty bonusu podle zdrojů; obě vypnuté = skóre je skóre z BNI",
     run: () => {
       const on = { ...DEFAULT_CHAPTER_SETTINGS };
-      assert.deepEqual(bonusSources(on), { mastermind: true, burza: true });
-      assert.deepEqual(bonusSources({ ...on, burzaEnabled: false }), { mastermind: true, burza: false });
-      assert.deepEqual(bonusSources({ ...on, semaforEnabled: false }), { mastermind: false, burza: false }, "bez semaforu žádný bonus");
-      assert.equal(hasBonusSource(bonusSources({ ...on, mastermindEnabled: false, burzaEnabled: false })), false);
+      assert.deepEqual(bonusSources(on), { mastermind: true, burza: true, points: true });
+      assert.deepEqual(bonusSources({ ...on, burzaEnabled: false }), { mastermind: true, burza: false, points: true });
+      assert.deepEqual(bonusSources({ ...on, semaforEnabled: false }), { mastermind: false, burza: false, points: false }, "bez semaforu žádný bonus");
+      // iter-044: při zapnutém semaforu je zdroj vždy (funkce a poděkování existují vždy).
+      assert.equal(hasBonusSource(bonusSources({ ...on, mastermindEnabled: false, burzaEnabled: false })), true);
+      assert.equal(hasBonusSource(bonusSources({ ...on, semaforEnabled: false })), false);
       const events: BonusEvent[] = [
         { memberId: "m1", category: "mastermind", date: "2026-09-10" },
         { memberId: "m1", category: "burza", date: "2026-09-11" },
         { memberId: "m1", category: "burza", date: "2026-09-12" },
       ];
-      assert.equal(filterBonusEvents(events, { mastermind: true, burza: true }).length, 3);
-      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: true }).map((e) => e.category), ["burza", "burza"]);
-      assert.equal(filterBonusEvents(events, { mastermind: false, burza: false }).length, 0);
+      assert.equal(filterBonusEvents(events, { mastermind: true, burza: true, points: true }).length, 3);
+      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: true, points: true }).map((e) => e.category), ["burza", "burza"]);
+      assert.equal(filterBonusEvents(events, { mastermind: false, burza: false, points: true }).length, 0);
       const record = { month: "2026-09-01", memberId: "m1", totalScore: 66 } as ScoreRecord;
       const full = buildMonthView(record, events);
       assert.equal(full.bonus.bonus, 17);
-      const burzaOnly = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: true }));
+      const burzaOnly = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: true, points: true }));
       assert.equal(burzaOnly.bonus.bonus, 10);
-      const none = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: false }));
+      const none = buildMonthView(record, filterBonusEvents(events, { mastermind: false, burza: false, points: true }));
       assert.equal(none.bonus.bonus, 0);
       assert.equal(none.internal, none.total, "obě části vypnuté: skóre = BNI");
       assert.equal(none.internalColor, none.bniColor);
@@ -1455,26 +1470,27 @@ const tests: TestCase[] = [
         assert.ok(read(f).includes("bonusSources(await getChapterSettings())"), f);
       }
       // karta, legendy a úvod
-      const all = { mastermind: true, burza: true };
+      const all = { mastermind: true, burza: true, points: true };
+      const noSource = { mastermind: false, burza: false, points: false };
       assert.equal(
         scoreLegendText(all),
-        "Skóre je skóre z BNI plus tvůj bonus za Master mind a Burzu pomoci. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30. Řádek BNI ukazuje skóre bez bonusu."
+        "Skóre je skóre z BNI plus tvůj bonus za Master mind, Burzu pomoci, funkci a vlastní body. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30. Řádek BNI ukazuje skóre bez bonusu."
       );
-      assert.ok(scoreLegendText({ mastermind: false, burza: true }).startsWith("Skóre je skóre z BNI plus tvůj bonus za Burzu pomoci. "));
+      assert.ok(scoreLegendText({ mastermind: false, burza: true, points: true }).startsWith("Skóre je skóre z BNI plus tvůj bonus za Burzu pomoci, funkci a vlastní body. "));
       assert.equal(
-        scoreLegendText({ mastermind: false, burza: false }),
+        scoreLegendText(noSource),
         "Skóre je skóre z BNI. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30."
       );
       assert.equal(
         overviewLegendText(all),
-        "Skóre a Barva jsou s bonusem, BNI je skóre bez bonusu, Bonus jsou body za Master mind a Burzu pomoci. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30."
+        "Skóre a Barva jsou s bonusem, BNI je skóre bez bonusu, Bonus jsou body za Master mind, Burzu pomoci, funkci a vlastní body. Zelená od 70, žlutá od 50, červená od 30, šedá pod 30."
       );
-      assert.equal(overviewLegendText({ mastermind: false, burza: false }), "Zelená od 70, žlutá od 50, červená od 30, šedá pod 30.");
-      assert.ok(overviewLegendText({ mastermind: true, burza: false }).includes("Bonus jsou body za Master mind. "));
+      assert.equal(overviewLegendText(noSource), "Zelená od 70, žlutá od 50, červená od 30, šedá pod 30.");
+      assert.ok(overviewLegendText({ mastermind: true, burza: false, points: true }).includes("Bonus jsou body za Master mind, funkci a vlastní body. "));
       assert.equal(myIntroText(all), SEMAFOR_TEXTS.myIntro);
-      assert.ok(!/bonus|Burz|Master/.test(myIntroText({ mastermind: false, burza: false })));
+      assert.ok(!/bonus|Burz|Master/.test(myIntroText(noSource)));
       assert.equal(
-        myBonusLaterText("2026-09-30", "2026-10-01", { mastermind: true, burza: false }),
+        myBonusLaterText("2026-09-30", "2026-10-01", { mastermind: true, burza: false, points: false }),
         "Master mind po 30. 9. 2026 se započtou s daty za říjen 2026."
       );
       // prahy ze COLOR_THRESHOLDS, ne natvrdo
@@ -1564,15 +1580,15 @@ const tests: TestCase[] = [
       assert.ok(!/7:30|čtvrt/i.test(texts), "texts.ts bez natvrdo času a dne");
       // Z3: nápověda podle zdrojů
       assert.deepEqual(helpSemaforMember(), [...HELP_SEMAFOR_MEMBER]);
-      assert.equal(helpSemaforMember().length, 5);
-      const none = helpSemaforMember({ mastermind: false, burza: false });
+      assert.equal(helpSemaforMember().length, 9);
+      const none = helpSemaforMember({ mastermind: false, burza: false, points: false });
       assert.equal(none.length, 4);
       assert.ok(!none.join(" ").includes("bonus") && !none.join(" ").includes("Master mind"));
-      assert.ok(helpSemaforMember({ mastermind: true, burza: false }).join(" ").includes("7 bodů za odprezentovaný Master mind"));
-      assert.ok(!helpSemaforMember({ mastermind: true, burza: false }).join(" ").includes("Burz"));
-      assert.equal(helpSemaforLeadership().length, 5);
-      assert.equal(helpSemaforLeadership({ mastermind: false, burza: true }).length, 4);
-      assert.ok(!helpSemaforLeadership({ mastermind: false, burza: true }).map((h) => h.text).join(" ").includes("Master mind"));
+      assert.ok(helpSemaforMember({ mastermind: true, burza: false, points: true }).join(" ").includes("Master mind, který proběhl, 7 bodů."));
+      assert.ok(!helpSemaforMember({ mastermind: true, burza: false, points: true }).join(" ").includes("Burz"));
+      assert.equal(helpSemaforLeadership().length, 11);
+      assert.equal(helpSemaforLeadership({ mastermind: false, burza: true, points: false }).length, 4);
+      assert.ok(!helpSemaforLeadership({ mastermind: false, burza: true, points: false }).map((h) => h.text).join(" ").includes("Master mind"));
       assert.ok(helpSemaforMember().every((t) => !t.includes(EM_DASH)));
     },
   },

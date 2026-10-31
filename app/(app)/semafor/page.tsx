@@ -12,8 +12,20 @@ import {
   listMyScores,
 } from "@/lib/db/queries/semafor";
 import { buildMonthView } from "@/lib/semafor/mine";
-import { bonusSources, hasBonusSource } from "@/lib/semafor/bonus";
-import { SEMAFOR_TEXTS, colorBadgeText, fmtNum, monthLabel, myIntroText, myMissingText } from "@/lib/semafor/texts";
+import { bonusSources, bonusWindow, hasBonusSource } from "@/lib/semafor/bonus";
+import { pointDateRange } from "@/lib/semafor/points";
+import {
+  POINT_TEXTS,
+  SEMAFOR_TEXTS,
+  colorBadgeText,
+  fmtNum,
+  monthLabel,
+  myIntroText,
+  myMissingText,
+} from "@/lib/semafor/texts";
+import { listMyPoints, listMyWrittenThanks, listThanksRecipients } from "@/lib/db/queries/semafor-points";
+import { MyPointsCard } from "@/components/semafor/MyPointsCard";
+import { ThanksCard } from "@/components/semafor/ThanksCard";
 import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { featureOff } from "@/lib/chapter/feature-guard";
 import { FeatureOff } from "@/components/chapter/FeatureOff";
@@ -31,6 +43,11 @@ import { ChapterSummaryCard } from "@/components/semafor/ChapterSummaryCard";
  *
  * iter-042: vypnutý semafor ukáže `FeatureOff` (Z10), bonus jen ze zapnutých
  * částí (BK2, Z3).
+ *
+ * iter-044: karty „Body za 6 měsíců“ a „Poděkovat“. `listMyPoints` a
+ * `listMyWrittenThanks` se volají jen se `session.memberId`, nikdy s cizím id,
+ * cizí body ani poděkování sem nejdou. Bez migrace (chybí tabulky) místo karet
+ * věta `readNoTable`, bonus se spočítá bez ručních bodů.
  */
 export default async function SemaforPage() {
   const session = await requirePageSession();
@@ -38,9 +55,11 @@ export default async function SemaforPage() {
   const sources = bonusSources(await getChapterSettings());
   const canViewAll = can(session, "semafor.view_all");
   const canImport = can(session, "semafor.import");
+  const canPoints = can(session, "semafor.points");
 
   const latest = await getLatestMonth();
   let body: React.ReactNode;
+  const today = pragueToday();
 
   if (!latest) {
     body = (
@@ -49,7 +68,6 @@ export default async function SemaforPage() {
       </Card>
     );
   } else {
-    const today = pragueToday();
     const mine = await listMyScores(session.memberId, 12);
     const events = await listMyBonusEvents(session.memberId, mine.map((r) => r.month), sources);
     const views = mine.map((r) => buildMonthView(r, events));
@@ -98,14 +116,43 @@ export default async function SemaforPage() {
     );
   }
 
+  // iter-044: vlastní záznamy a poděkování. Okno posledního měsíce snímku, jinak 6 měsíců od dneška.
+  const pointsAfter = latest ? bonusWindow(latest).after : pointDateRange(today).after;
+  const writtenAfter = pointDateRange(today).after;
+  const [myPoints, written, recipients] = await Promise.all([
+    listMyPoints(session.memberId, pointsAfter, today),
+    listMyWrittenThanks(session.memberId, writtenAfter),
+    listThanksRecipients(session.memberId),
+  ]);
+  let snapshotEnd: string | null = null;
+  let nextMonthStart: string | null = null;
+  if (latest) {
+    const { year, month: m } = monthOf(latest);
+    snapshotEnd = monthEnd(year, m);
+    const nx = shiftMonth(year, m, 1);
+    nextMonthStart = monthStart(nx.year, nx.month);
+  }
+  const pointsBody =
+    myPoints.missing || written.missing ? (
+      <Card>
+        <p className="text-sm text-text-muted">{POINT_TEXTS.readNoTable}</p>
+      </Card>
+    ) : (
+      <>
+        <MyPointsCard points={myPoints.value} afterDate={snapshotEnd} nextMonth={nextMonthStart} />
+        <ThanksCard recipients={recipients} written={written.value} />
+      </>
+    );
+
   return (
     <div className="max-w-3xl space-y-6">
-      <SemaforTabs active="mine" canViewAll={canViewAll} canImport={canImport} />
+      <SemaforTabs active="mine" canViewAll={canViewAll} canImport={canImport} canPoints={canPoints} />
       <div>
         <h1 className="text-2xl font-bold text-text-main">{SEMAFOR_TEXTS.myTitle}</h1>
         <p className="mt-2 text-sm text-text-muted">{myIntroText(sources)}</p>
       </div>
       {body}
+      {pointsBody}
     </div>
   );
 }

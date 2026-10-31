@@ -11,7 +11,7 @@ export function PrintButton({ label }: { label: string }) {
     <button
       type="button"
       onClick={() => window.print()}
-      className="info-print-button rounded text-sm font-medium text-navy underline underline-offset-2 focus:outline-none focus-visible:shadow-focus"
+      className="info-print-button inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-sm font-medium text-navy underline underline-offset-2 focus:outline-none focus-visible:shadow-focus"
     >
       {label}
     </button>

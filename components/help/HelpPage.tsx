@@ -23,6 +23,10 @@ interface HelpPageProps {
   showSemaforHelp?: boolean;
   /** iter-041: právo `semafor.import` (nahrávání souboru, první tři body nápovědy). */
   showSemaforImportHelp?: boolean;
+  /** iter-044: právo `semafor.points` (body o vlastních bodech v nápovědě pro vedení). */
+  showSemaforPointsHelp?: boolean;
+  /** iter-044: držitel funkce Člen výboru (bod o udělování ostatní práce). */
+  showSemaforCommitteeHelp?: boolean;
   /**
    * iter-042: nastavení chapteru. Vypnutý Master mind, Burza a Semafor v nápovědě
    * zmizí (sekce i věty o nich), den a začátek schůzky se berou odsud.
@@ -42,10 +46,12 @@ export function HelpPage({
   showInternalMeetingHelp = false,
   showSemaforHelp = false,
   showSemaforImportHelp = false,
+  showSemaforPointsHelp = false,
+  showSemaforCommitteeHelp = false,
   settings = DEFAULT_CHAPTER_SETTINGS,
   canManageSettings = false,
 }: HelpPageProps) {
-  const semaforHelp = showSemaforHelp && settings.semaforEnabled;
+  const semaforHelp = (showSemaforHelp || showSemaforPointsHelp) && settings.semaforEnabled;
   const tabs = [
     {
       id: "member",
@@ -66,6 +72,8 @@ export function HelpPage({
                 internalMeetings={showInternalMeetingHelp}
                 semafor={showSemaforHelp}
                 semaforImport={showSemaforImportHelp}
+                semaforPoints={showSemaforPointsHelp}
+                semaforCommittee={showSemaforCommitteeHelp}
                 settings={settings}
               />
             ),

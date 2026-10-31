@@ -8,14 +8,22 @@ import {
   deleteSemaforRowAction,
   removeSemaforAliasAction,
 } from "@/actions/semafor";
-import { SEMAFOR_TEXTS, deleteMonthConfirmText, deleteRowConfirmText } from "@/lib/semafor/texts";
+import { deleteActivityAction, deleteOwnThanksAction, deletePointAction } from "@/actions/semafor-points";
+import {
+  POINT_TEXTS,
+  SEMAFOR_TEXTS,
+  deleteActivityConfirmText,
+  deleteMonthConfirmText,
+  deletePointConfirmText,
+  deleteRowConfirmText,
+} from "@/lib/semafor/texts";
 
 /**
  * iter-041 (arch 5.9, gate Z6): mazání v semaforu. Dvoukrokové tlačítko v místě
  * (žádný modal), cíle klepnutí aspoň 44 px, na 390 px se zalomí. Po akci se
  * stránka obnoví přes `revalidatePath` na serveru, žádný `router.refresh()`.
  */
-function ConfirmDelete({
+export function ConfirmDelete({
   label,
   question,
   run,
@@ -112,6 +120,44 @@ export function RemoveAliasButton({ nameKey }: { nameKey: string }) {
       label={SEMAFOR_TEXTS.aliasRemove}
       question={null}
       run={() => removeSemaforAliasAction(nameKey)}
+      small
+    />
+  );
+}
+
+// ── iter-044: vlastní body ───────────────────────────────────
+
+/** Smazání záznamu vedením (moderace, `deletePointAction`). */
+export function DeletePointButton({ pointId, category, name }: { pointId: string; category: string; name: string }) {
+  return (
+    <ConfirmDelete
+      label={POINT_TEXTS.deletePoint}
+      question={deletePointConfirmText(category, name)}
+      run={() => deletePointAction(pointId)}
+      small
+    />
+  );
+}
+
+/** Smazání akce a všech jejích bodů (`deleteActivityAction`). */
+export function DeleteActivityButton({ activityId, title, participants }: { activityId: string; title: string; participants: number }) {
+  return (
+    <ConfirmDelete
+      label={POINT_TEXTS.deleteActivity}
+      question={deleteActivityConfirmText(title, participants)}
+      run={() => deleteActivityAction(activityId)}
+      small
+    />
+  );
+}
+
+/** Autor smaže své poděkování (`deleteOwnThanksAction`, bez větve práva). */
+export function DeleteOwnThanksButton({ pointId, name }: { pointId: string; name: string }) {
+  return (
+    <ConfirmDelete
+      label={POINT_TEXTS.deletePoint}
+      question={deletePointConfirmText("Poděkování", name)}
+      run={() => deleteOwnThanksAction(pointId)}
       small
     />
   );

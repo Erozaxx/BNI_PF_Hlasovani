@@ -292,9 +292,9 @@ const tests: TestCase[] = [
     },
   },
   {
-    name: "7a. práva: 29 klíčů, chapter.settings není nedelegovatelné ani v sadě moderátora a Člena výboru",
+    name: "7a. práva: 30 klíčů (iter-044: semafor.points), chapter.settings není nedelegovatelné ani v sadě moderátora a Člena výboru",
     run: () => {
-      assert.equal(PERMISSIONS.length, 29);
+      assert.equal(PERMISSIONS.length, 30);
       assert.ok((PERMISSIONS as readonly string[]).includes("chapter.settings"));
       assert.ok(!NON_DELEGABLE.includes("chapter.settings"));
       assert.ok(!MODERATOR_ROLE_PERMISSIONS.includes("chapter.settings"));
@@ -652,35 +652,37 @@ const tests: TestCase[] = [
     name: "6. bonus podle zapnutých částí (BK2, Z3): funkce, skóre a texty (B7/6)",
     run: () => {
       const on = { ...DEFAULT_CHAPTER_SETTINGS };
-      assert.deepEqual(bonusSources(on), { mastermind: true, burza: true });
-      assert.deepEqual(bonusSources({ ...on, mastermindEnabled: false }), { mastermind: false, burza: true });
-      assert.deepEqual(bonusSources({ ...on, burzaEnabled: false }), { mastermind: true, burza: false });
+      assert.deepEqual(bonusSources(on), { mastermind: true, burza: true, points: true });
+      assert.deepEqual(bonusSources({ ...on, mastermindEnabled: false }), { mastermind: false, burza: true, points: true });
+      assert.deepEqual(bonusSources({ ...on, burzaEnabled: false }), { mastermind: true, burza: false, points: true });
       // vypnutý semafor: bonus neexistuje, i když jsou části zapnuté
-      assert.deepEqual(bonusSources({ ...on, semaforEnabled: false }), { mastermind: false, burza: false });
+      assert.deepEqual(bonusSources({ ...on, semaforEnabled: false }), { mastermind: false, burza: false, points: false });
       const events = [
         { category: "mastermind" as const, date: "2026-09-10" },
         { category: "burza" as const, date: "2026-09-11" },
         { category: "burza" as const, date: "2026-09-12" },
       ];
-      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: true }).map((e) => e.category), ["burza", "burza"]);
-      assert.deepEqual(filterBonusEvents(events, { mastermind: true, burza: false }).map((e) => e.category), ["mastermind"]);
-      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: false }), []);
+      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: true, points: true }).map((e) => e.category), ["burza", "burza"]);
+      assert.deepEqual(filterBonusEvents(events, { mastermind: true, burza: false, points: true }).map((e) => e.category), ["mastermind"]);
+      assert.deepEqual(filterBonusEvents(events, { mastermind: false, burza: false, points: true }), []);
       // oba zdroje vypnuté: bonus 0 a vnitřní skóre = skóre BNI
       const none = computeBonus({
-        mastermind: filterBonusEvents(events, { mastermind: false, burza: false }).length,
+        mastermind: filterBonusEvents(events, { mastermind: false, burza: false, points: false }).length,
         burza: 0,
       });
       assert.equal(none.bonus, 0);
       assert.equal(internalScore(62.5, none.bonus), 62.5);
       assert.ok(internalScore(95, computeBonus({ mastermind: 9, burza: 9 }).bonus) <= 100 && BONUS_CAP === 20);
-      assert.equal(hasBonusSource({ mastermind: false, burza: false }), false);
-      // texty: bez zdroje o bonusu ani slovo
-      const off = { mastermind: false, burza: false };
+      assert.equal(hasBonusSource({ mastermind: false, burza: false, points: false }), false);
+      // iter-044: se zapnutým semaforem je zdrojem vždy funkce a vlastní body
+      assert.equal(hasBonusSource({ mastermind: false, burza: false, points: true }), true);
+      // texty: bez zdroje (vypnutý semafor) o bonusu ani slovo
+      const off = { mastermind: false, burza: false, points: false };
       assert.ok(!/bonus/i.test(scoreLegendText(off)));
       assert.ok(!/bonus/i.test(overviewLegendText(off)));
       assert.ok(!/bonus/i.test(helpSemaforMember(off).join(" ")));
       assert.ok(!/Master mind|bonus/i.test(helpSemaforLeadership(off).map((h) => h.text).join(" ")));
-      assert.ok(!/Burz/.test(scoreLegendText({ mastermind: true, burza: false })));
+      assert.ok(!/Burz/.test(scoreLegendText({ mastermind: true, burza: false, points: true })));
       assert.ok(!/bonus/.test(BURZA_TEXTS.usedHelpHint(false)) && !/bonus/.test(BURZA_TEXTS.usedContactHint(false)));
       assert.ok(/bonus/.test(BURZA_TEXTS.usedHelpHint(true)) && /bonus/.test(BURZA_TEXTS.usedContactHint(true)));
       assert.ok(!/bonus/.test(MM_TEXTS.confirmPresented(false)) && /bonus/.test(MM_TEXTS.confirmPresented(true)));

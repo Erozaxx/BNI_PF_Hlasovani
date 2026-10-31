@@ -373,13 +373,15 @@ const tests: TestCase[] = [
       ].join("\n");
       const must = [
         "Semafor ukazuje vaše skóre podle BNI za posledních 6 měsíců a k němu bonus za to, co děláte pro chapter. Vedení nahrává data BNI jednou měsíčně.",
-        "Bonus: 7 bodů za odprezentovaný Master mind, 5 bodů za každou pomoc nebo kontakt, které někdo v Burze pomoci označí jako využité. Za 6 měsíců nejvýš 20 bodů.",
+        // iter-044: odpověď „Za co je bonus?“ se skládá ze zdrojů a konstant, bez „odprezentovaný“.
+        "Master mind, který proběhl, 7 bodů. Pomoc nebo kontakt, které někdo v Burze pomoci označí jako využité, 5 bodů. Funkce v chapteru 5 bodů.",
+        "Za 6 měsíců nejvýš 20 bodů.",
         "Barvu určuje skóre s bonusem: zelená od 70 bodů, žlutá od 50, červená od 30, šedá pod 30. Vedle vidíte i barvu podle BNI bez bonusu.",
-        "Své hodnoty vidíte jen vy, vedení a členský výbor. Ostatní členové vidí jen počty členů v každé barvě, bez jmen.",
+        "Své hodnoty vidíte jen vy, vedení a členové výboru. Ostatní členové vidí jen počty členů v každé barvě, bez jmen.",
         "Když vám hodnoty nesedí, ozvěte se vedení.",
         "Když nepřijdete, do 7:30 se neomluvíte a nepošlete náhradníka, zapíše vás správce docházky jako Chyběl(a) bez omluvy. Do absencí se to počítá stejně jako omluvená absence.",
         "Chyběl(a) bez omluvy zaškrtněte u člena, který nepřišel, neomluvil se a neposlal náhradníka. Jde to od 7:30, do té doby se člen může omluvit. U omluveného člena volba není, nejdřív zrušte omluvu.",
-        "Vlastní případ v Master mindu nepotvrzujte, potvrdí ho jiný člen vedení. Odprezentovaný případ dává bonus 7 bodů do semaforu.",
+        "Vlastní případ v Master mindu nepotvrzujte, potvrdí ho jiný člen vedení. Master mind, který proběhl, dává bonus 7 bodů do semaforu.",
       ];
       for (const m of must) assert.ok(texts.includes(m), m.slice(0, 40));
       assert.ok(!texts.includes(String.fromCharCode(0x2014)));

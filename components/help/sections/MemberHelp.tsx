@@ -168,7 +168,7 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
             </Link>
             . Stránky jsou veřejné, odkaz můžete poslat i hostovi. Kdo o čem
             rozhoduje, od hosta ke členovi, jak probíhá schůzka, absence, obory,
-            etický kodex a stížnosti.
+            etický kodex, stížnosti a semafor.
           </>
         }
       />
@@ -348,7 +348,21 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
         <HelpSection
           title="Semafor"
           faq={[
-            ...semaforMemberFaq(bonus),
+            ...semaforMemberFaq(bonus).map((x) => ({
+              q: x.q,
+              a:
+                x.link === "pravidla-semafor" ? (
+                  <>
+                    Na stránce{" "}
+                    <Link href="/pravidla/semafor" className="underline text-primary">
+                      Pravidla chapteru, Semafor
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  x.a
+                ),
+            })),
             { q: "Co znamenají zkratky?", a: HELP_SEMAFOR_ABBREVIATIONS },
           ]}
         />

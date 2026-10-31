@@ -18,6 +18,8 @@
 12. [Review Response (iter-001 T-003)](#12-review-response-iter-001-t-003)
 13. [Review Response — T-004](#13-review-response--t-004)
 
+Semafor (iter-041 až iter-044, bonus a vlastní body): [semafor.md](semafor.md).
+
 ---
 
 ## 1. Kontext a omezení

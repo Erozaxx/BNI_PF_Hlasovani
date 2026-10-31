@@ -13,6 +13,7 @@ import {
   internalScore,
   type BonusCategory,
   type BonusResult,
+  WORK_POINTS,
 } from "@/lib/semafor/bonus";
 
 /** Jeden snímek ze `semafor_score` (čísla už jako `number`). */
@@ -41,6 +42,8 @@ export interface BonusEvent {
   category: BonusCategory;
   /** `YYYY-MM-DD` */
   date: string;
+  /** Jen ostatní práce (`work`): body udělené členem výboru, 1 až `WORK_POINTS.max`. */
+  points?: number;
 }
 
 export type AreaKey = "attendance" | "ceu" | "oneToOne" | "referrals" | "tyfcb" | "visitors" | "sponsors";
@@ -74,15 +77,42 @@ export function areasOf(r: ScoreRecord): AreaView[] {
   ];
 }
 
-/** Bonus člena k měsíci snímku: počty událostí v okně `(poslední den - 6 měsíců, poslední den]`. */
+/**
+ * Bonus člena k měsíci snímku: události v okně `(poslední den - 6 měsíců,
+ * poslední den]`. Funkce (iter-044, K10) nemá spodní mez: počítá se, když ji
+ * člen drží dnes a `date` (přidělení) je nejpozději poslední den měsíce.
+ * Body ostatní práce se ořežou na `WORK_POINTS` a sečtou.
+ */
 export function bonusForMonth(month: string, memberId: string, events: readonly BonusEvent[]): BonusResult {
   const w = bonusWindow(month);
-  const counts = { mastermind: 0, burza: 0 };
+  const counts: Partial<Record<BonusCategory, number>> = {};
+  let workPoints = 0;
   for (const e of events) {
     if (e.memberId !== memberId) continue;
-    if (inBonusWindow(w, e.date)) counts[e.category]++;
+    if (e.category === "function") {
+      if (e.date <= w.to) counts.function = 1;
+      continue;
+    }
+    if (!inBonusWindow(w, e.date)) continue;
+    counts[e.category] = (counts[e.category] ?? 0) + 1;
+    if (e.category === "work") {
+      const p = Math.floor(Number(e.points));
+      if (Number.isFinite(p)) workPoints += Math.min(WORK_POINTS.max, Math.max(0, p));
+    }
   }
-  return computeBonus(counts);
+  return computeBonus(counts, workPoints);
+}
+
+/**
+ * R-08: události po konci měsíce snímku. Funkce nemá spodní mez okna, takže
+ * by se započetla vždy; zůstane jen ta přidělená po `afterDate`. Ostatní
+ * kategorie beze změny.
+ */
+export function eventsAfterSnapshot<T extends { category: BonusCategory; date: string }>(
+  events: readonly T[],
+  afterDate: string
+): T[] {
+  return events.filter((e) => (e.category === "function" ? e.date > afterDate : true));
 }
 
 export interface MonthView {

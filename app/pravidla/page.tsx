@@ -27,6 +27,8 @@ const T = TEMPLATE_TEXTS.hub;
  */
 const HUB_IMAGE_FALLBACK: Record<string, ComicPanel> = {
   role: ROLE_COMICS.R10.panels[1],
+  // iter-044: ilustraci semaforu dodá Tom, do té doby existující panel.
+  semafor: ROLE_COMICS.R10.panels[1],
 };
 
 export const metadata: Metadata = {

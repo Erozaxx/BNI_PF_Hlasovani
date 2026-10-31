@@ -311,7 +311,7 @@ const tests: TestCase[] = [
     run: () => {
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
-      assert.equal(PERMISSIONS.length, 29, "iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
+      assert.equal(PERMISSIONS.length, 30, "iter-044: +semafor.points, iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));

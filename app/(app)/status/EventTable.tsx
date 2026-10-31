@@ -90,6 +90,11 @@ export const KIND_LABELS: Record<string, string> = {
   "semafor.month-deleted": "Semafor: měsíc smazán",
   "semafor.row-deleted": "Semafor: řádek smazán",
   "semafor.alias-removed": "Semafor: párování smazáno",
+  // iter-044 (arch 6.4): vlastní body
+  "semafor.points-added": "Semafor: body zapsány",
+  "semafor.activity-added": "Semafor: akce zapsána",
+  "semafor.points-deleted": "Semafor: body smazány",
+  "semafor.activity-deleted": "Semafor: akce smazána",
   // iter-042: nastavení chapteru
   "settings.changed": "Nastavení chapteru změněno",
 };

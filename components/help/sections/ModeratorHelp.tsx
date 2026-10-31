@@ -19,6 +19,10 @@ interface ModeratorHelpProps {
   semafor?: boolean;
   /** iter-041: právo `semafor.import`: první tři body sekce „Semafor pro vedení“. */
   semaforImport?: boolean;
+  /** iter-044: právo `semafor.points`: body o vlastních bodech v sekci „Semafor pro vedení“. */
+  semaforPoints?: boolean;
+  /** iter-044: držitel funkce Člen výboru: bod o udělování ostatní práce. */
+  semaforCommittee?: boolean;
   /** iter-042: nastavení chapteru (den a začátek schůzky, zapnuté části). Bez něj platí výchozí stav. */
   settings?: ChapterSettings;
 }
@@ -31,6 +35,8 @@ export function ModeratorHelp({
   internalMeetings = false,
   semafor = false,
   semaforImport = false,
+  semaforPoints = false,
+  semaforCommittee = false,
   settings = DEFAULT_CHAPTER_SETTINGS,
 }: ModeratorHelpProps = {}) {
   const sources = bonusSources(settings);
@@ -74,10 +80,12 @@ export function ModeratorHelp({
         </>
       )}
 
-      {semafor && settings.semaforEnabled && (
+      {(semafor || semaforPoints) && settings.semaforEnabled && (
         <HelpSection
           title="Semafor pro vedení"
-          faq={helpSemaforLeadership(sources).filter((h) => semaforImport || !h.importOnly).map((h) => ({
+          faq={helpSemaforLeadership(sources)
+            .filter((h) => (semaforImport || !h.importOnly) && (semaforPoints || !h.pointsOnly) && (semaforCommittee || !h.committeeOnly))
+            .map((h) => ({
             q: "",
             a: h.text,
           }))}
