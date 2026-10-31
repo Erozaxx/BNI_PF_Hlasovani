@@ -12,13 +12,21 @@ export type SemaforEventKind =
   | "semafor.imported"
   | "semafor.month-deleted"
   | "semafor.row-deleted"
-  | "semafor.alias-removed";
+  | "semafor.alias-removed"
+  | "semafor.points-added"
+  | "semafor.activity-added"
+  | "semafor.points-deleted"
+  | "semafor.activity-deleted";
 
 export const SEMAFOR_EVENT_KINDS: readonly SemaforEventKind[] = [
   "semafor.imported",
   "semafor.month-deleted",
   "semafor.row-deleted",
   "semafor.alias-removed",
+  "semafor.points-added",
+  "semafor.activity-added",
+  "semafor.points-deleted",
+  "semafor.activity-deleted",
 ];
 
 export interface SemaforEventCtx {
@@ -27,13 +35,19 @@ export interface SemaforEventCtx {
   actor: string;
 }
 
-function base(ctx: SemaforEventCtx, kind: SemaforEventKind, message: string, detail: Record<string, unknown>): OpsEventInput {
+function base(
+  ctx: SemaforEventCtx,
+  kind: SemaforEventKind,
+  message: string,
+  detail: Record<string, unknown>,
+  severity: "info" | "warn" = "info"
+): OpsEventInput {
   return {
     runId: ctx.runId,
     seq: 1,
     source: "gui",
     kind,
-    severity: "info",
+    severity,
     actor: ctx.actor,
     message,
     detail,
@@ -68,4 +82,31 @@ export function rowDeletedEvent(ctx: SemaforEventCtx, d: { month: string }): Ops
 
 export function aliasRemovedEvent(ctx: SemaforEventCtx): OpsEventInput {
   return base(ctx, "semafor.alias-removed", "Semafor: zapamatované párování smazáno", {});
+}
+
+// ── iter-044 (arch 6.4): vlastní body ────────────────────────
+// Do události nikdy příjemce, jméno nového člena, název akce, text poděkování
+// ani popis práce. `category` je pevný klíč, `points` číslo.
+
+/** Vedení zapsalo školení nebo hosta, nebo člen výboru udělil ostatní práci. */
+export function pointsAddedEvent(ctx: SemaforEventCtx, d: { category: string; points?: number }): OpsEventInput {
+  const detail: Record<string, unknown> = { category: d.category };
+  if (typeof d.points === "number") detail.points = d.points;
+  return base(ctx, "semafor.points-added", "Semafor: body zapsány", detail);
+}
+
+export function activityAddedEvent(ctx: SemaforEventCtx, d: { participants: number }): OpsEventInput {
+  return base(ctx, "semafor.activity-added", "Semafor: akce zapsána", { participants: d.participants });
+}
+
+/** `warn` u cizího poděkování a u ostatní práce smazané někým jiným než udělujícím. */
+export function pointsDeletedEvent(
+  ctx: SemaforEventCtx,
+  d: { category: string; warn: boolean }
+): OpsEventInput {
+  return base(ctx, "semafor.points-deleted", "Semafor: body smazány", { category: d.category }, d.warn ? "warn" : "info");
+}
+
+export function activityDeletedEvent(ctx: SemaforEventCtx, d: { participants: number }): OpsEventInput {
+  return base(ctx, "semafor.activity-deleted", "Semafor: akce smazána", { participants: d.participants });
 }

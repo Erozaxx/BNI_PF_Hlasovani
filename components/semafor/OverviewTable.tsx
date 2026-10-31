@@ -3,6 +3,8 @@ import { SEMAFOR_TEXTS, colorBadgeText, fmtNum, myBonusText } from "@/lib/semafo
 import { ColorBadge } from "@/components/semafor/ColorBadge";
 import { AreaList } from "@/components/semafor/AreaList";
 import { DeleteRowButton } from "@/components/semafor/DeleteButtons";
+import { BonusLines } from "@/components/semafor/BonusLines";
+import type { BonusSources } from "@/lib/semafor/bonus";
 
 const DASH = SEMAFOR_TEXTS.overviewNoValue;
 
@@ -39,12 +41,15 @@ export function OverviewTable({
   items,
   canDelete,
   showBonus = true,
+  sources,
 }: {
   month: string;
   items: OverviewItem[];
   canDelete: boolean;
   /** iter-042 (BK2): bez zdroje bonusu zmizí sloupce BNI a Bonus, skóre je skóre z BNI. */
   showBonus?: boolean;
+  /** iter-044: zdroje bonusu pro rozpis po kategoriích v rozbalení řádku. */
+  sources?: BonusSources;
 }) {
   const [cMember, cColor, cScore, cBni, cBonus] = SEMAFOR_TEXTS.overviewColumns;
   return (
@@ -87,6 +92,12 @@ export function OverviewTable({
                       </summary>
                       <div className="mt-1 min-w-[16rem]">
                         <AreaList areas={item.areas} />
+                        {showBonus && sources && item.bonus && item.bonus.raw > 0 && (
+                          <div className="mt-2">
+                            <p className="text-sm font-medium text-text-main">{SEMAFOR_TEXTS.overviewBonusDetail}</p>
+                            <BonusLines bonus={item.bonus} sources={sources} />
+                          </div>
+                        )}
                       </div>
                     </details>
                   ) : (
@@ -131,6 +142,12 @@ export function OverviewTable({
                 </summary>
                 <div className="mt-1">
                   <AreaList areas={item.areas} />
+                  {showBonus && sources && item.bonus && item.bonus.raw > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium text-text-main">{SEMAFOR_TEXTS.overviewBonusDetail}</p>
+                      <BonusLines bonus={item.bonus} sources={sources} />
+                    </div>
+                  )}
                 </div>
               </details>
             )}

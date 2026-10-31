@@ -26,7 +26,7 @@ export default async function SemaforImportPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <SemaforTabs active="import" canViewAll={can(session, "semafor.view_all")} canImport />
+      <SemaforTabs active="import" canViewAll={can(session, "semafor.view_all")} canImport canPoints={can(session, "semafor.points")} />
       <div>
         <h1 className="text-2xl font-bold text-text-main">{SEMAFOR_TEXTS.importTitle}</h1>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-text-muted">

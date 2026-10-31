@@ -10,6 +10,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import {
   ADMIN_DELEGABLE_MARKER,
+  COMMITTEE_FUNCTION_AREA,
   DEFAULT_FUNCTION_PERMISSIONS,
   NON_DELEGABLE,
   roleGrants,
@@ -95,6 +96,20 @@ export function actorHasPermissionSql(actorId: string, permission: Permission): 
             AND ${functionGrantsSql(sql`cf.permissions`, permission)}
         ))
       ))
+  )`;
+}
+
+/**
+ * iter-044 (Tom 30. 10.): volající drží funkci s `chapter_function.area =
+ * COMMITTEE_FUNCTION_AREA` (Člen výboru). Heslo ani aktivitu nekontroluje, vždy
+ * se kombinuje s `actorHasPermissionSql(…, "semafor.points")`. Prezident a
+ * Viceprezident (`area = 'vedeni'`) tu vždy vyjdou `false`, admin bez funkce také.
+ */
+export function actorHoldsCommitteeFunctionSql(actorId: string): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM member_function mf
+    JOIN chapter_function cf ON cf.id = mf.function_id
+    WHERE mf.member_id = ${actorId}::uuid AND cf.area = ${COMMITTEE_FUNCTION_AREA}::text
   )`;
 }
 

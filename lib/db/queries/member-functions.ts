@@ -147,7 +147,8 @@ export async function assignMemberFunctionGuarded(input: {
       SELECT ok.id, ${newFunctionId}::uuid, ${actorId}::uuid FROM ok
       ON CONFLICT (member_id) DO UPDATE SET
         function_id = EXCLUDED.function_id,
-        assigned_at = now(),
+        -- iter-044 (Q10 A): assigned_at se při změně funkce nepřepisuje, datum
+        -- znamená „drží nějakou funkci od“ (bonus za funkci v semaforu).
         assigned_by = EXCLUDED.assigned_by
       RETURNING member_id
     ), upd AS (

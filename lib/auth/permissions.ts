@@ -64,6 +64,11 @@ export const PERMISSIONS = [
   // admin a značka `admin-delegable`, tedy Prezident a Viceprezident).
   "semafor.view_all",
   "semafor.import",
+  // iter-044 (gate Q4 A): vlastní body semaforu (školení, přivedený host, akce,
+  // mazání záznamů). Výchozí sada FUNKCE (Člen výboru), P a VP značkou, admin
+  // vždy; ne role moderátor. Ostatní práci navíc smí udělit jen držitel funkce
+  // s `area = COMMITTEE_FUNCTION_AREA`.
+  "semafor.points",
   // iter-042 (gate BK1): Nastavení chapteru (/admin/nastaveni). Mimo
   // `NON_DELEGABLE`, takže ho přes značku dostane Prezident a Viceprezident.
   // Není v sadě moderátora ani Člena výboru.
@@ -114,7 +119,17 @@ export function roleGrants(role: "moderator", permission: Permission): boolean {
 export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
   ...MODERATOR_ROLE_PERMISSIONS,
   "semafor.view_all",
+  "semafor.points",
 ];
+
+/**
+ * iter-044 (Tom 30. 10.): ostatní práci pro chapter v semaforu uděluje jen
+ * držitel funkce s tímhle `chapter_function.area` (dnes jen Člen výboru).
+ * Právo `semafor.points` to vyjádřit neumí (značka `admin-delegable` ho dá i
+ * Prezidentovi a Viceprezidentovi, admin ho má vždy), proto druhá podmínka
+ * v SQL (`actorHoldsCommitteeFunctionSql`). Jde jako bind parametr.
+ */
+export const COMMITTEE_FUNCTION_AREA = "vybor";
 
 /**
  * iter-038 (arch 5.2, gate K1 A, Z4): práva, která dává příznak „Správce

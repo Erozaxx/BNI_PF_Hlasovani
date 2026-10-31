@@ -12,7 +12,7 @@ import {
   type ChapterSettings,
 } from "@/lib/chapter/settings";
 import type { BonusSources } from "@/lib/semafor/bonus";
-import { clockText, helpSemaforMember } from "@/lib/semafor/texts";
+import { clockText, semaforMemberQa, type SemaforQa } from "@/lib/semafor/texts";
 
 export interface HelpQa {
   q: string;
@@ -64,18 +64,12 @@ export function closeVotingHelp(settings: Pick<ChapterSettings, "meetingWeekday"
   return `Hlasování skončí v 23:59 dne před další pravidelnou schůzkou a ${weekdayLocative(settings.meetingWeekday)} ráno ho aplikace sama uzavře. Report pak odejde mailem všem z vedení: počty hlasů, kdo jak hlasoval, důvody u „Proti“ a poznámky.`;
 }
 
-/** Odpovědi k semaforu s otázkami (nález 36). Pořadí odpovídá `helpSemaforMember`. */
-export function semaforMemberFaq(sources: BonusSources): HelpQa[] {
-  const texts = helpSemaforMember(sources);
-  return texts.map((a) => {
-    let q = "";
-    if (a.startsWith("Semafor ukazuje")) q = "Co je skóre a odkud jsou data?";
-    else if (a.startsWith("Bonus:")) q = "Co je bonus?";
-    else if (a.startsWith("Barvu určuje")) q = "Jak se určuje barva?";
-    else if (a.startsWith("Své hodnoty")) q = "Kdo vidí přehled?";
-    else if (a.startsWith("Když vám hodnoty")) q = "Hodnoty mi nesedí.";
-    return { q, a };
-  });
+/**
+ * Odpovědi k semaforu s otázkami (nález 36). Explicitní páry otázka a odpověď
+ * z `semaforMemberQa` (iter-044, R-05d), žádné hledání otázky podle začátku odpovědi.
+ */
+export function semaforMemberFaq(sources: BonusSources): SemaforQa[] {
+  return semaforMemberQa(sources);
 }
 
 /** Karta člena v Burze a témata v Master mindu zmizí neaktivnímu členovi jen tam, kde jsou části zapnuté. */

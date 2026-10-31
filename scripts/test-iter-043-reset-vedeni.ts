@@ -41,9 +41,9 @@ function declaration(src: string, name: string): string {
 }
 
 // R1
-test("R1. právo je v katalogu (29), delegovatelné, v sadě role moderátor i výchozí sadě funkce", () => {
+test("R1. právo je v katalogu (30, iter-044 přidala semafor.points), delegovatelné, v sadě role moderátor i výchozí sadě funkce", () => {
   assert.ok(PERMISSIONS.includes(RESET));
-  assert.equal(PERMISSIONS.length, 29);
+  assert.equal(PERMISSIONS.length, 30);
   assert.ok(!NON_DELEGABLE.includes(RESET));
   assert.ok(MODERATOR_ROLE_PERMISSIONS.includes(RESET));
   assert.ok(DEFAULT_FUNCTION_PERMISSIONS.includes(RESET));

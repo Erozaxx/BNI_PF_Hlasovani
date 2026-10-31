@@ -87,7 +87,8 @@ const UNEXPLAINED_TERMS: { term: string; re: RegExp }[] = [
  */
 export function findTextIssues(where: string, text: string): string[] {
   const issues: string[] = [];
-  if (text.includes("—")) issues.push(`${where}: em dash „—" v textu`);
+  // Znak zapsaný escapem, aby v souboru nebyl literál (testy dlouhé pomlčky čtou změněné soubory).
+  if (text.includes("\u2014")) issues.push(`${where}: em dash „\u2014" v textu`);
   if (/\s–\s/.test(text)) issues.push(`${where}: pomlčka „ – " v textu`);
   for (const { term, re } of UNEXPLAINED_TERMS) {
     if (re.test(text)) issues.push(`${where}: nevysvětlená zkratka ${term}`);
@@ -648,11 +649,21 @@ function checkSections(sections: InfoListSection[], c: ReferenceChecks): void {
       c.errors.push(`${where}: factsFirst bez faktů`);
     }
     if (section.items.length === 0) c.errors.push(`${where}: sekce nemá žádnou položku`);
+    // iter-044: sekce „U nás v chapteru“ nemá zdroj v manuálu, ostatní ho vyžadují u každé položky.
+    const chapter = section.kind === "chapter";
+    if (chapter) {
+      if ((section.facts ?? []).length > 0) c.errors.push(`${where}: sekce kind chapter nemá mít fakta`);
+      if (section.factsFirst) c.errors.push(`${where}: sekce kind chapter nemá factsFirst`);
+    }
     for (const item of section.items) {
       const iw = `${where}/${item.id}`;
       c.registerId(item.id);
       c.addText(`${iw}.text`, item.text);
-      if (item.sources.length === 0) c.errors.push(`${iw}: položka nemá zdroj`);
+      if (chapter) {
+        if (item.sources.length > 0) c.errors.push(`${iw}: položka sekce kind chapter nemá mít zdroj z manuálu`);
+      } else if (item.sources.length === 0) {
+        c.errors.push(`${iw}: položka nemá zdroj`);
+      }
       c.checkSources(iw, item.sources);
     }
     c.checkNoteIds(where, section.chapterNotes);

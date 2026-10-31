@@ -2,6 +2,8 @@ import { HelpSection } from "@/components/help/HelpParts";
 import { deleteMemberScopeText, inactiveHidesText } from "@/components/help/help-texts";
 import { CHAPTER_SETTINGS_TEXTS } from "@/lib/chapter/texts";
 import { DEFAULT_CHAPTER_SETTINGS, type ChapterSettings } from "@/lib/chapter/settings";
+import { BONUS_POINTS } from "@/lib/semafor/bonus";
+import { pointsText } from "@/lib/text/plural";
 
 interface AdminHelpProps {
   /** Čtenář smí přidělovat admina a funkce (právo `access.manage`, jen admin). */
@@ -113,6 +115,19 @@ export function AdminHelp({
           },
         ] : undefined}
       />
+
+      {settings.semaforEnabled && (
+        <HelpSection
+          title="Funkce v semaforu"
+          faq={[
+            {
+              q: "",
+              a: `Držitel funkce má v semaforu bonus ${pointsText(BONUS_POINTS.function)}, dokud funkci má. Po odebrání funkce bonus zmizí i ze starších měsíců. Při změně funkce se bonus nemění.`,
+            },
+            { q: "", a: "Ostatní práci v semaforu uděluje jen držitel funkce Člen výboru." },
+          ]}
+        />
+      )}
 
       <HelpSection
         title="Správce docházky"

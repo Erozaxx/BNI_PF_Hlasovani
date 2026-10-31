@@ -446,20 +446,31 @@ const tests: TestCase[] = [
   {
     name: "12. nápověda podle nastavení: texty bonusu, zdroje, Nastavení chapteru, smazání člena, neaktivní člen",
     run: () => {
-      const on = { mastermind: true, burza: true };
-      const off = { mastermind: false, burza: false };
+      const on = { mastermind: true, burza: true, points: true };
+      // `off` = vypnutý semafor (iter-044: při zapnutém semaforu je zdrojem vždy funkce a vlastní body)
+      const off = { mastermind: false, burza: false, points: false };
       // Semafor: každá odpověď má otázku, bez bonusu odpadá otázka o bonusu
       const faqOn = semaforMemberFaq(on);
       assert.equal(faqOn.length, helpSemaforMember(on).length);
       assert.ok(faqOn.every((x) => x.q.length > 0 && x.a.length > 0), "otázky ke všem položkám");
       assert.deepEqual(
         faqOn.map((x) => x.q),
-        ["Co je skóre a odkud jsou data?", "Co je bonus?", "Jak se určuje barva?", "Kdo vidí přehled?", "Hodnoty mi nesedí."]
+        [
+          "Co je skóre a odkud jsou data?",
+          "Za co je bonus?",
+          "Jak se určuje barva?",
+          "Jak poděkovat?",
+          "Kdo vidí poděkování?",
+          "Kdo zapisuje ostatní body?",
+          "Kdo vidí přehled?",
+          "Kde je celý návod?",
+          "Hodnoty mi nesedí.",
+        ]
       );
       const faqOff = semaforMemberFaq(off);
       assert.ok(faqOff.every((x) => x.q.length > 0));
       assert.ok(!faqOff.some((x) => /bonus/i.test(x.q + x.a)));
-      assert.equal(helpSemaforLeadership(on).length, 5);
+      assert.equal(helpSemaforLeadership(on).length, 11);
       // zkratky a bonus u Burzy
       assert.ok(HELP_SEMAFOR_ABBREVIATIONS.includes("Hosté a Sponzoři jsou počty za posledních 6 měsíců"));
       assert.ok(HELP_BURZA_USED_BONUS.startsWith("Využil(a) jsem připíše členovi, který pomohl, bonus do interního semaforu."));

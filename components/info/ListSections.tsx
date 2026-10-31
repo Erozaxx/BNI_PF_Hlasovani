@@ -6,7 +6,12 @@
  * „U nás v chapteru", zdroje faktů (T-007z: fakta pod seznamem, jak je
  * psal content-writer). `factsFirst` dá fakta nad seznam, když ho uvádějí
  * (kodex). Zdroj položky je u položky.
+ *
+ * iter-044: sekce `kind: "chapter"` (pravidla našeho chapteru, bez zdroje
+ * v manuálu) má štítek „U nás v chapteru“ a nevolá `createRoleLinker`:
+ * „člen výboru“ tu znamená funkci v aplikaci, ne roli BNI z glosáře.
  */
+import { TEMPLATE_TEXTS } from "@/content/pravidla/texty-sablony";
 import { createRoleLinker, linkFact, type RoleLinkOptions } from "@/lib/info-pages/glossary";
 import type { ChapterNote, InfoListSection } from "@/lib/info-pages/types";
 import { ChapterNotes } from "./ChapterNoteBox";
@@ -25,14 +30,26 @@ function ListSection({
   links: RoleLinkOptions;
   notes: ChapterNote[];
 }) {
+  const chapter = section.kind === "chapter";
+  // Sekce „U nás v chapteru“ bez odkazů na role (text se vykreslí beze změny).
+  const sectionLinks: RoleLinkOptions = chapter ? { ...links, enabled: false } : links;
   // Jeden `seen` na úvod a fakta sekce, položky mají vlastní (jako RightsList).
-  const link = createRoleLinker(links);
+  const link = createRoleLinker(sectionLinks);
   const lead = (section.lead ?? []).map(link);
   const facts = section.facts ?? [];
   const factTexts = facts.map((fact) => linkFact(link, fact));
   const titleId = `${section.id}-title`;
   return (
-    <section id={section.id} aria-labelledby={titleId} className="info-list-section mt-10">
+    <section
+      id={section.id}
+      aria-labelledby={titleId}
+      className={`info-list-section mt-10${chapter ? " info-list-section--chapter" : ""}`}
+    >
+      {chapter && (
+        <p className="info-note-label mb-2 inline-block rounded border-l-4 border-gold bg-gold-light px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-text-main">
+          {TEMPLATE_TEXTS.chapterNote.label}
+        </p>
+      )}
       <h2 id={titleId} className="text-2xl font-semibold leading-tight text-text-main">
         {section.title}
       </h2>
@@ -47,7 +64,7 @@ function ListSection({
       )}
       {section.comic && <ComicStrip comic={section.comic} />}
       {section.factsFirst && <ChapterSide facts={facts} texts={factTexts} />}
-      <RightsList items={section.items} links={links} ordered={section.ordered ?? false} />
+      <RightsList items={section.items} links={sectionLinks} ordered={section.ordered ?? false} />
       {!section.factsFirst && <ChapterSide facts={facts} texts={factTexts} />}
       <ChapterNotes ids={section.chapterNotes} notes={notes} />
       <SourceNote facts={facts} />

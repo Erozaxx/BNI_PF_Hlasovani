@@ -105,6 +105,12 @@ export type OpsEventKind =
   | "semafor.month-deleted"
   | "semafor.row-deleted"
   | "semafor.alias-removed"
+  // iter-044 (arch 6.4): vlastní body semaforu. Jen zásahy vedení, bez jména
+  // příjemce, textu poděkování, popisu práce a názvu akce.
+  | "semafor.points-added"
+  | "semafor.activity-added"
+  | "semafor.points-deleted"
+  | "semafor.activity-deleted"
   // iter-042 (B5, security bod 6): změna Nastavení chapteru. Jednorázová událost
   // s vlastním runId. Bez jmen, `memberId` a e-mailu, v detailu jen klíče a hodnoty.
   | "settings.changed";
@@ -150,6 +156,10 @@ export const TERMINAL_KINDS: readonly OpsEventKind[] = [
   "semafor.month-deleted",
   "semafor.row-deleted",
   "semafor.alias-removed",
+  "semafor.points-added",
+  "semafor.activity-added",
+  "semafor.points-deleted",
+  "semafor.activity-deleted",
   "settings.changed",
 ];
 

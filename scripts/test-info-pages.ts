@@ -39,6 +39,9 @@ import { hasVisual, keepsIntro, renderLegend } from "../components/info/visuals/
 import { CLENSTVI_SOURCES } from "../content/pravidla/clenstvi-zdroje";
 import { mergeSources, SERIES_SOURCES, src as seriesSrc } from "../content/pravidla/fakta";
 import { KODEX_SOURCES } from "../content/pravidla/kodex-zdroje";
+import { SEMAFOR_SOURCES } from "../content/pravidla/semafor-zdroje";
+import { BONUS_CAP, BONUS_POINTS, CATEGORY_CAPS, WORK_POINTS } from "../lib/semafor/bonus";
+import { COLOR_THRESHOLDS } from "../lib/semafor/color";
 import { OBOR_SOURCES } from "../content/pravidla/obor-zdroje";
 import { ROLE_SOURCES } from "../content/pravidla/role-zdroje";
 import { SCHUZKA_SOURCES } from "../content/pravidla/schuzka-zdroje";
@@ -503,6 +506,8 @@ const ANCHOR_CONTRACT: Record<string, string[]> = {
   schuzka: ["program", "predstaveni", "hlavni-prezentace", "pozdni-prichod", "nahradnik", "jiny-chapter", "rytmus"],
   absence: ["uvod", "nahradnik", "treti-absence", "ctvrta-absence", "odchod-s-kreditem"],
   role: ["vedeni"],
+  // iter-044 (test 27): kotvy návodu semaforu
+  semafor: ["barvy", "novacek", "vedeni", "interni", "body", "kdo-zapisuje"],
 };
 
 /** Popisky odkazů L4 až L7, L10, L13: jediný nový text na stránce rolí (T-003s 1.8). */
@@ -1560,8 +1565,8 @@ const cases: TestCase[] = [
       // iter-031: pořadí T-003s 1.7 (role první podle K5 iter-030).
       assert.deepEqual(
         INFO_PAGES.map((p) => p.slug),
-        ["role", "clenstvi", "schuzka", "absence", "obor", "kodex", "stiznosti"],
-        "role první (K5), pak pořadí T-003s 1.7, kodex před stížnostmi (K3 gate T-004e)"
+        ["role", "clenstvi", "schuzka", "absence", "obor", "kodex", "stiznosti", "semafor"],
+        "role první (K5), pak pořadí T-003s 1.7, kodex před stížnostmi (K3 gate T-004e), semafor poslední (iter-044, R-23)"
       );
       const pages = registryWith(rolePage());
       assert.deepEqual(errorsWithFakeRole(pages), []);
@@ -1850,6 +1855,11 @@ const cases: TestCase[] = [
       for (const page of INFO_PAGES) {
         const html = renderPage(page);
         const links = Array.from(html.matchAll(/<a href="([^"]+)" title="[^"]*" data-role="([a-z-]+)" class="info-role-link/g));
+        // iter-044: stránka semafor má `glossary: false` ("člen výboru" je tam funkce v aplikaci, ne role BNI).
+        if (page.glossary === false) {
+          assert.equal(links.length, 0, `${page.slug}: bez odkazů na role`);
+          continue;
+        }
         assert.ok(links.length > 0, page.slug);
         for (const [, href, id] of links) {
           assert.ok(href.endsWith(`#${id}`), href);
@@ -2059,7 +2069,7 @@ const cases: TestCase[] = [
   {
     name: "75. SERIES_SOURCES (fakta.ts): unikatni klice, zadna shodna citace pod dvema id, src() neznamy klic vyhodi, prefixy, zrusene id",
     run: () => {
-      const registries = { ROLE_SOURCES, CLENSTVI_SOURCES, OBOR_SOURCES, STIZNOSTI_SOURCES, SCHUZKA_SOURCES, KODEX_SOURCES };
+      const registries = { ROLE_SOURCES, CLENSTVI_SOURCES, OBOR_SOURCES, STIZNOSTI_SOURCES, SCHUZKA_SOURCES, KODEX_SOURCES, SEMAFOR_SOURCES };
       const total = Object.values(registries).reduce((sum, r) => sum + Object.keys(r).length, 0);
       assert.equal(Object.keys(SERIES_SOURCES).length, total, "žádný klíč ve dvou rejstřících");
       assert.throws(() => mergeSources({ a: { X1: SECTION_REF }, b: { X1: SECTION_REF } }), /citace X1 je v rejstříku a i b/);
@@ -2079,6 +2089,7 @@ const cases: TestCase[] = [
         [STIZNOSTI_SOURCES, /^S[GM]\d+$/],
         [SCHUZKA_SOURCES, /^Q[GM]\d+$/],
         [KODEX_SOURCES, /^K[GM]\d+$/],
+        [SEMAFOR_SOURCES, /^TM\d+$/],
       ];
       for (const [registry, re] of prefixes) for (const id of Object.keys(registry)) assert.match(id, re);
       // T-003s 1.3 (rušené duplicity) a gate T-004 3s / T-006x (citace bez faktu).
@@ -2168,6 +2179,7 @@ const cases: TestCase[] = [
         stiznosti: "Stížnost a spor",
         schuzka: "Jak probíhá čtvrteční schůzka",
         kodex: "Etický kodex",
+        semafor: "Semafor",
       };
       for (const [slug, title] of Object.entries(titles)) assert.equal(getInfoPage(slug)?.title, title, slug);
       for (const [slug, anchors] of Object.entries(ANCHOR_CONTRACT)) {
@@ -2233,25 +2245,25 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "91. rozcestnik T-012x: karty temat pred situacemi, 7 karet s odkazem na stranku, všechny karty s obrázkem (role náhradní), skupiny v zavrenych <details>",
+    name: "91. rozcestnik T-012x: karty temat pred situacemi, 8 karet s odkazem na stranku, všechny karty s obrázkem (role náhradní), skupiny v zavrenych <details>",
     run: () => {
       const html = renderToStaticMarkup(createElement(PravidlaHubPage));
       const topicsAt = html.indexOf('id="temata-title"');
       const situationsAt = html.indexOf('id="situace-title"');
       assert.ok(topicsAt > 0 && situationsAt > topicsAt, "karty před situacemi");
       const topics = html.slice(topicsAt, situationsAt);
-      assert.equal(INFO_PAGES.length, 7);
-      assert.equal((topics.match(/<li class="info-hub-card"/g) ?? []).length, 7, "7 karet");
-      assert.equal((topics.match(/<a /g) ?? []).length, 7, "jeden odkaz na kartu, žádné vnořené");
+      assert.equal(INFO_PAGES.length, 8);
+      assert.equal((topics.match(/<li class="info-hub-card"/g) ?? []).length, 8, "8 karet");
+      assert.equal((topics.match(/<a /g) ?? []).length, 8, "jeden odkaz na kartu, žádné vnořené");
       for (const page of INFO_PAGES) {
         assert.ok(topics.includes(`href="/pravidla/${page.slug}"`), `karta ${page.slug}`);
-        const src = page.hero?.src ?? (page.slug === "role" ? "/pravidla/komiksy/role-r10-2.webp" : undefined);
+        const src = page.hero?.src ?? (page.slug === "role" || page.slug === "semafor" ? "/pravidla/komiksy/role-r10-2.webp" : undefined);
         assert.ok(src && topics.includes(`src="${src}"`), `obrázek ${page.slug}`);
       }
-      assert.equal((topics.match(/<img /g) ?? []).length, 7, "obrázek u všech 7 karet");
+      assert.equal((topics.match(/<img /g) ?? []).length, 8, "obrázek u všech 8 karet");
       assert.ok(!/<img [^>]*alt="[^"]+"/.test(topics), "alt prázdný, název je pod obrázkem");
       assert.ok(/<img [^>]*loading="lazy"/.test(topics), "lazy");
-      assert.equal((topics.match(/<img [^>]*class="info-hub-card-image"/g) ?? []).length, 7, "třída jednotného poměru stran u všech karet");
+      assert.equal((topics.match(/<img [^>]*class="info-hub-card-image"/g) ?? []).length, 8, "třída jednotného poměru stran u všech karet");
       assert.ok(/\.info-hub-card-image\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9[^}]*object-fit:\s*cover/.test(readFileSync(join(process.cwd(), "app/pravidla/pravidla.css"), "utf8")), "CSS 16/9 cover");
       for (const card of topics.split('<li class="info-hub-card"').slice(1)) {
         if (card.includes("<img")) assert.ok(card.indexOf("<img") < card.indexOf("<h3"), "obrázek nad titulkem");
@@ -2409,7 +2421,7 @@ const cases: TestCase[] = [
     run: () => {
       const css = readFileSync(join(process.cwd(), "app", "pravidla", "pravidla.css"), "utf8");
       assert.match(css, /\.info-comic--single \{\s*max-width: 480px;\s*\}/);
-      const expected: Record<string, number> = { clenstvi: 9, obor: 3, schuzka: 3, stiznosti: 1, kodex: 7, absence: 0, role: 0 };
+      const expected: Record<string, number> = { clenstvi: 9, obor: 3, schuzka: 3, stiznosti: 1, kodex: 7, absence: 0, role: 0, semafor: 0 };
       for (const page of INFO_PAGES) {
         const html = renderPage(page);
         const figures = Array.from(html.matchAll(/<figure class="info-comic([^"]*)"[^>]*>([\s\S]*?)<\/figure>/g));
@@ -2521,6 +2533,114 @@ const cases: TestCase[] = [
       const html = renderPage(page);
       assert.equal((html.match(/kodex-k\d\.webp/g) ?? []).length, 8);
       assert.ok(!html.includes("\u2014"), "bez em dash");
+    },
+  },
+  // --- iter-044 (návod celého semaforu, /pravidla/semafor) ---
+  {
+    name: "92. iter-044 test 27: semafor je v registru poslední, kotvy a kontrakt, stránka projde validací, bez em dash",
+    run: () => {
+      const slugs = INFO_PAGES.map((p) => p.slug);
+      assert.equal(slugs[slugs.length - 1], "semafor", "nová stránka na konec (R-23)");
+      assert.deepEqual(slugs.slice(0, 7), ["role", "clenstvi", "schuzka", "absence", "obor", "kodex", "stiznosti"], "pořadí ostatních karet se nemění");
+      const page = getInfoPage("semafor")!;
+      assert.deepEqual(validateInfoPage(page, CHAPTER_NOTES).errors, []);
+      assert.equal(page.visual, "none");
+      assert.equal(page.glossary, false);
+      assert.deepEqual(page.situations.map((x) => x.anchor), ["barvy", "novacek", "vedeni", "interni", "body", "kdo-zapisuje"]);
+      assert.deepEqual((page.sections ?? []).map((x) => x.id), ["interni", "body", "kdo-zapisuje"]);
+      assert.ok((page.sections ?? []).every((x) => x.kind === "chapter"), "všechny tři sekce jsou U nás v chapteru");
+      assert.deepEqual(page.steps.map((x) => x.id), ["barvy", "novacek", "vedeni"]);
+      const html = renderPage(page);
+      assert.ok(!html.includes("\u2014"), "bez em dash");
+      assert.ok(html.includes("U nás v chapteru"), "štítek");
+      // veřejně a staticky: stránka nezná data členů ani DB
+      const src = readFileSync(join(process.cwd(), "content", "pravidla", "semafor.ts"), "utf8");
+      assert.ok(!/@\/lib\/db|getSession|drizzle|fetch\(/.test(src), "žádný dotaz do DB ani session");
+      // bez štítků závazné / doporučené a bez „návrh"
+      assert.ok(!/závazn|doporučené|doporučeno|\bnávrh/i.test(textContent(html)), "bez štítků závazné / doporučené");
+      for (const step of page.steps) {
+        const facts = step.type === "scene" ? step.chapter : step.options.flatMap((o) => o.chapter);
+        for (const f of facts) assert.equal(f.obligation, undefined);
+      }
+    },
+  },
+  {
+    name: "93. iter-044 test 26: sekce kind chapter bez zdroje, bez odkazů na role, štítek; běžná sekce bez zdroje dál chyba",
+    run: () => {
+      const page = JSON.parse(JSON.stringify(getInfoPage("semafor")!)) as InfoPage;
+      // Interní sekce nemají zdroj a validují.
+      for (const section of page.sections ?? []) {
+        assert.ok(section.items.every((i) => i.sources.length === 0), section.id);
+        assert.equal((section.facts ?? []).length, 0, section.id);
+      }
+      // Vykreslená sekce bez odkazů na role, i když jsou odkazy zapnuté a stránka je nevypíná.
+      const withRoles = JSON.parse(JSON.stringify(page)) as InfoPage;
+      delete withRoles.glossary;
+      withRoles.sections = [
+        {
+          kind: "chapter",
+          id: "interni",
+          title: "Interní pravidla",
+          items: [{ id: "interni-a", text: "Prezident a viceprezident vidí jména. Člen výboru uděluje ostatní práci.", sources: [] }],
+        },
+        {
+          id: "obycejna",
+          title: "Běžná sekce",
+          items: [{ id: "obycejna-a", text: "Prezident a viceprezident vedou schůzku.", sources: [seriesSrc("H80")] }],
+        },
+      ];
+      const html = renderPage(withRoles, { roleLinks: true });
+      const chapterHtml = html.slice(html.indexOf('id="interni"'), html.indexOf('id="obycejna"'));
+      const plainHtml = html.slice(html.indexOf('id="obycejna"'));
+      assert.ok(!chapterHtml.includes("/pravidla/role#") && !chapterHtml.includes("info-role-link"), "interní sekce bez odkazu na roli");
+      assert.ok(chapterHtml.includes("U nás v chapteru"), "štítek u sekce");
+      assert.ok(plainHtml.includes("info-role-link"), "běžná sekce odkazy na role má dál");
+      assert.ok(!plainHtml.includes("U nás v chapteru"), "běžná sekce bez štítku");
+      // Validátor.
+      assert.deepEqual(errorsOf(withRoles).filter((e) => /obycejna|interni/.test(e)), []);
+      const noSource = JSON.parse(JSON.stringify(withRoles)) as InfoPage;
+      noSource.sections![1].items[0].sources = [];
+      assertHasError(errorsOf(noSource), /položka nemá zdroj/);
+      const chapterWithSource = JSON.parse(JSON.stringify(withRoles)) as InfoPage;
+      chapterWithSource.sections![0].items[0].sources = [seriesSrc("H80")];
+      assertHasError(errorsOf(chapterWithSource), /kind chapter nemá mít zdroj/);
+      const chapterWithFacts = JSON.parse(JSON.stringify(withRoles)) as InfoPage;
+      chapterWithFacts.sections![0].facts = [{ text: "Fakt.", sources: [seriesSrc("H80")] }];
+      assertHasError(errorsOf(chapterWithFacts), /kind chapter nemá mít fakta/);
+      // Tisková příloha prázdné zdroje přeskočí.
+      assert.ok(!renderPage(getInfoPage("semafor")!).includes("sekce-interni"), "tisk: interní sekce bez citací");
+    },
+  },
+  {
+    name: "94. iter-044 test 10 (stránka): čísla v návodu odpovídají konstantám, Master mind bez „prezentace\", bez em dash",
+    run: () => {
+      const page = getInfoPage("semafor")!;
+      const text = textContent(renderPage(page));
+      const t = COLOR_THRESHOLDS;
+      const must = [
+        `zelená od ${t.green} bodů, žlutá od ${t.yellow}, červená od ${t.red}, šedá pod ${t.red}`,
+        `Bonus je nejvýš ${BONUS_CAP} bodů za šest měsíců`,
+        `Master mind, který proběhl: ${BONUS_POINTS.mastermind} bodů`,
+        `Pomoc nebo kontakt v Burze pomoci: ${BONUS_POINTS.burza} bodů`,
+        `Funkce v chapteru: ${BONUS_POINTS.function} bodů`,
+        `Školení nebo workshop pro členy chapteru: ${BONUS_POINTS.training} bodů pro toho, kdo ho vedl. Pravidelné vzdělávací okénko na schůzce se nepočítá.`,
+        `Přivedený host, který se stal členem: ${BONUS_POINTS.host_member} bodů`,
+        `Účast na akci chapteru: ${BONUS_POINTS.activity} body za akci. Akce je společná událost mimo pravidelnou schůzku. Za šest měsíců se počítá nejvýš ${CATEGORY_CAPS.activity} bodů.`,
+        `Poděkování od jiného člena: ${BONUS_POINTS.thanks} bod. Za šest měsíců se počítá nejvýš ${CATEGORY_CAPS.thanks} bodů.`,
+        `Ostatní práce pro chapter: ${WORK_POINTS.min} až ${WORK_POINTS.max} bodů podle rozsahu`,
+        "jednou za kalendářní měsíc",
+        "Ostatní práci uděluje jen držitel funkce Člen výboru.",
+        "Nikdo si body nezapisuje sám, ani vedení.",
+        "Jména vidí vedení a členové výboru.",
+        "Bonus ji nemění.",
+      ];
+      for (const m of must) assert.ok(text.includes(m), m);
+      assert.ok(!/členský výbor/i.test(text), "v návodu jen člen výboru a vedení");
+      for (const sentence of text.split(/(?<=[.!?])\s+/).filter((x) => x.includes("Master mind"))) {
+        assert.ok(!/prezent|přednáš/i.test(sentence), sentence);
+      }
+      assert.ok(!text.includes("\u2014"));
+      assert.ok(!/odprezent/i.test(text));
     },
   },
 ];
