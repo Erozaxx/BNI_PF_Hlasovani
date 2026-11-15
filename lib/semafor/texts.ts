@@ -65,11 +65,11 @@ export const SEMAFOR_TEXTS = {
   importTitle: "Nahrát semafor",
   importMonth: "Měsíc",
   /** #8: popisek souboru. */
-  importFile: "Soubor .xlsx z BNI (list se skóre členů)",
+  importFile: "Soubor .xlsx nebo .xlsm z BNI (list se skóre členů)",
   /** #8: kroky nad formulářem, jeden řádek na krok. */
   importSteps: [
     "Vyber měsíc, za který soubor je. Soubor sám měsíc nezná.",
-    "Vyber soubor .xlsx z BNI s listem skóre členů.",
+    "Vyber soubor .xlsx nebo .xlsm z BNI s listem skóre členů.",
     "Zobrazit náhled zatím nic neuloží.",
     "Zkontroluj párování jmen a klikni na Uložit.",
   ] as const,
@@ -119,12 +119,28 @@ export const SEMAFOR_TEXTS = {
   /** Mimo gate sekci 5: řádek bez jména. */
   errRowNoName: "Řádek {r}: chybí jméno. Oprav soubor, nebo řádek přeskoč.",
   /** Mimo gate sekci 5: chyby uložení, které sekce nepokrývá. */
-  errNoFile: "Vyber soubor .xlsx.",
+  errNoFile: "Vyber soubor .xlsx nebo .xlsm.",
   errNothingToSave: "Nic k uložení. Všechny řádky jsou přeskočené.",
   errSaveFailed: "Uložení se nepovedlo. Zkus to znovu.",
   errUndecided: "Řádek {r} čeká na rozhodnutí. Vyber člena, nebo řádek přeskoč.",
   errUnknownMember: "Řádek {r}: vybraný člen neexistuje.",
   errErrorRowSelected: "Řádek {r} má chybu a jde jen přeskočit.",
+  /** iter-045 (arch 5, gate 4): „Čeká na započtení“ v Přehledu a v Mém semaforu. */
+  pendingTitle: "Čeká na započtení",
+  pendingColumns: ["Datum", "Komu", "Za co", "Od koho", "Body"] as const,
+  pendingFilterMember: "Komu",
+  pendingFilterAllMembers: "Všichni",
+  pendingFilterCategory: "Kategorie",
+  pendingFilterAllCategories: "Všechny",
+  pendingEmpty: "Zatím nic nečeká na započtení.",
+  pendingEmptyFiltered: "Pro tenhle výběr nic nečeká.",
+  pendingReset: "Zrušit výběr",
+  pendingNoTable: "Ruční body a poděkování teď nejde načíst. Zkus to později.",
+  pendingBurzaHelp: "pomoc",
+  pendingBurzaContact: "kontakt",
+  pendingNoFrom: "–",
+  /** Gate 4.2: jen s `semafor.points`, slovo „Body“ na konci je odkaz na záložku Body. */
+  pendingTextsHint: "Texty poděkování a popis ostatní práce najdeš v záložce Body.",
 } as const;
 
 // ── Vlastní body (iter-044, arch 8.1) ────────────────────────
@@ -477,7 +493,7 @@ export function helpSemaforLeadership(sources: BonusSources = ALL_BONUS_SOURCES)
   const items: HelpLeadershipItem[] = [
     {
       importOnly: true,
-      text: "Měsíční soubor .xlsx s listem se skóre nahrajete v menu Semafor, záložka Import. Vyberte měsíc, za který soubor je, a zobrazte náhled.",
+      text: "Měsíční soubor .xlsx nebo .xlsm s listem se skóre nahrajete v menu Semafor, záložka Import. Vyberte měsíc, za který soubor je, a zobrazte náhled.",
     },
     {
       importOnly: true,
@@ -627,6 +643,33 @@ export function myBonusLaterText(
   }
   const names = bonusSourcesText(sources, "nominative");
   return `${names} po ${formatCzDate(afterDate)} se započtou s daty za ${monthLabel(month)}.`;
+}
+
+// ── Čeká na započtení (iter-045) ──────────────────────────────
+
+/** „Co přibylo po 31. 10. 2026. Započte se s daty za listopad 2026, podstropy a strop se uplatní až tehdy.“ */
+export function pendingIntroText(afterDate: string, nextMonth: string): string {
+  return `Co přibylo po ${formatCzDate(afterDate)}. Započte se s daty za ${monthLabel(nextMonth)}, podstropy a strop se uplatní až tehdy.`;
+}
+
+/** Stejné znění pod rozpisem v „Mém semaforu“. */
+export function pendingMineNoteText(afterDate: string, nextMonth: string): string {
+  return pendingIntroText(afterDate, nextMonth);
+}
+
+/** „1 záznam“, „3 záznamy“, „5 záznamů“. */
+export function pendingCountText(n: number): string {
+  return `${n} ${plural(n, "záznam", "záznamy", "záznamů")}`;
+}
+
+/**
+ * Sloupec „Za co“ (gate 4.3): vždy název kategorie, za dvojtečkou detail,
+ * když je („Master mind: {název}“, „Burza pomoci: pomoc“). Bez detailu jen název.
+ */
+export function pendingWhatText(category: BonusCategory, detail: string | null): string {
+  const name = categoryName(category);
+  const d = detail?.trim();
+  return d ? `${name}: ${d}` : name;
 }
 
 export function rateWeekText(x: string): string {

@@ -33,6 +33,13 @@ export const TEMPLATE_TEXTS = {
   },
   contactsTitle: "Na koho se obrátit",
   print: "Vytisknout",
+  /** iter-045: ikona řetězu u nadpisu sekce. `{title}` = nadpis sekce. */
+  sectionLink: {
+    label: "Zkopírovat odkaz na sekci {title}",
+    labelNoJs: "Odkaz na sekci {title}",
+    copied: "Odkaz zkopírován",
+    fallback: "Odkaz je v adresním řádku, zkopíruj ho odtud.",
+  },
   /** Legenda osy `absence-timeline`. */
   timeline: {
     title: "Půl roku v chapteru",

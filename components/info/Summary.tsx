@@ -5,6 +5,7 @@ import { sourceHref, sourceLinkText, sourceShortRef } from "@/lib/info-pages/sou
 import type { InfoPage, VisualKind } from "@/lib/info-pages/types";
 import { SUMMARY_ANCHOR } from "@/lib/info-pages/types";
 import { RichText } from "./RichText";
+import { SectionHeading } from "./SectionHeading";
 import { renderLegend } from "./visuals/registry";
 
 export function Summary<K extends VisualKind>({
@@ -24,9 +25,12 @@ export function Summary<K extends VisualKind>({
       aria-labelledby={`${SUMMARY_ANCHOR}-title`}
       className="info-summary mt-10 rounded-card border border-border bg-background px-4 py-6 sm:px-6"
     >
-      <h2 id={`${SUMMARY_ANCHOR}-title`} className="text-2xl font-semibold leading-tight text-text-main">
-        {summary.title}
-      </h2>
+      <SectionHeading
+        anchor={SUMMARY_ANCHOR}
+        titleId={`${SUMMARY_ANCHOR}-title`}
+        title={summary.title}
+        className="text-2xl font-semibold leading-tight text-text-main"
+      />
       {summary.subtitle && <p className="mt-1 text-lg text-text-main">{summary.subtitle}</p>}
       <ol className="mt-5 list-decimal space-y-3 pl-6 text-lg leading-relaxed text-text-main">
         {points.map((segments, i) => (
