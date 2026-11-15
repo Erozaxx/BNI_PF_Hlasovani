@@ -14,6 +14,7 @@ import { DecisionTable } from "./DecisionTable";
 import { RichText } from "./RichText";
 import { RightsList } from "./RightsList";
 import { RoleCards } from "./RoleCards";
+import { SectionHeading } from "./SectionHeading";
 import { SourceNote } from "./SourceNote";
 
 const R = TEMPLATE_TEXTS.reference;
@@ -36,9 +37,7 @@ export function ReferenceSection({
   return (
     <div className="info-reference mt-10">
       <section id={A.intro} aria-labelledby={`${A.intro}-title`} className="info-ref-intro">
-        <h2 id={`${A.intro}-title`} className={h2}>
-          {reference.title}
-        </h2>
+        <SectionHeading anchor={A.intro} titleId={`${A.intro}-title`} title={reference.title} className={h2} />
         <div className="mt-4 space-y-4 text-lg leading-relaxed text-text-main">
           {lead.map((segments, i) => (
             <p key={i}>
@@ -53,27 +52,21 @@ export function ReferenceSection({
 
       {reference.roles.length > 0 && (
         <section id={A.roles} aria-labelledby={`${A.roles}-title`} className="mt-10">
-          <h2 id={`${A.roles}-title`} className={h2}>
-            {R.rolesTitle}
-          </h2>
+          <SectionHeading anchor={A.roles} titleId={`${A.roles}-title`} title={R.rolesTitle} className={h2} />
           <RoleCards cards={reference.roles} links={links} notes={notes} />
         </section>
       )}
 
       {reference.decisions.length > 0 && (
         <section id={A.decisions} aria-labelledby={`${A.decisions}-title`} className="mt-10">
-          <h2 id={`${A.decisions}-title`} className={h2}>
-            {R.decisionsTitle}
-          </h2>
+          <SectionHeading anchor={A.decisions} titleId={`${A.decisions}-title`} title={R.decisionsTitle} className={h2} />
           <DecisionTable rows={reference.decisions} links={links} />
         </section>
       )}
 
       {reference.rights.length > 0 && (
         <section id={A.rights} aria-labelledby={`${A.rights}-title`} className="mt-10">
-          <h2 id={`${A.rights}-title`} className={h2}>
-            {R.rightsTitle}
-          </h2>
+          <SectionHeading anchor={A.rights} titleId={`${A.rights}-title`} title={R.rightsTitle} className={h2} />
           <RightsList items={reference.rights} links={links} />
         </section>
       )}

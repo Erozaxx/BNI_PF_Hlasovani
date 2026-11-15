@@ -9,7 +9,6 @@ import {
   colorBadgeText,
   monthLabel,
   myBniText,
-  myBonusLaterText,
   myBonusText,
   myTotalText,
   scoreLegendText,
@@ -17,6 +16,8 @@ import {
 import { ColorBadge } from "@/components/semafor/ColorBadge";
 import { AreaList } from "@/components/semafor/AreaList";
 import { BonusLines } from "@/components/semafor/BonusLines";
+import { PendingLines } from "@/components/semafor/PendingLines";
+import type { PendingSummaryLine } from "@/lib/semafor/pending";
 
 /**
  * iter-041 (arch 6.2, gate Z8): karta „Můj semafor“. Hlavní štítek je interní
@@ -25,15 +26,19 @@ import { BonusLines } from "@/components/semafor/BonusLines";
  *
  * iter-042: legenda pod nadpisem (#7) a pod oblastmi, bonus jen ze zapnutých
  * částí (`sources`, Z3). Bez zdroje bonusu zmizí řádek BNI i sekce Bonus.
+ *
+ * iter-045 (arch 4.2): v sekci Bonus podsekce „Čeká na započtení“ s rozpisem
+ * vlastních bonusů po konci posledního nahraného měsíce (nahradila větu
+ * `myBonusLaterText`).
  */
 export function MyScoreCard({
   view,
-  later,
+  pending,
   sources = ALL_BONUS_SOURCES,
 }: {
   view: MonthView;
-  /** Bonus po konci měsíce snímku se započte s dalším měsícem (`afterDate`, `nextMonth`). */
-  later: { afterDate: string; nextMonth: string } | null;
+  /** Vlastní bonusy po konci měsíce snímku, započtou se s dalším měsícem (`afterDate`, `nextMonth`). */
+  pending: { lines: PendingSummaryLine[]; afterDate: string; nextMonth: string } | null;
   /** Které části dávají bonus (BK2). */
   sources?: BonusSources;
 }) {
@@ -62,10 +67,8 @@ export function MyScoreCard({
           ) : (
             <BonusLines bonus={view.bonus} sources={sources} />
           )}
-          {later && (
-            <p className="mt-2 text-sm text-text-muted">
-              {myBonusLaterText(later.afterDate, later.nextMonth, sources)}
-            </p>
+          {pending && pending.lines.length > 0 && (
+            <PendingLines lines={pending.lines} afterDate={pending.afterDate} nextMonth={pending.nextMonth} />
           )}
         </>
       )}

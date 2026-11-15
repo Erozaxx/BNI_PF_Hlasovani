@@ -6,6 +6,7 @@ import { ChapterSide } from "./ChapterSide";
 import { ComicStrip, ComicWide } from "./ComicStrip";
 import { InlineVisual } from "./InlineVisual";
 import { RichText } from "./RichText";
+import { SectionHeading } from "./SectionHeading";
 import { SourceNote } from "./SourceNote";
 
 export function StepScene<K extends VisualKind>({
@@ -37,9 +38,12 @@ export function StepScene<K extends VisualKind>({
       }
     >
       <p className="text-sm font-semibold text-navy">{scene.label}</p>
-      <h2 id={titleId} className="mt-1 text-2xl font-semibold leading-tight text-text-main">
-        {scene.title}
-      </h2>
+      <SectionHeading
+        anchor={scene.id}
+        titleId={titleId}
+        title={scene.title}
+        className="mt-1 text-2xl font-semibold leading-tight text-text-main"
+      />
       {scene.comic && <ComicStrip comic={scene.comic} />}
       {scene.comicWide && <ComicWide panel={scene.comicWide} />}
       <div className="mt-4 space-y-4 text-lg leading-relaxed text-text-main">

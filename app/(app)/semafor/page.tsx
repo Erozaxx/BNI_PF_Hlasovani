@@ -5,12 +5,13 @@ import { can } from "@/lib/auth/permissions";
 import { pragueToday } from "@/lib/members/activity";
 import { monthEnd, monthOf, monthStart, shiftMonth } from "@/lib/attendance/rules";
 import {
-  countMyEventsAfter,
   getChapterCounts,
   getLatestMonth,
   listMyBonusEvents,
+  listMyPendingEvents,
   listMyScores,
 } from "@/lib/db/queries/semafor";
+import { pendingRange, pendingSummary } from "@/lib/semafor/pending";
 import { buildMonthView } from "@/lib/semafor/mine";
 import { bonusSources, bonusWindow, hasBonusSource } from "@/lib/semafor/bonus";
 import { pointDateRange } from "@/lib/semafor/points";
@@ -48,6 +49,9 @@ import { ChapterSummaryCard } from "@/components/semafor/ChapterSummaryCard";
  * `listMyWrittenThanks` se volají jen se `session.memberId`, nikdy s cizím id,
  * cizí body ani poděkování sem nejdou. Bez migrace (chybí tabulky) místo karet
  * věta `readNoTable`, bonus se spočítá bez ručních bodů.
+ *
+ * iter-045: rozpis „Čeká na započtení“ v kartě skóre z `listMyPendingEvents`
+ * se `session.memberId` (žádná jména, žádný seznam vedení).
  */
 export default async function SemaforPage() {
   const session = await requirePageSession();
@@ -74,10 +78,9 @@ export default async function SemaforPage() {
     const current = views.find((v) => v.month === latest) ?? null;
     const history = views.filter((v) => v.month !== latest);
 
-    const { year, month: m } = monthOf(latest);
-    const afterDate = monthEnd(year, m);
-    const next = shiftMonth(year, m, 1);
-    const laterCount = await countMyEventsAfter(session.memberId, afterDate, today, sources);
+    // iter-045: vlastní bonusy po konci posledního nahraného měsíce, jen session.memberId.
+    const range = pendingRange(latest, today);
+    const pending = range && current ? await listMyPendingEvents(session.memberId, range, sources) : [];
     const counts = await getChapterCounts(latest, sources);
 
     body = (
@@ -85,7 +88,11 @@ export default async function SemaforPage() {
         {current ? (
           <MyScoreCard
             view={current}
-            later={laterCount > 0 ? { afterDate, nextMonth: monthStart(next.year, next.month) } : null}
+            pending={
+              range && pending.length > 0
+                ? { lines: pendingSummary(pending), afterDate: range.after, nextMonth: range.nextMonth }
+                : null
+            }
             sources={sources}
           />
         ) : (

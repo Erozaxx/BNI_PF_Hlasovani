@@ -10,8 +10,10 @@
  * Funkce, které vrací jména nebo cizí čísla (`listOverviewRows`, `listMonthMembers`,
  * `listMembersForMatch`, `listAliases`), smí volat jen stránky a akce za právem
  * `semafor.view_all` nebo `semafor.import`. Členská stránka `/semafor` volá
- * jen `listMyScores`, `listBonusEvents` s `memberId` a `getChapterCounts`
- * (čtyři čísla, žádná jména).
+ * jen `listMyScores`, `listBonusEvents` s `memberId` (i přes
+ * `listMyPendingEvents`) a `getChapterCounts` (čtyři čísla, žádná jména).
+ * `pendingAutoSql` a `listPendingForOverview` (iter-045, se jmény) jen
+ * `/semafor/prehled` za `semafor.view_all`.
  *
  * NENÍ čistý modul (importuje drizzle-orm a @/lib/db/*).
  */
@@ -20,7 +22,8 @@ import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { memberActiveSql } from "@/lib/db/queries/member-active";
 import { bonusForMonth, eventsAfterSnapshot, type BonusEvent, type ScoreRecord } from "@/lib/semafor/mine";
-import { functionEventsSql, readPointEvents } from "@/lib/db/queries/semafor-points";
+import { functionEventsSql, listPointsForManagement, readPointEvents } from "@/lib/db/queries/semafor-points";
+import { toPendingRows, type PendingAutoDbRow, type PendingRange, type PendingRow } from "@/lib/semafor/pending";
 import {
   bonusWindow,
   filterBonusEvents,
@@ -184,6 +187,7 @@ export async function listMyScores(memberId: string, limit = 12): Promise<ScoreR
  * dvojici (pomocník, příjemce) a kalendářní měsíc (první využití v měsíci;
  * výběr je před oknem, aby byl stejný pro každé okno). Jeden dotaz `UNION ALL`.
  * `memberId` omezí na jednoho člena (stránka člena), bez něj jsou všichni (přehled jednoho měsíce).
+ * Stejné podmínky má `pendingAutoSql` (iter-045), při změně uprav oba.
  */
 export function bonusEventsSql(opts: { after: string; to: string; memberId?: string }): SQL {
   const mm: SQL = opts.memberId ? sql`AND c.member_id = ${opts.memberId}::uuid` : sql``;
@@ -262,17 +266,109 @@ export async function listMyBonusEvents(
   return listBonusEvents({ after: oldest.after, to: newest.to, memberId, sources });
 }
 
-/** Události člena po konci posledního nahraného měsíce (pro větu „započtou se“). */
-export async function countMyEventsAfter(
+// ── Čeká na započtení (iter-045) ──────────────────────────────
+
+/**
+ * Vlastní události člena po konci posledního nahraného měsíce (rozpis
+ * „Čeká na započtení“ v Mém semaforu). Jen `session.memberId`, jména nečte.
+ * Jde jedinou cestou `listBonusEvents` (zapnuté části, ruční body přes
+ * `readPointEvents`). R-08: funkce nemá spodní mez okna, zůstane jen ta
+ * přidělená po `range.after`.
+ */
+export async function listMyPendingEvents(
   memberId: string,
-  afterDate: string,
-  today: string,
+  range: PendingRange,
   sources: BonusSources
-): Promise<number> {
-  if (today <= afterDate) return 0;
-  const events = await listBonusEvents({ after: afterDate, to: today, memberId, sources });
-  // R-08: funkce nemá spodní mez okna, počítá se jen ta přidělená po konci měsíce snímku.
-  return eventsAfterSnapshot(events, afterDate).length;
+): Promise<BonusEvent[]> {
+  if (range.to <= range.after) return [];
+  const events = await listBonusEvents({ after: range.after, to: range.to, memberId, sources });
+  return eventsAfterSnapshot(events, range.after);
+}
+
+/**
+ * Automatické události se jmény v `(after, to]` pro sekci „Čeká na
+ * započtení“ v Přehledu. Podmínky jsou stejné jako v `bonusEventsSql` a
+ * `functionEventsSql` (+ `eventsAfterSnapshot`), shodu hlídá test 7 iter-045
+ * nad PGlite. Při změně podmínky v jednom SQL ji změň i v druhém.
+ *
+ * Od koho: Master mind potvrdil (`presented_confirmed_by`), pomoc v burze
+ * využil/a (`recipient_id`, jinak `created_by`), kontakt využil/a
+ * (`recipient_id`), funkci přidělil (`assigned_by`). Smazaný člen = `NULL`.
+ * Známé omezení: u pomoci se smazaným příjemcem (`recipient_id` je
+ * `ON DELETE SET NULL`) `COALESCE(recipient_id, created_by)` ukáže zapisovatele,
+ * z dat nejde rozlišit „příjemce nebyl“ a „příjemce smazán“. Okno je 1 až 2 měsíce.
+ * JEN stránka se `semafor.view_all`.
+ */
+export function pendingAutoSql(opts: { after: string; to: string }): SQL {
+  const fnDate = sql`(mf.assigned_at AT TIME ZONE 'Europe/Prague')::date`;
+  return sql`
+    SELECT e.key, e.member_id::text AS member_id, m.name AS member_name, (${memberActiveSql("m")}) AS active,
+           e.category, e.d::text AS d, e.detail, e.kind, e.from_name
+    FROM (
+      SELECT 'mm:' || c.id::text AS key, c.member_id, 'mastermind'::text AS category, c.internal_date AS d,
+             c.title::text AS detail, NULL::text AS kind, fc.name::text AS from_name
+      FROM mastermind_case c
+      LEFT JOIN member fc ON fc.id = c.presented_confirmed_by
+      WHERE c.status = 'presented' AND c.internal_date IS NOT NULL
+        AND c.internal_date > ${opts.after}::date AND c.internal_date <= ${opts.to}::date
+      UNION ALL
+      SELECT 'bh:' || h.id::text, h.helper_id, 'burza'::text, h.used_on, NULL::text, 'help'::text, fh.name::text
+      FROM burza_help h
+      LEFT JOIN member fh ON fh.id = COALESCE(h.recipient_id, h.created_by)
+      WHERE h.used_on > ${opts.after}::date AND h.used_on <= ${opts.to}::date
+      UNION ALL
+      SELECT 'bc:' || d.id::text, d.helper_id, 'burza'::text, d.used_on, NULL::text, 'contact'::text, fd.name::text
+      FROM (
+        SELECT DISTINCT ON (u.helper_id, u.recipient_id, date_trunc('month', u.used_on::timestamp))
+               u.id, u.helper_id, u.recipient_id, u.used_on
+        FROM burza_contact_use u
+        ORDER BY u.helper_id, u.recipient_id, date_trunc('month', u.used_on::timestamp), u.used_on
+      ) d
+      LEFT JOIN member fd ON fd.id = d.recipient_id
+      WHERE d.used_on > ${opts.after}::date AND d.used_on <= ${opts.to}::date
+      UNION ALL
+      SELECT 'fn:' || mf.member_id::text, mf.member_id, 'function'::text, ${fnDate}, cf.name::text, NULL::text, fa.name::text
+      FROM member_function mf
+      JOIN chapter_function cf ON cf.id = mf.function_id
+      LEFT JOIN member fa ON fa.id = mf.assigned_by
+      WHERE ${fnDate} > ${opts.after}::date AND ${fnDate} <= ${opts.to}::date
+    ) e
+    JOIN member m ON m.id = e.member_id
+  `;
+}
+
+/**
+ * Sekce „Čeká na započtení“ v Přehledu: automatické události
+ * (`pendingAutoSql`) a ruční body (`listPointsForManagement`, bez pole
+ * `note`), jen ze zapnutých částí. `pointsMissing`: tabulky ručních bodů
+ * chybí (merge před migrací), automatické řádky zůstávají.
+ * JEN stránka se `semafor.view_all`.
+ */
+export async function listPendingForOverview(
+  range: PendingRange,
+  sources: BonusSources
+): Promise<{ rows: PendingRow[]; pointsMissing: boolean }> {
+  const [auto, manual] = await Promise.all([
+    getDb().execute<PendingAutoDbRow & Record<string, unknown>>(pendingAutoSql(range)),
+    listPointsForManagement(range.after, range.to),
+  ]);
+  const manualRows = manual.missing ? [] : manual.value;
+  const rows = toPendingRows(
+    auto.rows,
+    manualRows.map((r) => ({
+      id: r.id,
+      memberId: r.memberId,
+      memberName: r.memberName,
+      memberActive: r.memberActive,
+      category: r.category,
+      earnedOn: r.earnedOn,
+      points: r.points,
+      authorName: r.authorName,
+      activityTitle: r.activityTitle,
+      refName: r.refName,
+    }))
+  );
+  return { rows: filterBonusEvents(rows, sources), pointsMissing: manual.missing };
 }
 
 // ── Souhrn chapteru a přehled vedení ──────────────────────────

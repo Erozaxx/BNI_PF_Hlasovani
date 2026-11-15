@@ -11,6 +11,7 @@ import { ChapterSide } from "./ChapterSide";
 import { ComicStrip, ComicWide } from "./ComicStrip";
 import { InlineVisual } from "./InlineVisual";
 import { RichText } from "./RichText";
+import { SectionHeading } from "./SectionHeading";
 import { SourceNote } from "./SourceNote";
 
 const TONE_BORDER: Record<BranchOption<VisualKind>["tone"], string> = {
@@ -97,9 +98,12 @@ export function BranchBlock<K extends VisualKind>({
   const titleId = `${branch.id}-title`;
   return (
     <section id={branch.id} aria-labelledby={titleId} className="info-branch py-6">
-      <h2 id={titleId} className="text-2xl font-semibold leading-tight text-text-main">
-        {branch.question}
-      </h2>
+      <SectionHeading
+        anchor={branch.id}
+        titleId={titleId}
+        title={branch.question}
+        className="text-2xl font-semibold leading-tight text-text-main"
+      />
       <div className="mt-5 space-y-5">
         {branch.options.map((option) => (
           <OptionCard key={option.id} option={option} kind={kind} notes={notes} links={links} />

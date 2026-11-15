@@ -567,6 +567,9 @@ export interface ManagedPointRow {
   category: PointCategory;
   earnedOn: string;
   points: number | null;
+  /** iter-045: příjemce bodu (filtr „Komu“ v Přehledu) a jeho stav. */
+  memberId: string;
+  memberActive: boolean;
   memberName: string;
   authorName: string | null;
   note: string | null;
@@ -575,9 +578,61 @@ export interface ManagedPointRow {
   refName: string | null;
 }
 
+/** SQL seznamu `listPointsForManagement` (samostatně kvůli testu nad PGlite, iter-045 test 7). */
+export function managementPointsSql(after: string, to: string, category?: PointCategory): SQL {
+  const cat: SQL = category ? sql`AND sp.category = ${category}::text` : sql``;
+  return sql`
+    SELECT sp.id::text AS id, sp.category, sp.earned_on::text AS earned_on, sp.points::int AS points,
+           sp.member_id::text AS member_id, (${memberActiveSql("m")}) AS member_active,
+           m.name AS member_name, au.name AS author_name, sp.note,
+           sp.activity_id::text AS activity_id, sa.title AS activity_title, rm.name AS ref_name
+    FROM semafor_point sp
+    JOIN member m ON m.id = sp.member_id
+    LEFT JOIN member au ON au.id = sp.created_by
+    LEFT JOIN semafor_activity sa ON sa.id = sp.activity_id
+    LEFT JOIN member rm ON rm.id = sp.ref_member_id
+    WHERE sp.earned_on > ${after}::date AND sp.earned_on <= ${to}::date ${cat}
+    ORDER BY sp.earned_on DESC, sp.created_at DESC
+  `;
+}
+
+export interface ManagementPointDbRow extends Record<string, unknown> {
+  id: string;
+  category: PointCategory;
+  earned_on: string;
+  points: number | null;
+  member_id: string;
+  member_active: boolean;
+  member_name: string;
+  author_name: string | null;
+  note: string | null;
+  activity_id: string | null;
+  activity_title: string | null;
+  ref_name: string | null;
+}
+
+export function toManagedPointRow(x: ManagementPointDbRow): ManagedPointRow {
+  return {
+    id: x.id,
+    category: x.category,
+    earnedOn: x.earned_on,
+    points: x.points === null ? null : Number(x.points),
+    memberId: x.member_id,
+    memberActive: Boolean(x.member_active),
+    memberName: x.member_name,
+    authorName: x.author_name,
+    note: x.note,
+    activityId: x.activity_id,
+    activityTitle: x.activity_title,
+    refName: x.ref_name,
+  };
+}
+
 /**
  * Všechny záznamy v `(after, to]` se jmény. JEN stránka s `semafor.points`
- * (`requirePageSession` jako první příkaz). Filtr kategorie je volitelný.
+ * (`requirePageSession` jako první příkaz), nebo `/semafor/prehled` se
+ * `semafor.view_all`, která pole `note` do HTML neposílá (iter-045). Filtr
+ * kategorie je volitelný.
  */
 export async function listPointsForManagement(
   after: string,
@@ -585,44 +640,8 @@ export async function listPointsForManagement(
   category?: PointCategory
 ): Promise<PointsRead<ManagedPointRow[]>> {
   return readPointsTables(async () => {
-    const cat: SQL = category ? sql`AND sp.category = ${category}::text` : sql``;
-    const r = await getDb().execute<
-      Record<string, unknown> & {
-        id: string;
-        category: PointCategory;
-        earned_on: string;
-        points: number | null;
-        member_name: string;
-        author_name: string | null;
-        note: string | null;
-        activity_id: string | null;
-        activity_title: string | null;
-        ref_name: string | null;
-      }
-    >(sql`
-      SELECT sp.id::text AS id, sp.category, sp.earned_on::text AS earned_on, sp.points::int AS points,
-             m.name AS member_name, au.name AS author_name, sp.note,
-             sp.activity_id::text AS activity_id, sa.title AS activity_title, rm.name AS ref_name
-      FROM semafor_point sp
-      JOIN member m ON m.id = sp.member_id
-      LEFT JOIN member au ON au.id = sp.created_by
-      LEFT JOIN semafor_activity sa ON sa.id = sp.activity_id
-      LEFT JOIN member rm ON rm.id = sp.ref_member_id
-      WHERE sp.earned_on > ${after}::date AND sp.earned_on <= ${to}::date ${cat}
-      ORDER BY sp.earned_on DESC, sp.created_at DESC
-    `);
-    return r.rows.map((x) => ({
-      id: x.id,
-      category: x.category,
-      earnedOn: x.earned_on,
-      points: x.points === null ? null : Number(x.points),
-      memberName: x.member_name,
-      authorName: x.author_name,
-      note: x.note,
-      activityId: x.activity_id,
-      activityTitle: x.activity_title,
-      refName: x.ref_name,
-    }));
+    const r = await getDb().execute<ManagementPointDbRow>(managementPointsSql(after, to, category));
+    return r.rows.map(toManagedPointRow);
   });
 }
 

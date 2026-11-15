@@ -19,6 +19,7 @@ import { ChapterSide } from "./ChapterSide";
 import { ComicStrip } from "./ComicStrip";
 import { RichText } from "./RichText";
 import { RightsList } from "./RightsList";
+import { SectionHeading } from "./SectionHeading";
 import { SourceNote } from "./SourceNote";
 
 function ListSection({
@@ -50,9 +51,12 @@ function ListSection({
           {TEMPLATE_TEXTS.chapterNote.label}
         </p>
       )}
-      <h2 id={titleId} className="text-2xl font-semibold leading-tight text-text-main">
-        {section.title}
-      </h2>
+      <SectionHeading
+        anchor={section.id}
+        titleId={titleId}
+        title={section.title}
+        className="text-2xl font-semibold leading-tight text-text-main"
+      />
       {lead.length > 0 && (
         <div className="mt-4 space-y-4 text-lg leading-relaxed text-text-main">
           {lead.map((segments, i) => (

@@ -129,6 +129,12 @@
     display: none !important;
   }
 
+  /* iter-045: ikona odkazu na sekci a její hlášení se netisknou. */
+  .info-section-link,
+  .info-section-link-status {
+    display: none !important;
+  }
+
   /* Barva stavu osy (např. červená „Výbor jedná") i v tisku. */
   .info-status-dot {
     -webkit-print-color-adjust: exact;
@@ -432,13 +438,15 @@
   .info-root h2,
   .info-root h3,
   .info-root h4,
+  .info-root .info-heading,
   .info-role-field dt {
     break-after: avoid;
     page-break-after: avoid;
   }
 
   .info-role-card > h3 + *,
-  .info-reference section > h2 + * {
+  .info-reference section > h2 + *,
+  .info-reference section > .info-heading + * {
     break-before: avoid;
   }
 
@@ -536,7 +544,8 @@
     max-width: 150mm;
   }
 
-  .info-list-section > h2 + * {
+  .info-list-section > h2 + *,
+  .info-list-section > .info-heading + * {
     break-before: avoid;
   }
 

@@ -6,7 +6,7 @@ v kódu, tady je jen odkaz, kde je najít. Návod pro členy je veřejně na
 
 ## 1. Co je semafor
 
-- Oficiální skóre z BNI: vedení jednou měsíčně nahraje soubor `.xlsx` se skóre
+- Oficiální skóre z BNI: vedení jednou měsíčně nahraje soubor `.xlsx` nebo `.xlsm` se skóre
   členů (záložka Import). Barvu podle skóre počítá aplikace (`lib/semafor/color.ts`).
 - Interní skóre: skóre z BNI plus bonus za to, co člen dělá pro chapter navíc.
   Z něj vychází interní barva.
@@ -25,9 +25,14 @@ bonus         = min(BONUS_CAP, součet kategorií po podstropech)
 - Nic se neodečítá. Bonus je vždy nejméně 0 a interní skóre nikdy nižší než BNI.
 - Funkce nemá spodní mez okna: počítá se v měsíci M, když ji člen drží dnes a
   `assigned_at` je nejpozději poslední den M (`bonusForMonth`).
-- Události po konci posledního nahraného měsíce se započtou s dalším měsícem
-  (věta na kartě Můj semafor). Funkce se do té věty nepočítá, pokud byla přidělena
-  před koncem měsíce snímku (`eventsAfterSnapshot`).
+- Události po konci posledního nahraného měsíce se započtou s dalším měsícem.
+  Ukazuje je sekce „Čeká na započtení“ (iter-045): v Mém semaforu rozpis vlastních
+  bonusů po kategoriích (`listMyPendingEvents`, jen `session.memberId`), v Přehledu
+  seznam všech záznamů se jmény a filtrem Komu a Kategorie (`listPendingForOverview`,
+  jen `semafor.view_all`). Okno je `(konec posledního nahraného měsíce, dnes]`
+  (`pendingRange` v `lib/semafor/pending.ts`), podstropy a strop se v něm neuplatní.
+  Funkce čeká, jen když byla přidělena po konci měsíce snímku (`eventsAfterSnapshot`,
+  v Přehledu stejná podmínka přímo v `pendingAutoSql`).
 - Konstanty jsou jen v `lib/semafor/bonus.ts`: `BONUS_POINTS`, `CATEGORY_CAPS`,
   `WORK_POINTS`, `WORK_GUIDE`, `BONUS_CAP`. Barvy a prahy v `lib/semafor/color.ts`.
 - Invariant: `BONUS_CAP` nesmí přesáhnout šířku nejužšího barevného pásma (dnes 20).
@@ -171,8 +176,8 @@ ale na záložce Body.
 
 | Adresa | Kdo | Co |
 |---|---|---|
-| `/semafor` | každý přihlášený | můj semafor, rozpis bonusu, Body za 6 měsíců, Poděkovat |
-| `/semafor/prehled` | `semafor.view_all` | přehled se jmény, rozpis bonusu v řádku |
+| `/semafor` | každý přihlášený | můj semafor, rozpis bonusu a čekajících bonusů, Body za 6 měsíců, Poděkovat |
+| `/semafor/prehled` | `semafor.view_all` | přehled se jmény, rozpis bonusu v řádku, pod tabulkou „Čeká na započtení“ |
 | `/semafor/body` | `semafor.points` | formuláře, seznam záznamů, mazání |
 | `/semafor/import` | `semafor.import` | nahrání souboru |
 | `/pravidla/semafor` | veřejně | návod celého semaforu, jen pravidla a body |
@@ -181,6 +186,8 @@ Všechny stránky v aplikaci jsou `force-dynamic`. `/pravidla/semafor` je static
 Člen vidí jen své body a poděkování, včetně jména autora a textu. Text poděkování
 a popisy práce vidí ještě vedení na záložce Body (moderace nevhodného textu).
 Souhrn chapteru zůstává čtyři počty interních barev.
+„Čeká na započtení“ v Přehledu ukazuje u poděkování a ostatní práce jen kategorii,
+datum, komu a od koho, texty jsou na záložce Body (odkaz jen se `semafor.points`).
 
 ## 8. Známá omezení
 
@@ -220,5 +227,8 @@ Souhrn chapteru zůstává čtyři počty interních barev.
 
 `npm run test:iter-044` řetězí `test:iter-044-body` (čisté moduly a statické
 kontroly), `test:iter-044-sql` (PGlite, bez sítě), `test:info-pages`,
-`test:iter-036` a `test:iter-043` (ta řetězí starší sady). Spuštění migrace proti
+`test:iter-036` a `test:iter-043` (ta řetězí starší sady). `npm run test:iter-045` přidává
+`test:iter-045-odkazy` (odkazy na sekce pravidel, čekající body) a
+`test:iter-045-sql` (shoda `pendingAutoSql` s dotazy bonusu nad PGlite) a řetězí
+`test:iter-044`. Spuštění migrace proti
 databázi je ruční krok mimo testy.

@@ -712,7 +712,7 @@ const tests: TestCase[] = [
       const r = eventsAfterSnapshot(ev, "2026-09-30");
       assert.deepEqual(r.map((e) => `${e.category}:${e.date}`), ["function:2026-10-05", "thanks:2026-10-05", "mastermind:2026-09-01"]);
       const q = stripComments(read("lib/db/queries/semafor.ts"));
-      assert.ok(q.slice(q.indexOf("export async function countMyEventsAfter")).includes("eventsAfterSnapshot("));
+      assert.ok(q.slice(q.indexOf("export async function listMyPendingEvents")).includes("eventsAfterSnapshot("));
     },
   },
   {

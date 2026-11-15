@@ -1520,10 +1520,10 @@ const tests: TestCase[] = [
   {
     name: "42. iter-042 (#8, #16, #17, #18): import, přehled a náhled importu",
     run: () => {
-      assert.equal(SEMAFOR_TEXTS.importFile, "Soubor .xlsx z BNI (list se skóre členů)");
+      assert.equal(SEMAFOR_TEXTS.importFile, "Soubor .xlsx nebo .xlsm z BNI (list se skóre členů)");
       assert.deepEqual([...SEMAFOR_TEXTS.importSteps], [
         "Vyber měsíc, za který soubor je. Soubor sám měsíc nezná.",
-        "Vyber soubor .xlsx z BNI s listem skóre členů.",
+        "Vyber soubor .xlsx nebo .xlsm z BNI s listem skóre členů.",
         "Zobrazit náhled zatím nic neuloží.",
         "Zkontroluj párování jmen a klikni na Uložit.",
       ]);
@@ -1590,6 +1590,27 @@ const tests: TestCase[] = [
       assert.equal(helpSemaforLeadership({ mastermind: false, burza: true, points: false }).length, 4);
       assert.ok(!helpSemaforLeadership({ mastermind: false, burza: true, points: false }).map((h) => h.text).join(" ").includes("Master mind"));
       assert.ok(helpSemaforMember().every((t) => !t.includes(EM_DASH)));
+    },
+  },
+  {
+    name: "T-004c. xlsm (macroEnabled content type, vbaProject.bin) projde analyzeFile",
+    run: async () => {
+      const base = await buildXlsx(SAMPLE, { sheetName: "Data" });
+      const zip = await JSZip.loadAsync(base);
+      zip.file(
+        "[Content_Types].xml",
+        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/>' +
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.ms-excel.sheet.macroEnabled.main+xml"/></Types>'
+      );
+      zip.file("xl/vbaProject.bin", Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 1, 2, 3]));
+      const buf = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+      assert.ok((await JSZip.loadAsync(buf)).file("xl/vbaProject.bin"), "xlsm nese vbaProject.bin");
+      const a = analyzeFile(buf);
+      assert.equal(a.rows.length, 3);
+      assert.deepEqual(a.unknownColumns, []);
+      assert.deepEqual(a.rows.map((r) => r.name), ["Jan Testovací", "Eva Vzorová", "Petr Příkladný"]);
+      assert.equal(a.rows[0].values?.totalScore, 74);
     },
   },
 ];

@@ -48,3 +48,6 @@ next-env.d.ts
 
 # QA pomocné skripty iterací (necommitovat)
 scripts/qa-tmp-*/
+
+# výstupy /security-check (raw nálezy, nepatří do public repa)
+checks/
