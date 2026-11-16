@@ -27,6 +27,8 @@ import { listInternalDays } from "@/lib/db/queries/attendance-internal";
 import { can } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/Card";
 import { AttendanceTabs } from "@/components/attendance/AttendanceTabs";
+import { getMemberById } from "@/lib/db/queries/members";
+import { MEDICAL_TEXTS, isMedicalOn } from "@/lib/members/medical";
 import { AbsenceCalendar } from "@/components/attendance/AbsenceCalendar";
 
 /**
@@ -47,7 +49,7 @@ export default async function AttendancePage() {
   const from = monthStart(minMonth.year, minMonth.month);
   const to = monthEnd(maxMonth.year, maxMonth.month);
 
-  const [absences, meetingDates, internalDates, pastDays, names, absenceDays, settings] = await Promise.all([
+  const [absences, meetingDates, internalDates, pastDays, names, absenceDays, settings, me] = await Promise.all([
     listMyAbsences(memberId, from, to),
     listMeetingDates(from, to),
     listInternalDays(from, to),
@@ -55,8 +57,12 @@ export default async function AttendancePage() {
     listSubstituteNames(memberId),
     listMyAbsenceDays(memberId, windowStart, today),
     getChapterSettings(),
+    getMemberById(memberId),
   ]);
 
+  // iter-046 (Q5 A): člen s medical se to dozví (je to jeho vlastní údaj).
+  const medicalNotice =
+    me && me.medicalUntil && isMedicalOn(me, today) ? MEDICAL_TEXTS.ownNotice(me.medicalUntil) : null;
   const count = absenceDays.length;
   const warn = count >= ABSENCE_LIMIT;
 
@@ -67,6 +73,12 @@ export default async function AttendancePage() {
         <h1 className="text-2xl font-bold text-text-main">{MEMBER_TEXTS.title}</h1>
         <p className="mt-1 text-sm text-text-muted">{memberIntroText(settings.meetingTime)}</p>
       </div>
+
+      {medicalNotice && (
+        <p className="rounded-card border border-border bg-surface px-4 py-3 text-sm text-text-main">
+          {medicalNotice}
+        </p>
+      )}
 
       <div
         className={`rounded-card border px-4 py-3 text-sm ${

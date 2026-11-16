@@ -113,6 +113,8 @@ export interface ReportMember {
   announcedSubstitute: boolean;
   /** Pořadí absence v okně 6 měsíců včetně tohoto dne, `null` když to není absence. */
   ordinal: number | null;
+  /** iter-046: omluva je medical (vedení ji vidí, do absencí se nepočítá). */
+  medical?: boolean;
 }
 
 export interface ReportData {
@@ -234,7 +236,11 @@ function sectionsOf(members: readonly ReportMember[]): ReportSection[] {
     {
       title: "Omluvení",
       lines: excusedAbsent.map((m) =>
-        m.announcedSubstitute ? plainLine(`${m.name}, ohlášený náhradník nepřišel`) : absenceLine(m)
+        m.announcedSubstitute
+          ? plainLine(`${m.name}, ohlášený náhradník nepřišel`)
+          : m.medical
+          ? absenceLine({ ...m, ordinal: null }, " (medical)")
+          : absenceLine(m)
       ),
     },
     { title: "Bez omluvy", lines: unexcused.map((m) => absenceLine(m)) },
@@ -304,6 +310,8 @@ export function buildAttendanceReport(input: ReportInput): BuiltMail {
             lines: [...data.members].sort(byName).map((m) =>
               m.status === "substitute"
                 ? plainLine(`${m.name}: náhradník ${m.substituteName ?? ""}`.trim())
+                : m.medical
+                ? absenceLine({ ...m, ordinal: null }, " (medical)")
                 : absenceLine(m)
             ),
           },

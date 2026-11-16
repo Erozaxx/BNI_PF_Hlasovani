@@ -7,6 +7,7 @@ import { pragueToday } from "@/lib/members/activity";
 import type { VoteDetailItem } from "./_components/MeetingResultsView";
 import {
   tokenErrorText,
+  VOTE_TEXTS,
   type MeetingTokenErrorReason,
 } from "@/lib/meetings/token-error-text";
 
@@ -49,6 +50,8 @@ interface MeetingData {
   /** ISO konec hlasování (iter-042 Z1), `null` když hlasování nemá uložený konec. */
   votingClosesAt?: string | null;
   memberName: string | null;
+  /** iter-046: člen s medical nehlasuje (tlačítka se nevykreslí). */
+  voteBlocked?: "medical" | null;
   guests: GuestShape[];
 }
 
@@ -189,7 +192,12 @@ export default async function MemberMeetingPage({
         </div>
 
         {/* Phase info banner */}
-        {phase === "voting" && (
+        {phase === "voting" && data.voteBlocked === "medical" && (
+          <div className="bg-surface border border-border rounded-lg px-4 py-3">
+            <p className="text-sm font-medium text-text-main">{VOTE_TEXTS.medical}</p>
+          </div>
+        )}
+        {phase === "voting" && data.voteBlocked !== "medical" && (
           <div className="bg-danger-light border border-danger rounded-lg px-4 py-3">
             <p className="text-sm font-medium text-danger">
               {closesAt
@@ -233,6 +241,7 @@ export default async function MemberMeetingPage({
                   voteSummary={g.voteSummary}
                   voteDetail={g.voteDetail}
                   phase={phase}
+                  voteBlocked={data.voteBlocked ?? null}
                 />
               ))}
             </div>

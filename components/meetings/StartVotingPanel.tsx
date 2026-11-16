@@ -8,8 +8,9 @@ import { useToast } from "@/components/ui/Toast";
 import { votingClosesAtFor, isDeliveryDue } from "@/lib/meetings/voting-window";
 import { deliveryHint, type DeliveryHint } from "@/lib/meetings/morning-dispatch";
 import { formatWeekdayFull } from "@/lib/attendance/rules";
+import { VOTE_TEXTS } from "@/lib/meetings/token-error-text";
 
-type SkipReason = "inactive" | "no-email" | "revoked" | "already-sent";
+type SkipReason = "inactive" | "medical" | "excused" | "no-email" | "revoked" | "already-sent";
 
 type DispatchOutcome =
   | { status: "sent" }
@@ -60,6 +61,8 @@ interface StartVotingPanelProps {
 
 const SKIP_LABEL: Record<SkipReason, string> = {
   inactive: "přeskočeno: neaktivní",
+  medical: VOTE_TEXTS.skipMedical,
+  excused: VOTE_TEXTS.skipExcused,
   "no-email": "přeskočeno: bez e-mailu",
   revoked: "přeskočeno: odkaz zneplatněný",
   "already-sent": "přeskočeno: odkaz už odeslaný",

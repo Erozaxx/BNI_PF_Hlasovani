@@ -18,6 +18,8 @@ export interface MobileNavShow {
   members: boolean;
   categories: boolean;
   settings: boolean;
+  /** iter-046: „Nastavit heslo“ bez hesla, jinak „Heslo“. */
+  passwordLabel: string;
 }
 
 interface MobileNavProps {
@@ -211,7 +213,7 @@ export function MobileNav({ show, name }: MobileNavProps) {
               className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
               onClick={() => setOpen(false)}
             >
-              Heslo
+              {show.passwordLabel}
             </Link>
           </>
         )}

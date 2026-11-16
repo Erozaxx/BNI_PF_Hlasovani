@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requirePermissionForRoute } from "@/lib/auth/guards";
+import { can } from "@/lib/auth/permissions";
+import { redactMedicalOutcome } from "@/lib/meetings/token-error-text";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { runVotingDispatch, type DispatchMode } from "@/lib/meetings/voting-dispatch";
 
@@ -107,5 +109,16 @@ export async function POST(
 
   // Vždy HTTP 200 při ok:true, i když se část mailů nepovedla - dílčí
   // neúspěch je v těle odpovědi (arch 4.1).
-  return NextResponse.json(result, { status: 200 });
+  // iter-046 (F-01): medical jen s `members.medical`, ostatním neutrální `excused`.
+  const canSeeMedical = can(session, "members.medical");
+  return NextResponse.json(
+    {
+      ...result,
+      recipients: result.recipients.map((r) => ({
+        ...r,
+        outcome: redactMedicalOutcome(r.outcome, canSeeMedical),
+      })),
+    },
+    { status: 200 }
+  );
 }

@@ -416,7 +416,7 @@ const cases: TestCase[] = [
         pw.map((r) => [r.key, r.max]),
         [
           [`pw-login-pair:${h}:1.2.3.4`, 10],
-          [`pw-login-email:${h}`, 50],
+          [`pw-login-email:${h}`, 10],
           ["pw-login-ip:1.2.3.4", 20],
         ]
       );
@@ -663,8 +663,10 @@ const cases: TestCase[] = [
   {
     name: "11a. M-1: updateMemberEmail zneplatní nepoužité odkazy (oba účely) v tomtéž příkazu jen při změně",
     run: () => {
-      const body = declaration(readSrc("lib/db/queries/members.ts"), "updateMemberEmail");
-      assert.equal((body.match(/getDb\(\)/g) ?? []).length, 1, "jeden příkaz");
+      // iter-046 (L-3): SQL je ve stavebnici `updateMemberEmailSql`, `updateMemberEmail` ji spustí jedním getDb()
+      const src = readSrc("lib/db/queries/members.ts");
+      assert.equal((declaration(src, "updateMemberEmail").match(/getDb\(\)/g) ?? []).length, 1, "jeden příkaz");
+      const body = declaration(src, "updateMemberEmailSql");
       assert.ok(/UPDATE member_login_link SET used_at = now\(\)/.test(body));
       assert.ok(/WHERE changed\)/.test(body), "jen při skutečné změně");
       assert.ok(!/purpose/.test(body), "oba účely, bez filtru purpose");
@@ -675,8 +677,9 @@ const cases: TestCase[] = [
     name: "11b. L-5: reset i povýšení/sesazení zneplatní odkazy set-password v tomtéž příkazu, přepnutí role ne",
     run: () => {
       const src = readSrc("lib/db/queries/members.ts");
-      const reset = declaration(src, "resetPasswordGuarded");
-      assert.equal((reset.match(/getDb\(\)/g) ?? []).length, 1);
+      // iter-046 (P1): SQL resetu je ve stavebnici `resetPasswordSql`, `resetPasswordGuarded` ji spustí jedním getDb()
+      assert.equal((declaration(src, "resetPasswordGuarded").match(/getDb\(\)/g) ?? []).length, 1);
+      const reset = declaration(src, "resetPasswordSql");
       assert.ok(/UPDATE member_login_link SET used_at = now\(\)[\s\S]*purpose = 'set-password'/.test(reset));
       const role = declaration(src, "setMemberRoleGuarded");
       assert.equal((role.match(/getDb\(\)/g) ?? []).length, 1);
@@ -824,10 +827,10 @@ const cases: TestCase[] = [
         planLoginStart({ blocked: null, member: { email: "a@b.cz", managementRole: null, passwordHash: null } }),
         { next: "link" }
       );
-      // Heslo bez role (zbytek po odebrání role) nesmí vést na pole hesla.
+      // iter-046 (P1, Q8 A): heslo smí mít každý člen, hash bez role vede na pole hesla.
       assert.deepEqual(
         planLoginStart({ blocked: null, member: { email: "a@b.cz", managementRole: null, passwordHash: "h" } }),
-        { next: "link" }
+        { next: "password" }
       );
       assert.deepEqual(
         planLoginStart({ blocked: null, member: { email: "a@b.cz", managementRole: "moderator", passwordHash: null } }),
@@ -934,7 +937,9 @@ const cases: TestCase[] = [
       const link = declaration(src, "handleSendLink");
       assert.ok(link.includes("setMessage(null)") && link.includes("setFormError(null)"));
       // L-2: nápověda pod heslem.
-      assert.ok(src.includes("Heslo ještě nemáš? Nastav si ho odkazem z mailu"));
+      // iter-046 (P1): nápověda pod heslem je LOGIN_TEXTS.passwordHint (lib/auth/password-texts.ts)
+      assert.ok(src.includes("{LOGIN_TEXTS.passwordHint}"));
+      assert.ok(readSrc("lib/auth/password-texts.ts").includes("Heslo nemáš nebo jsi ho zapomněl(a)? Přihlas se odkazem níž."));
       // iter-037 (T-003b): stránka /magic je smazaná (mrtvá, nic na ni nevedlo),
       // test 12d v test-iter-037-members.ts hlídá, že neexistuje.
     },

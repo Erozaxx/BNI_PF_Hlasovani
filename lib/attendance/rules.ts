@@ -32,6 +32,17 @@ export function isAbsenceStatus(status: string | null | undefined): status is Ab
   return status === "absent" || status === "unexcused";
 }
 
+/**
+ * iter-046 (arch 5.1): počítá se do absencí. Medical omluva ne (Tom 15. 11.).
+ * SQL protějšek je `absenceStatusSql` v lib/db/queries/absence-status.ts.
+ */
+export function isCountedAbsence(row: {
+  status: string | null | undefined;
+  medical: boolean;
+}): boolean {
+  return isAbsenceStatus(row.status) && !row.medical;
+}
+
 /** Zdroje záznamu docházky (`attendance_record.source`); `palms` = doplnění z PALMS (iter-041). */
 export const RECORD_SOURCES = ["manager", "auto", "palms"] as const;
 

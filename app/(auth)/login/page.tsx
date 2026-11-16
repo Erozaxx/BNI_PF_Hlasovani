@@ -4,13 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent, Suspense } from "react";
 import { loginAction } from "@/actions/auth";
 import { requestLoginLinkAction, startLoginAction } from "@/actions/login-link";
+import { LOGIN_TEXTS } from "@/lib/auth/password-texts";
 
 /**
  * iter-032 T-011: dvoukrokové přihlášení (rozhodnutí uživatele 15. 10. 2026).
- * Krok 1: jen e-mail a „Pokračovat". Krok 2: vedení s heslem zadá heslo,
+ * Krok 1: jen e-mail a „Pokračovat". Krok 2: člen s heslem zadá heslo,
  * ostatním se pošle odkaz do e-mailu (vždy stejná odpověď, aspoň 2,5 s).
- * Z kroku 1 se pozná, že e-mail patří vedení s heslem, člena a neexistující
- * e-mail rozlišit nejde (viz startLoginAction).
+ * Z kroku 1 se pozná, že e-mail patří členovi s heslem (iter-046: každý
+ * člen), člena bez hesla a neexistující e-mail rozlišit nejde (viz startLoginAction).
  */
 
 type Step = "email" | "password" | "link";
@@ -214,8 +215,7 @@ function LoginFormInner() {
                   readOnly={isPending}
                 />
                 <p className="mt-2 text-sm text-gray-600">
-                  Heslo ještě nemáš? Nastav si ho odkazem z mailu, který ti
-                  poslal admin. Nebo se přihlas odkazem níž.
+                  {LOGIN_TEXTS.passwordHint}
                 </p>
               </div>
               <button type="submit" disabled={isPending} className={PRIMARY_BUTTON}>

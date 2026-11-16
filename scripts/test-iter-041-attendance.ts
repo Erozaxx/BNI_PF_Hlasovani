@@ -177,14 +177,19 @@ const tests: TestCase[] = [
         if (f !== "attendance-close.ts") assert.ok(!/'absent'\s*,\s*NULL/.test(src), f);
       }
       const att = stripComments(read("lib/db/queries/attendance.ts"));
-      assert.equal((att.match(/absenceStatusSql\("r"\)/g) ?? []).length, 3, "listMyAbsenceDays, listOverviewMembers, listClosedDays");
+      // iter-046 (M2): listClosedDays (souhrn dne) počítá přes missingStatusSql, medical člen chyběl.
+      assert.equal((att.match(/absenceStatusSql\("r"\)/g) ?? []).length, 2, "listMyAbsenceDays, listOverviewMembers");
+      assert.equal((att.match(/missingStatusSql\("r"\)/g) ?? []).length, 1, "listClosedDays");
       const close = stripComments(read("lib/db/queries/attendance-close.ts"));
       assert.equal((close.match(/absenceStatusSql\("[rx]"\)/g) ?? []).length, 2, "pořadí absence v reportu");
       assert.ok(close.includes("isAbsenceStatus(status)"));
       const detail = read("app/(app)/dochazka/prehled/[memberId]/page.tsx");
-      assert.ok(detail.includes("isAbsenceStatus(d.status)"));
+      // iter-046 (M2): detail člena počítá přes isCountedAbsence (medical se nepočítá).
+      assert.ok(detail.includes("isCountedAbsence(d)"));
       const ab = stripComments(read("lib/db/queries/absence-status.ts"));
       assert.ok(ab.includes("IN ('absent', 'unexcused')"));
+      // iter-046 (M2): absenceStatusSql navíc vylučuje medical omluvu.
+      assert.ok(ab.includes("mma.medical"));
     },
   },
   {

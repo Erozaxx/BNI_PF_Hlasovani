@@ -16,6 +16,7 @@ import {
   markEventDone,
   getEventParticipants,
   isEventParticipantAllowed,
+  isEventParticipantAllowedToVote,
 } from "@/lib/db/queries/events";
 import { getParticipantById } from "@/lib/db/queries/participants";
 import { bulkCreateParticipantsFromMembers } from "@/lib/events/bulk-participants";
@@ -26,6 +27,7 @@ import {
   buildEventLink,
 } from "@/lib/events/magic-link";
 import { castVote } from "@/lib/events/voting";
+import { VOTE_TEXTS } from "@/lib/meetings/token-error-text";
 import { validateCreateEventInput } from "@/lib/events/create-input";
 import { encryptToken, decryptToken } from "@/lib/events/token-encryption";
 import type { ActionResult } from "@/lib/types";
@@ -900,6 +902,10 @@ export async function castVoteAction(
     // iter-037 (T-003b): deaktivovaný člen už otevřenou stránkou nehlasuje.
     if (!(await isEventParticipantAllowed(participantId))) {
       return { success: false, error: "Člen je neaktivní." };
+    }
+    // iter-046 (arch 6.2 V3): člen s medical nehlasuje ani v akci, server rozhoduje (fail closed).
+    if (!(await isEventParticipantAllowedToVote(participantId))) {
+      return { success: false, error: VOTE_TEXTS.medical };
     }
 
     // Verify the event is still active

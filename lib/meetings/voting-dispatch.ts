@@ -52,6 +52,7 @@ import {
 import { getMembers } from "@/lib/db/queries/members";
 import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { isMedicalOn } from "@/lib/members/medical";
 import {
   getMeetingLinkRows,
   markLinkEmailSent,
@@ -108,7 +109,7 @@ export type DispatchOutcome =
   // kterého se nic neudělalo (žádný token, žádný mail, žádná značka).
   // Doženě ho ranní cron.
   | { status: "scheduled" }
-  | { status: "skipped"; reason: "inactive" | "no-email" | "revoked" | "already-sent" }
+  | { status: "skipped"; reason: "inactive" | "medical" | "no-email" | "revoked" | "already-sent" }
   | { status: "error"; reason: string };
 
 export interface DispatchRecipient {
@@ -248,7 +249,10 @@ async function runVotingDispatchInner(
   const allMembers = await getMembers();
   const todayPrague = pragueToday(now);
   const isActive = (m: (typeof allMembers)[number]) => isMemberActive(m, todayPrague);
-  const membersWithEmail = allMembers.filter((m) => !!m.email && isActive(m));
+  // iter-046 (arch 6.3): člen s medical odkaz nedostane, mezi příjemce se nepočítá.
+  const membersWithEmail = allMembers.filter(
+    (m) => !!m.email && isActive(m) && !isMedicalOn(m, todayPrague)
+  );
   if (membersWithEmail.length === 0) {
     return {
       ok: false,
@@ -284,6 +288,7 @@ async function runVotingDispatchInner(
       memberName: m.name,
       memberEmail: m.email ?? null,
       active: isActive(m),
+      medical: isMedicalOn(m, todayPrague),
     })),
     links: existingLinks.map((l) => ({
       memberId: l.memberId,
@@ -361,7 +366,8 @@ async function runVotingDispatchInner(
       recipients.push(recipient);
       // iter-037: o deaktivaci se do ops logu nic nezapisuje (neaktivní člen se
       // jen nepočítá), proto `skip "inactive"` nemá vlastní záznam.
-      if (!isDefer && row.action.reason !== "inactive") {
+      // iter-046: medical se do ops logu také nezapisuje (zdravotní údaj, /status vidí i moderátor).
+      if (!isDefer && row.action.reason !== "inactive" && row.action.reason !== "medical") {
         // iter-027 (T-005, 6.3c): jeden zápis do ops_event za příjemce, hned
         // po recipients.push - logOpsEvent nikdy nevyhazuje (D2), takže krok
         // 8 samotný se nemění.

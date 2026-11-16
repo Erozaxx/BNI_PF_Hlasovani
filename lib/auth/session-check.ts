@@ -1,5 +1,5 @@
 /**
- * iter-032 (arch T-001, sekce 7.2) — čistá kontrola session proti DB.
+ * iter-032 (arch T-001, sekce 7.2) - čistá kontrola session proti DB.
  *
  * Čistý modul: žádný import drizzle-orm, @/lib/db/*, next/* ani resend.
  * Bezpečné pro scripts/test-iter-032-access.ts.
@@ -33,6 +33,13 @@ export interface MemberAuthRow {
    */
   hasFunction?: boolean;
   /**
+   * iter-046 (arch 8.3): v `password_hash` něco je (skutečné heslo, nebo zámek).
+   * Chybějící pole = bez hesla.
+   */
+  hasHash?: boolean;
+  /** iter-046: čeká nepoužitý odkaz `set-password` (hash je pak zámek, ne heslo). */
+  pendingSetPassword?: boolean;
+  /**
    * iter-038 (arch 5.2): kdy člen dostal příznak Správce docházky, `null` =
    * není správce. Chybějící pole = není (starší volající a testy).
    */
@@ -56,8 +63,7 @@ export type SessionCheckResult =
         | "inactive"
         | "version-mismatch"
         | "role-mismatch"
-        | "link-with-role"
-        | "no-password-access";
+        | "link-with-role";
     };
 
 /**
@@ -68,7 +74,9 @@ export type SessionCheckResult =
  * - `(cookie.sv ?? 0) !== row.sessionVersion` (N-a: chybějící sv = 0),
  * - u `password` se role v cookie neshoduje s DB,
  * - u `magic_link` a `email_link` je v cookie role jiná než `null`,
- * - u `password` nemá člen v DB ani roli, ani funkci (heslo bez přístupu).
+ *
+ * iter-046 (P1): větev `no-password-access` zrušena, heslo smí mít každý člen.
+ * Práva běžného člena s heslem počítá `permissionsFor` (prázdná množina).
  */
 export function checkSession(
   cookie: SessionCookieState,
@@ -88,9 +96,6 @@ export function checkSession(
   if (cookie.authMethod === "password") {
     if ((cookie.managementRole ?? null) !== (row.managementRole ?? null)) {
       return { valid: false, reason: "role-mismatch" };
-    }
-    if (row.managementRole == null && !row.hasFunction) {
-      return { valid: false, reason: "no-password-access" };
     }
   } else if (cookie.managementRole != null) {
     return { valid: false, reason: "link-with-role" };

@@ -1,14 +1,14 @@
 /**
- * Plán rozeslání hlasovacích odkazů — rozhoduje, komu se zakládá odkaz a
+ * Plán rozeslání hlasovacích odkazů - rozhoduje, komu se zakládá odkaz a
  * komu se posílá mail. Nedělá nic jiného (arch iter-026 T-001, sekce 3.2).
  *
  * Čistý modul bez DB: žádný import drizzle-orm, @/lib/db/*, next/server,
- * next/cache ani resend. Jde spustit v holém Node (tsx) bez DATABASE_URL —
+ * next/cache ani resend. Jde spustit v holém Node (tsx) bez DATABASE_URL -
  * viz scripts/test-voting-plan.ts.
  */
 
 export type DispatchMode = "start" | "resend";
-export type SkipReason = "inactive" | "no-email" | "revoked" | "already-sent";
+export type SkipReason = "inactive" | "medical" | "no-email" | "revoked" | "already-sent";
 
 export interface PlanMember {
   memberId: string;
@@ -20,6 +20,12 @@ export interface PlanMember {
    * a do „Rozesláno X z Y“ se nepočítá.
    */
   active: boolean;
+  /**
+   * iter-046 (arch 6.3): člen má dnes medical (`isMedicalOn`), nehlasuje. Dostane
+   * `skip "medical"` hned po `inactive`, odkaz se mu nezakládá a do „Rozesláno
+   * X z Y“ se nepočítá. Chybějící hodnota = bez medical.
+   */
+  medical?: boolean;
 }
 
 export interface PlanLink {
@@ -59,6 +65,8 @@ export interface DispatchPlan {
     skippedAlreadySent: number;
     /** iter-037: deaktivovaní členové (řádky v `rows`, ale mimo `totalMembers`). */
     skippedInactive: number;
+    /** iter-046: členové s medical (řádky v `rows`, ale mimo `totalMembers`). */
+    skippedMedical: number;
   };
 }
 
@@ -66,6 +74,7 @@ export interface DispatchPlan {
  * Rozhodne akci pro jednoho člena. Pravidla, v tomto pořadí (sekce 3.2):
  * 0. Neaktivní člen (iter-037) → skip "inactive". První, před "no-email".
  *    Odkaz se mu nezakládá.
+ * 0b. Člen s medical (iter-046) → skip "medical", hned po "inactive".
  * 1. Člen bez e-mailu (null i "") → skip "no-email". Odkaz se mu nezakládá.
  * 2. Odkaz existuje a revokedAt != null → skip "revoked". Hromadné rozeslání
  *    revokaci nesmí přebít.
@@ -82,6 +91,9 @@ function planAction(
 ): PlanAction {
   if (!member.active) {
     return { kind: "skip", reason: "inactive" };
+  }
+  if (member.medical) {
+    return { kind: "skip", reason: "medical" };
   }
   if (!member.memberEmail) {
     return { kind: "skip", reason: "no-email" };
@@ -112,7 +124,7 @@ export function planVotingDispatch(input: PlanInput): DispatchPlan {
     };
   });
 
-  // Řazení podle jména (cs), druhotný klíč memberId — bez něj by dva
+  // Řazení podle jména (cs), druhotný klíč memberId - bez něj by dva
   // stejnojmenní členové měnili pořadí mezi běhy a testovací případ na
   // pozici řádku by byl vrtkavý (případ 12).
   rows.sort((a, b) => {
@@ -138,7 +150,10 @@ export function planVotingDispatch(input: PlanInput): DispatchPlan {
   const skippedInactive = rows.filter(
     (r) => r.action.kind === "skip" && r.action.reason === "inactive"
   ).length;
-  const activeRows = input.members.filter((m) => m.active);
+  const skippedMedical = rows.filter(
+    (r) => r.action.kind === "skip" && r.action.reason === "medical"
+  ).length;
+  const activeRows = input.members.filter((m) => m.active && !m.medical);
 
   return {
     rows,
@@ -154,6 +169,7 @@ export function planVotingDispatch(input: PlanInput): DispatchPlan {
       skippedRevoked,
       skippedAlreadySent,
       skippedInactive,
+      skippedMedical,
     },
   };
 }

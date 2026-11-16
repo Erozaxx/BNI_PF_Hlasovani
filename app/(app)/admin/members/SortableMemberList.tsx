@@ -41,6 +41,8 @@ export interface MemberRow {
   functionName: string | null;
   /** „Neaktivní do 30. 11. 2026“ / „Neaktivní do odvolání“, u aktivního `null`. */
   inactiveLabel: string | null;
+  /** iter-046: „medical do 30. 11.“ nebo `null`. */
+  medicalLabel?: string | null;
   /** iter-038: člen má příznak Správce docházky (štítek v seznamu). */
   attendanceManager: boolean;
   /** Number of interview records (any status) that would cascade-delete with this member (R-11). */
@@ -129,6 +131,7 @@ function SortableMemberCard({ m }: { m: MemberRow }) {
           {m.attendanceManager && <Badge variant="info">Správce docházky</Badge>}
           {role && <Badge variant={m.managementRole === "admin" ? "danger" : "info"}>{role}</Badge>}
           {m.inactiveLabel && <Badge variant="neutral">{m.inactiveLabel}</Badge>}
+          {m.medicalLabel && <Badge variant="warning">{m.medicalLabel}</Badge>}
           {m.due5 && <DueChip type="month_5" memberId={m.id} />}
           {m.due10 && <DueChip type="month_10" memberId={m.id} />}
         </div>

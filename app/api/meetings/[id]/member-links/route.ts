@@ -3,9 +3,10 @@ import { eq, isNotNull, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { requirePermissionForRoute } from "@/lib/auth/guards";
+import { can } from "@/lib/auth/permissions";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { member as memberTable, meetingMemberLink } from "@/lib/db/schema";
-import { memberActiveSql } from "@/lib/db/queries/member-active";
+import { memberActiveSql, memberMedicalOnSql } from "@/lib/db/queries/member-active";
 
 function getDb() {
   return drizzle(getSql());
@@ -36,6 +37,9 @@ export async function GET(
   // 1. Auth check
   const authz = await requirePermissionForRoute("meetings.manage");
   if ("response" in authz) return authz.response;
+  // iter-046 (L-1): příznak medical vidí jen držitel `members.medical`, ostatní
+  // dostanou neutrální `voteBlocked` (člen dnes nehlasuje, důvod neznají).
+  const canSeeMedical = can(authz.session, "members.medical");
 
   const { id: meetingId } = await params;
 
@@ -54,6 +58,8 @@ export async function GET(
       // iter-037 (T-003b): neaktivní se ukáže se štítkem „Neaktivní“ bez akcí.
       // Jen příznak, datum deaktivace do odpovědi nejde.
       isInactive: sql<boolean>`NOT ${memberActiveSql("member")}`,
+      // iter-046 (arch 6.3): medical dnes, jen příznak (bez data), odkaz se neposílá.
+      isMedical: sql<boolean>`${memberMedicalOnSql("member", sql`(now() AT TIME ZONE 'Europe/Prague')::date`)}`,
       linkId: meetingMemberLink.id,
       tokenHash: meetingMemberLink.tokenHash,
       linkCreatedAt: meetingMemberLink.createdAt,
@@ -84,6 +90,8 @@ export async function GET(
       memberName: row.memberName,
       memberEmail: row.memberEmail,
       isInactive: row.isInactive,
+      isMedical: canSeeMedical && Boolean(row.isMedical),
+      voteBlocked: Boolean(row.isMedical),
       hasLink,
       isRevoked,
       isExpired,

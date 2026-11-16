@@ -39,6 +39,7 @@ import {
   listReportRecipients,
   loadReportRows,
   markDayFinalized,
+  materializeMedical,
   markLinkSent,
   markReportSent,
   recordLinkSkipped,
@@ -318,7 +319,7 @@ interface DayContext {
 
 /**
  * Uzavře den (když ještě není) a pošle report příjemcům, kteří ho nemají.
- * Pořadí (LL-003, bez transakce): doplnění řádků, označení dne, claim příjemce,
+ * Pořadí (LL-003, bez transakce): medical z období (krok 0), doplnění řádků, označení dne, claim příjemce,
  * mail, `sent_at`. Zpětné opravy po uzávěrce report neposílají (nikdo nevolá
  * tuhle funkci pro den uzavřený před víc než `REPORT_RESUME_HOURS`).
  */
@@ -334,6 +335,8 @@ async function processDay(
 
   if (!state.finalized) {
     const mode: DayMode = state.hasManagerRecord ? "recorded" : "unrecorded";
+    // iter-046 (arch 5.4): krok 0, období medical se uloží do omluv dřív než se doplní řádky.
+    await materializeMedical(date);
     await fillDayRows(date, mode);
     finalizedNow = (await markDayFinalized({ date, mode, late })) !== null;
     state = await getCloseState(date);

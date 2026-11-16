@@ -16,6 +16,7 @@ import { getMemberById } from "@/lib/db/queries/members";
 import { getInterviewCountsByMember } from "@/lib/db/queries/interviews";
 import { getMemberFunctionId, listChapterFunctions } from "@/lib/db/queries/member-functions";
 import {
+  addDaysToDateString,
   deactivationLabel,
   formatCzDate,
   isMemberActive,
@@ -29,6 +30,8 @@ import { EditMemberEmailForm } from "../EditMemberEmailForm";
 import { EditMemberJoinedAtForm } from "../EditMemberJoinedAtForm";
 import { MemberAccessControls } from "../MemberAccessControls";
 import { MemberStatusControls } from "../MemberStatusControls";
+import { MedicalControls } from "../MedicalControls";
+import { MAX_MEDICAL_DAYS, MEDICAL_TEXTS, medicalLabel } from "@/lib/members/medical";
 import { AttendanceManagerToggle } from "../AttendanceManagerToggle";
 import { PasswordResetControls } from "../PasswordResetControls";
 
@@ -171,14 +174,14 @@ export default async function AdminMemberPage({ params }: { params: { id: string
       {!locked &&
         !isSelf &&
         can(session, "access.password_reset") &&
-        !can(session, "access.manage") &&
-        (managementRole !== null || currentFunctionId !== null) && (
+        !can(session, "access.manage") && (
           <Card>
             <h2 className="text-lg font-semibold mb-3">Heslo</h2>
             <PasswordResetControls
               memberId={m.id}
               memberName={m.name}
               email={m.email ?? null}
+              hasEmail={Boolean(m.email)}
               isInactive={!active}
             />
           </Card>
@@ -208,6 +211,19 @@ export default async function AdminMemberPage({ params }: { params: { id: string
             isSelf={isSelf}
             burzaEnabled={chapterSettings.burzaEnabled}
             mastermindEnabled={chapterSettings.mastermindEnabled}
+          />
+        </Card>
+      )}
+
+      {!locked && !isSelf && can(session, "members.medical") && (
+        <Card>
+          <h2 className="text-lg font-semibold mb-1">{MEDICAL_TEXTS.title}</h2>
+          <p className="mb-3 text-sm text-text-muted">{MEDICAL_TEXTS.intro}</p>
+          <MedicalControls
+            memberId={m.id}
+            initialUntil={medicalLabel(m, today) ? (m.medicalUntil ?? null) : null}
+            todayPrague={today}
+            maxDate={addDaysToDateString(today, MAX_MEDICAL_DAYS)}
           />
         </Card>
       )}

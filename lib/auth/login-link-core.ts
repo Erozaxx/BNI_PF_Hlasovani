@@ -1,5 +1,5 @@
 /**
- * iter-032 (arch T-001, sekce 6, 9.3, 10.1) — čisté jádro přihlašovacích
+ * iter-032 (arch T-001, sekce 6, 9.3, 10.1) - čisté jádro přihlašovacích
  * odkazů a throttle klíčů.
  *
  * Čistý modul: žádný import drizzle-orm, @/lib/db/*, next/* ani resend, jen
@@ -7,7 +7,8 @@
  * DATABASE_URL).
  */
 import { createHash, randomBytes } from "node:crypto";
-import { hasPasswordAccess } from "@/lib/auth/permissions";
+
+export { LOGIN_TEXTS, PASSWORD_TEXTS, PASSWORD_NOTICE_TEXTS } from "@/lib/auth/password-texts";
 
 // ── Konstanty (jediné místo, změna délky je jeden řádek bez migrace) ──
 
@@ -28,7 +29,7 @@ export const THROTTLE_WINDOW_MINUTES = 10;
 /** Limity za THROTTLE_WINDOW_MINUTES (9.3, K11). */
 export const THROTTLE_LIMITS = {
   pwLoginPair: 10,
-  pwLoginEmail: 50,
+  pwLoginEmail: 10,
   pwLoginIp: 20,
   linkReqEmail: 3,
   linkReqIp: 10,
@@ -37,6 +38,8 @@ export const THROTTLE_LIMITS = {
   loginStartPair: 10,
   loginStartIp: 20,
   loginStartEmail: 50,
+  /** iter-046 (arch 8.4): ověření starého hesla při změně v aplikaci, za člena. */
+  pwChange: 10,
 } as const;
 
 /** Vždy stejná odpověď na žádost o odkaz (6.1 bod 7), ve všech větvích. */
@@ -205,6 +208,11 @@ export function loginStartThrottleRules(
   return rules;
 }
 
+/** iter-046 (arch 8.4): ověření starého hesla při změně v aplikaci, klíč podle člena. */
+export function passwordChangeThrottleRule(memberId: string): ThrottleRule {
+  return { key: `pw-change:${memberId}`, max: THROTTLE_LIMITS.pwChange, scope: "email" };
+}
+
 /** Neplatné spotřebování odkazu (throttleCheck/throttleFail), `null` bez IP. */
 export function linkUseThrottleKey(ip: string): string | null {
   return isKnownIp(ip) ? `link-use-ip:${ip}` : null;
@@ -300,7 +308,7 @@ export interface LoginStartMember {
   email: string | null;
   managementRole: string | null;
   passwordHash: string | null;
-  /** iter-037 (T-003b): držitel funkce bez role má heslo také. */
+  /** iter-037 (T-003b), od iter-046 se nepoužívá (heslo smí mít každý člen). */
   hasFunction?: boolean;
 }
 
@@ -315,8 +323,8 @@ export type LoginStartPlan =
  * je mezi členy veřejně známé a heslo má throttle). Opouští se tím původní
  * návrh arch 6.4 a 6.7. Naopak člena a neexistující e-mail rozlišit nejde:
  * všechno ostatní jde do větve odkazu se stejnou odpovědí a dobou.
- * Do "password" se jde jen s rolí NEBO funkcí (T-003b, `hasPasswordAccess`) A
- * heslem. Neaktivní člen jde na krok hesla stejně (odpověď se neliší), o
+ * Do "password" se jde s jakýmkoli hashem (iter-046, Q8 A, dřív jen role NEBO
+ * funkce): kdo má účet s hashem, dostane krok hesla. Neaktivní člen jde na krok hesla stejně (odpověď se neliší), o
  * pozastavení se dozví až po správném hesle (K18). Povýšený nebo resetovaný člen
  * vedení má v `passwordHash` zámkový hash (ne NULL), takže jde také na krok
  * hesla, i když si heslo ještě nenastavil. Probíhající reset se tím nepozná,
@@ -329,8 +337,7 @@ export function planLoginStart(input: {
 }): LoginStartPlan {
   if (input.blocked) return { next: "blocked", message: THROTTLE_BLOCKED_TEXT };
   const m = input.member;
-  if (m && m.passwordHash && hasPasswordAccess({ managementRole: m.managementRole, hasFunction: !!m.hasFunction })) {
-    return { next: "password" };
-  }
+  // iter-046 (Q8 A): krok hesla dostane každý člen s hashem, ne jen vedení.
+  if (m && m.passwordHash) return { next: "password" };
   return { next: "link" };
 }

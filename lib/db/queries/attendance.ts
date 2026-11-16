@@ -14,12 +14,17 @@
 import { sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { actorMayChangeSql, memberActiveSql } from "@/lib/db/queries/member-active";
+import {
+  actorMayChangeSql,
+  medicalPeriodAppliesSql,
+  memberActiveSql,
+  memberMedicalOnSql,
+} from "@/lib/db/queries/member-active";
 import { MAX_ADVANCE_DAYS, SUBSTITUTE_NAME_MEMORY_LIMIT } from "@/lib/attendance/rules";
 import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
-import { absenceStatusSql } from "@/lib/db/queries/absence-status";
+import { absenceStatusSql, missingStatusSql } from "@/lib/db/queries/absence-status";
 import type { AuditRow, PresenceStatus, SheetRow } from "@/lib/attendance/sheet";
-import type { PlanEntry } from "@/lib/attendance/plan";
+import type { MedicalPeriod, PlanEntry } from "@/lib/attendance/plan";
 
 function getDb() {
   return drizzle(getSql());
@@ -72,6 +77,8 @@ function trimNamesSql(memberId: string, newName: SQL): SQL {
 export interface AbsenceRow {
   date: string;
   substituteName: string | null;
+  /** iter-046: jen u `listMyAbsences`, omluva je medical. */
+  medical?: boolean;
 }
 
 export interface SubstituteNameRow {
@@ -90,14 +97,18 @@ export async function listMyAbsences(
   from: string,
   to: string
 ): Promise<AbsenceRow[]> {
-  const result = await getDb().execute<{ d: string; substitute_name: string | null }>(sql`
-    SELECT absence_date::text AS d, substitute_name
+  const result = await getDb().execute<{ d: string; substitute_name: string | null; medical: boolean }>(sql`
+    SELECT absence_date::text AS d, substitute_name, medical
     FROM member_absence
     WHERE member_id = ${memberId}::uuid
       AND absence_date >= ${from}::date AND absence_date <= ${to}::date
     ORDER BY absence_date
   `);
-  return result.rows.map((r) => ({ date: r.d, substituteName: r.substitute_name }));
+  return result.rows.map((r) => ({
+    date: r.d,
+    substituteName: r.substitute_name,
+    medical: Boolean(r.medical),
+  }));
 }
 
 /** Data, na která existuje schůzka v aplikaci (podtržení v kalendáři). */
@@ -127,8 +138,9 @@ export async function listPlannedAbsences(from: string, to: string): Promise<Pla
     name: string;
     substitute_name: string | null;
     announced_on: string;
+    medical: boolean;
   }>(sql`
-    SELECT a.absence_date::text AS d, m.id, m.name, a.substitute_name,
+    SELECT a.absence_date::text AS d, m.id, m.name, a.substitute_name, a.medical,
            (a.created_at AT TIME ZONE 'Europe/Prague')::date::text AS announced_on
     FROM member_absence a
     JOIN member m ON m.id = a.member_id
@@ -142,6 +154,31 @@ export async function listPlannedAbsences(from: string, to: string): Promise<Pla
     name: r.name,
     substituteName: r.substitute_name,
     announcedOn: r.announced_on,
+    medical: Boolean(r.medical),
+  }));
+}
+
+/**
+ * iter-046 (arch 5.6): období medical aktivních členů, která zasahují do
+ * `[from, to]`. Jen pro odvození v kalendáři Omluvy (`plan-view.ts`).
+ */
+export async function listMedicalPeriods(from: string, to: string): Promise<MedicalPeriod[]> {
+  const result = await getDb().execute<{
+    id: string;
+    name: string;
+    medical_from: string;
+    medical_until: string;
+  }>(sql`
+    SELECT m.id, m.name, m.medical_from::text AS medical_from, m.medical_until::text AS medical_until
+    FROM member m
+    WHERE m.medical_until IS NOT NULL AND ${memberActiveSql("m")}
+      AND m.medical_until >= ${from}::date AND m.medical_from <= ${to}::date
+  `);
+  return result.rows.map((r) => ({
+    memberId: r.id,
+    name: r.name,
+    medicalFrom: r.medical_from,
+    medicalUntil: r.medical_until,
   }));
 }
 
@@ -198,12 +235,26 @@ export async function setMyAbsenceGuarded(input: {
   /** Začátek schůzky `HH:MM`; bez něj se čte z nastavení chapteru. */
   meetingTime?: string;
 }): Promise<{ ok: boolean }> {
-  const { memberId, date, kind, name } = input;
   const meetingTime = input.meetingTime ?? (await getChapterSettings()).meetingTime;
+  const result = await getDb().execute<{ ok: boolean }>(
+    setMyAbsenceSql({ memberId: input.memberId, date: input.date, kind: input.kind, name: input.name, meetingTime })
+  );
+  return { ok: Boolean(result.rows[0]?.ok) };
+}
+
+/** SQL vlastní omluvy člena (samostatně kvůli testu nad pglite). */
+export function setMyAbsenceSql(input: {
+  memberId: string;
+  date: string;
+  kind: SetAbsenceKind;
+  name: string | null;
+  meetingTime: string;
+}): SQL {
+  const { memberId, date, kind, name, meetingTime } = input;
   const guard = absenceEditGuardSql(memberId, date, meetingTime);
 
   if (kind === "none") {
-    const result = await getDb().execute<{ ok: boolean }>(sql`
+    return sql`
       WITH g AS (SELECT ${guard} AS ok),
       del AS (
         DELETE FROM member_absence
@@ -212,12 +263,11 @@ export async function setMyAbsenceGuarded(input: {
         RETURNING 1
       )
       SELECT (SELECT ok FROM g) AS ok, (SELECT count(*) FROM del) AS n
-    `);
-    return { ok: Boolean(result.rows[0]?.ok) };
+    `;
   }
 
   const nameValue = kind === "substitute" ? sql`${name}::text` : sql`NULL::text`;
-  const result = await getDb().execute<{ ok: boolean }>(sql`
+  return sql`
     WITH g AS (SELECT ${guard} AS ok),
     ins AS (
       INSERT INTO member_absence (member_id, absence_date, substitute_name, created_by, updated_by)
@@ -225,6 +275,8 @@ export async function setMyAbsenceGuarded(input: {
       WHERE (SELECT ok FROM g)
       ON CONFLICT (member_id, absence_date) DO UPDATE SET
         substitute_name = EXCLUDED.substitute_name,
+        -- iter-046 (gate změna 5): jméno náhradníka u medical omluvy medical zruší (CHECK ma_medical_no_sub).
+        medical = CASE WHEN EXCLUDED.substitute_name IS NULL THEN member_absence.medical ELSE false END,
         updated_by = EXCLUDED.updated_by,
         updated_at = now()
       RETURNING member_id, substitute_name
@@ -236,8 +288,7 @@ export async function setMyAbsenceGuarded(input: {
     ),
     ${trimNamesSql(memberId, sql`(SELECT btrim(substitute_name) FROM ins WHERE substitute_name IS NOT NULL)`)}
     SELECT (SELECT ok FROM g) AS ok, (SELECT count(*) FROM ins) AS n
-  `);
-  return { ok: Boolean(result.rows[0]?.ok) };
+  `;
 }
 
 /** Člen smaže své jméno z paměti. `false` = jméno není jeho nebo už neexistuje. */
@@ -425,12 +476,40 @@ function dayListCriteriaSql(date: string): SQL {
 }
 
 /**
+ * SQL pro `listSheetRows` (samostatně kvůli testu nad pglite). `onlyMemberId`
+ * zúží výsledek na jednoho člena.
+ */
+export function listSheetRowsSql(date: string, onlyMemberId?: string): SQL {
+  const only = onlyMemberId ? sql`AND m.id = ${onlyMemberId}::uuid` : sql``;
+  return sql`
+    SELECT m.id, m.name, r.status, r.substitute_name AS rec_sub, r.version,
+           r.updated_by AS updated_by_id, ub.name AS updated_by_name,
+           ${isoSql(sql`r.updated_at`)} AS updated_at,
+           (ma.member_id IS NOT NULL OR mp.until IS NOT NULL) AS excused,
+           (COALESCE(ma.medical, false) OR mp.until IS NOT NULL) AS medical,
+           mp.until AS medical_period_until,
+           ma.substitute_name AS ann_name
+    FROM member m
+    LEFT JOIN attendance_record r ON r.member_id = m.id AND r.attendance_date = ${date}::date
+    LEFT JOIN member ub ON ub.id = r.updated_by
+    LEFT JOIN member_absence ma ON ma.member_id = m.id AND ma.absence_date = ${date}::date
+    LEFT JOIN attendance_day mad ON mad.attendance_date = ${date}::date
+    LEFT JOIN LATERAL (
+      -- iter-046 (arch 5.3, gate změna 4): období medical se na neuzavřený den odvozuje při čtení.
+      SELECT m.medical_until::text AS until
+      WHERE mad.finalized_at IS NULL AND ${medicalPeriodAppliesSql("m", sql`${date}::date`)}
+    ) mp ON true
+    WHERE ${dayListCriteriaSql(date)} ${only}
+    ORDER BY m.name
+  `;
+}
+
+/**
  * Seznam dne pro zápis (arch 8): aktivní členové s `joined_at <= D` plus členové
  * s řádkem pro D (po uzavření nebo opravě), podle jména. `onlyMemberId` zúží
  * výsledek na jednoho člena (odpověď na zápis).
  */
 export async function listSheetRows(date: string, onlyMemberId?: string): Promise<SheetRow[]> {
-  const only = onlyMemberId ? sql`AND m.id = ${onlyMemberId}::uuid` : sql``;
   const result = await getDb().execute<{
     id: string;
     name: string;
@@ -441,20 +520,12 @@ export async function listSheetRows(date: string, onlyMemberId?: string): Promis
     updated_by_name: string | null;
     updated_at: string | null;
     excused: boolean;
+    medical: boolean;
+    medical_period_until: string | null;
     ann_name: string | null;
-  }>(sql`
-    SELECT m.id, m.name, r.status, r.substitute_name AS rec_sub, r.version,
-           r.updated_by AS updated_by_id, ub.name AS updated_by_name,
-           ${isoSql(sql`r.updated_at`)} AS updated_at,
-           (ma.member_id IS NOT NULL) AS excused, ma.substitute_name AS ann_name
-    FROM member m
-    LEFT JOIN attendance_record r ON r.member_id = m.id AND r.attendance_date = ${date}::date
-    LEFT JOIN member ub ON ub.id = r.updated_by
-    LEFT JOIN member_absence ma ON ma.member_id = m.id AND ma.absence_date = ${date}::date
-    WHERE ${dayListCriteriaSql(date)} ${only}
-    ORDER BY m.name
-  `);
+  }>(listSheetRowsSql(date, onlyMemberId));
 
+  const only = onlyMemberId ? sql`AND m.id = ${onlyMemberId}::uuid` : sql``;
   const namesResult = await getDb().execute<{ member_id: string; name: string }>(sql`
     SELECT member_id, name FROM (
       SELECT n.member_id, n.name,
@@ -488,6 +559,8 @@ export async function listSheetRows(date: string, onlyMemberId?: string): Promis
     updatedByName: r.updated_by_name,
     updatedAt: r.updated_at,
     excused: Boolean(r.excused),
+    medical: Boolean(r.medical),
+    medicalPeriodUntil: r.medical_period_until,
     announcedName: r.ann_name,
     names: byMember.get(r.id) ?? [],
   }));
@@ -572,9 +645,45 @@ export async function writePresenceGuarded(input: {
   meetingTime?: string;
 }): Promise<PresenceWriteResult> {
   const { date, memberId, status, name, expectedVersion, actorId, mode } = input;
-  const nameValue = status === "substitute" ? sql`${name}::text` : sql`NULL::text`;
   const isUnexcused = status === "unexcused";
   const meetingTime = isUnexcused ? (input.meetingTime ?? (await getChapterSettings()).meetingTime) : "";
+
+  const result = await getDb().execute<{
+    day_ok: boolean;
+    member_ok: boolean;
+    time_ok: boolean;
+    excuse_ok: boolean;
+    version: number | null;
+    audited: number;
+  }>(writePresenceSql({ date, memberId, status, name, expectedVersion, actorId, mode, meetingTime }));
+  const r = result.rows[0];
+  if (r && r.version !== null && r.version !== undefined) {
+    return { result: "ok", version: Number(r.version), audited: Number(r.audited) > 0 };
+  }
+  if (!r?.day_ok) return { result: "day-closed" };
+  if (!r?.member_ok) return { result: "inactive" };
+  if (!r?.time_ok) return { result: "too-early" };
+  if (!r?.excuse_ok) return { result: "excused-conflict" };
+  return { result: "conflict" };
+}
+
+/**
+ * SQL zápisu přítomnosti (samostatně kvůli testu nad pglite). `meetingTime` je
+ * jen u „Chyběl(a) bez omluvy“, jinak se nepoužije.
+ */
+export function writePresenceSql(input: {
+  date: string;
+  memberId: string;
+  status: PresenceStatus;
+  name: string | null;
+  expectedVersion: number;
+  actorId: string;
+  mode: WriteMode2;
+  meetingTime: string;
+}): SQL {
+  const { date, memberId, status, name, expectedVersion, actorId, mode, meetingTime } = input;
+  const nameValue = status === "substitute" ? sql`${name}::text` : sql`NULL::text`;
+  const isUnexcused = status === "unexcused";
 
   const audit =
     mode === "history"
@@ -598,21 +707,15 @@ export async function writePresenceGuarded(input: {
     )`
       : sql``;
 
-  const result = await getDb().execute<{
-    day_ok: boolean;
-    member_ok: boolean;
-    time_ok: boolean;
-    excuse_ok: boolean;
-    version: number | null;
-    audited: number;
-  }>(sql`
+  return sql`
     WITH g AS (
       SELECT ${dayGuardSql(date, mode, "presence")} AS day_ok,
              ${memberGuardSql(date, memberId, mode)} AS member_ok,
              ${isUnexcused ? unexcusedTimeSql(date, meetingTime) : sql`true`} AS time_ok,
              ${
                isUnexcused
-                 ? sql`NOT EXISTS (SELECT 1 FROM member_absence ea WHERE ea.member_id = ${memberId}::uuid AND ea.absence_date = ${date}::date)`
+                 ? sql`(NOT EXISTS (SELECT 1 FROM member_absence ea WHERE ea.member_id = ${memberId}::uuid AND ea.absence_date = ${date}::date)
+                     AND NOT EXISTS (SELECT 1 FROM member em WHERE em.id = ${memberId}::uuid AND ${memberMedicalOnSql("em", sql`${date}::date`)}))`
                  : sql`true`
              } AS excuse_ok
     ),
@@ -657,16 +760,7 @@ export async function writePresenceGuarded(input: {
            (SELECT excuse_ok FROM g) AS excuse_ok,
            (SELECT version FROM res) AS version,
            ${mode === "history" ? sql`(SELECT count(*) FROM aud)::int` : sql`0`} AS audited
-  `);
-  const r = result.rows[0];
-  if (r && r.version !== null && r.version !== undefined) {
-    return { result: "ok", version: Number(r.version), audited: Number(r.audited) > 0 };
-  }
-  if (!r?.day_ok) return { result: "day-closed" };
-  if (!r?.member_ok) return { result: "inactive" };
-  if (!r?.time_ok) return { result: "too-early" };
-  if (!r?.excuse_ok) return { result: "excused-conflict" };
-  return { result: "conflict" };
+  `;
 }
 
 export type ExcuseWriteResult =
@@ -764,6 +858,94 @@ export async function setExcuseGuarded(input: {
   return { result: "ok", audited: Number(r.audited) > 0 };
 }
 
+export type MedicalFlagResult =
+  | { result: "ok"; audited: boolean }
+  | { result: "day-closed" }
+  | { result: "inactive" }
+  /** Omluva bez náhradníka neexistuje (medical jde jen u ní). */
+  | { result: "no-excuse" };
+
+/** SQL jednorázového příznaku Medical (samostatně kvůli testu nad pglite). */
+export function setMedicalFlagSql(input: {
+  date: string;
+  memberId: string;
+  medical: boolean;
+  actorId: string;
+  mode: WriteMode2;
+}): SQL {
+  const { date, memberId, medical, actorId, mode } = input;
+
+  const audit =
+    mode === "history"
+      ? sql`,
+    aud AS (
+      INSERT INTO attendance_audit
+        (actor_id, actor_name, member_id, member_name, attendance_date, field, old_value, new_value)
+      SELECT ${actorId}::uuid,
+             (SELECT name FROM member WHERE id = ${actorId}::uuid),
+             ${memberId}::uuid,
+             (SELECT name FROM member WHERE id = ${memberId}::uuid),
+             ${date}::date,
+             'medical',
+             CASE WHEN b.medical THEN 'ano' ELSE 'ne' END,
+             CASE WHEN ${medical}::boolean THEN 'ano' ELSE 'ne' END
+      FROM before b
+      WHERE EXISTS (SELECT 1 FROM upd) AND b.medical IS DISTINCT FROM ${medical}::boolean
+      RETURNING 1
+    )`
+      : sql``;
+
+  return sql`
+    WITH g AS (
+      SELECT ${dayGuardSql(date, mode, "excuse")} AS day_ok,
+             ${memberGuardSql(date, memberId, mode)} AS member_ok
+    ),
+    ok AS (SELECT (day_ok AND member_ok) AS go FROM g),
+    before AS (
+      SELECT medical FROM member_absence
+      WHERE member_id = ${memberId}::uuid AND absence_date = ${date}::date AND substitute_name IS NULL
+    ),
+    upd AS (
+      UPDATE member_absence SET medical = ${medical}::boolean,
+        updated_by = ${actorId}::uuid, updated_at = now()
+      WHERE member_id = ${memberId}::uuid AND absence_date = ${date}::date
+        AND substitute_name IS NULL AND (SELECT go FROM ok)
+      RETURNING 1
+    )${audit}
+    SELECT (SELECT day_ok FROM g) AS day_ok, (SELECT member_ok FROM g) AS member_ok,
+           (SELECT count(*) FROM upd)::int AS n,
+           ${mode === "history" ? sql`(SELECT count(*) FROM aud)::int` : sql`0`} AS audited
+  `;
+}
+
+/**
+ * iter-046 (arch 5.3): jednorázový příznak Medical u omluvy bez náhradníka,
+ * cílový stav, jeden SQL příkaz. Právo `members.medical` kontroluje route.
+ * V režimu `history` zapíše audit (`field = 'medical'`) jen při skutečné změně.
+ * Den v období nemá vlastní řádek, `n = 0` vrací `no-excuse`.
+ */
+export async function setMedicalFlagGuarded(input: {
+  date: string;
+  memberId: string;
+  medical: boolean;
+  actorId: string;
+  mode: WriteMode2;
+}): Promise<MedicalFlagResult> {
+  const { date, memberId, medical, actorId, mode } = input;
+
+  const result = await getDb().execute<{
+    day_ok: boolean;
+    member_ok: boolean;
+    n: number;
+    audited: number;
+  }>(setMedicalFlagSql({ date, memberId, medical, actorId, mode }));
+  const r = result.rows[0];
+  if (!r?.day_ok) return { result: "day-closed" };
+  if (!r?.member_ok) return { result: "inactive" };
+  if (Number(r.n) === 0) return { result: "no-excuse" };
+  return { result: "ok", audited: Number(r.audited) > 0 };
+}
+
 // ── Audit a přehled (arch 12.4, 13.3) ───────────────────────
 
 type AuditDbRow = {
@@ -784,7 +966,7 @@ function mapAudit(rows: AuditDbRow[]): AuditRow[] {
     actorName: r.actor_name,
     memberName: r.member_name,
     date: r.d,
-    field: r.field === "absence" ? "absence" : "presence",
+    field: r.field === "absence" ? "absence" : r.field === "medical" ? "medical" : "presence",
     oldValue: r.old_value,
     newValue: r.new_value,
   }));
@@ -878,7 +1060,7 @@ export async function listClosedDays(limit = 20): Promise<ClosedDayRow[]> {
     SELECT ad.attendance_date::text AS d, ad.mode,
            count(r.member_id) FILTER (WHERE r.status = 'present')::int AS present,
            count(r.member_id) FILTER (WHERE r.status = 'substitute')::int AS substitutes,
-           count(r.member_id) FILTER (WHERE ${absenceStatusSql("r")})::int AS absent
+           count(r.member_id) FILTER (WHERE ${missingStatusSql("r")})::int AS absent
     FROM attendance_day ad
     LEFT JOIN attendance_record r ON r.attendance_date = ad.attendance_date
     WHERE ad.finalized_at IS NOT NULL
@@ -900,6 +1082,8 @@ export interface MemberDayRow {
   status: PresenceStatus;
   substituteName: string | null;
   excused: boolean;
+  /** iter-046: omluva je medical (do absencí se nepočítá). */
+  medical: boolean;
 }
 
 /** Uzavřené dny člena v okně `(from, to]` s výsledkem a omluvou, nejnovější první. */
@@ -913,12 +1097,17 @@ export async function listMemberDays(
     status: string;
     substitute_name: string | null;
     excused: boolean;
+    medical: boolean;
   }>(sql`
     SELECT r.attendance_date::text AS d, r.status, r.substitute_name,
            EXISTS (
              SELECT 1 FROM member_absence ma
              WHERE ma.member_id = r.member_id AND ma.absence_date = r.attendance_date
-           ) AS excused
+           ) AS excused,
+           EXISTS (
+             SELECT 1 FROM member_absence mm
+             WHERE mm.member_id = r.member_id AND mm.absence_date = r.attendance_date AND mm.medical
+           ) AS medical
     FROM attendance_record r
     JOIN attendance_day ad ON ad.attendance_date = r.attendance_date AND ad.finalized_at IS NOT NULL
     WHERE r.member_id = ${memberId}::uuid
@@ -930,5 +1119,73 @@ export async function listMemberDays(
     status: r.status as PresenceStatus,
     substituteName: r.substitute_name,
     excused: Boolean(r.excused),
+    medical: Boolean(r.medical),
   }));
+}
+
+// ── iter-046 (arch 9.3): docházka všech a pohled na den, jen veřejné sloupce ──
+
+export type DayResultPublicRow = {
+  name: string;
+  status: string;
+  substitute_name: string | null;
+  excused: boolean;
+};
+
+/**
+ * Uzavřený den pro pohled všech. Vrací jen jméno, stav, jméno náhradníka a
+ * příznak omluvy. Nikdy `member_id`, e-mail, `medical`, kdo omluvu zapsal ani
+ * kdy byla ohlášena (test 34 hlídá sloupce).
+ */
+export function listDayResultsPublicSql(date: string): SQL {
+  return sql`
+    SELECT m.name, r.status,
+           COALESCE(r.substitute_name,
+                    (SELECT ma.substitute_name FROM member_absence ma
+                     WHERE ma.member_id = r.member_id AND ma.absence_date = r.attendance_date)) AS substitute_name,
+           EXISTS (SELECT 1 FROM member_absence ma WHERE ma.member_id = r.member_id
+                   AND ma.absence_date = r.attendance_date) AS excused
+    FROM attendance_record r
+    JOIN attendance_day ad ON ad.attendance_date = r.attendance_date AND ad.finalized_at IS NOT NULL
+    JOIN member m ON m.id = r.member_id
+    WHERE r.attendance_date = ${date}::date
+  `;
+}
+
+export async function listDayResultsPublic(date: string): Promise<DayResultPublicRow[]> {
+  const result = await getDb().execute<DayResultPublicRow>(listDayResultsPublicSql(date));
+  return result.rows.map((r) => ({
+    name: r.name,
+    status: r.status,
+    substitute_name: r.substitute_name,
+    excused: Boolean(r.excused),
+  }));
+}
+
+export type DayPlannedPublicRow = {
+  name: string;
+  substitute_name: string | null;
+};
+
+/**
+ * Neuzavřený den (dnešek do uzávěrky, budoucnost): aktivní členové s omluvou
+ * nebo s medical obdobím (`medicalPeriodAppliesSql`, gate změna 4). Průběžný
+ * zápis správce se neukazuje, kdo je zapsaný přítomný nebo náhradník, v seznamu
+ * není (Q10 A). Výstup jen `name` a `substitute_name`.
+ */
+export function listDayPlannedPublicSql(date: string): SQL {
+  return sql`
+    SELECT m.name, a.substitute_name
+    FROM member m
+    LEFT JOIN member_absence a ON a.member_id = m.id AND a.absence_date = ${date}::date
+    WHERE ${memberActiveSql("m")} AND m.joined_at <= ${date}::date
+      AND (a.member_id IS NOT NULL OR ${medicalPeriodAppliesSql("m", sql`${date}::date`)})
+      AND NOT EXISTS (SELECT 1 FROM attendance_record r WHERE r.member_id = m.id
+                      AND r.attendance_date = ${date}::date AND r.status IN ('present', 'substitute'))
+  `;
+}
+
+export async function listDayPlannedPublic(date: string): Promise<DayPlannedPublicRow[]> {
+  const result = await getDb().execute<DayPlannedPublicRow>(listDayPlannedPublicSql(date));
+  return result.rows.map((r) => ({ name: r.name, substitute_name: r.substitute_name }));
 }

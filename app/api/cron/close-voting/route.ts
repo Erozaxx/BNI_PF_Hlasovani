@@ -9,6 +9,7 @@ import {
 import { sendReport, sendMagicLinkEmail, sendVotingWarningEmail } from "@/lib/email/resend";
 import { getActiveMembers, getMembers } from "@/lib/db/queries/members";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { isMedicalOn } from "@/lib/members/medical";
 import { cleanupExpiredDeactivations } from "@/lib/db/queries/member-status";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { generateMagicToken } from "@/lib/auth/magic";
@@ -118,6 +119,7 @@ async function runMorningDispatch(
             memberName: m.name,
             memberEmail: m.email ?? null,
             active: isMemberActive(m, todayForPlan),
+            medical: isMedicalOn(m, todayForPlan),
           })),
           links: links.map((l) => ({
             memberId: l.memberId,

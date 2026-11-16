@@ -8,8 +8,10 @@ import {
   helpAttendanceMemberUnexcused,
 } from "@/lib/semafor/texts";
 import {
+  HELP_ATTENDANCE_MEMBERS,
   HELP_ATTENDANCE_TERMS,
   HELP_BUTTON_GO_VOTE,
+  HELP_PASSWORD_LOGIN,
   HELP_CALENDAR_LEGEND,
   HELP_NEUTRAL_VOTE,
   memberDashboardIntro,
@@ -90,6 +92,8 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
           },
         ]}
       />
+
+      <HelpSection title="Přihlášení heslem" intro={HELP_PASSWORD_LOGIN} />
 
       <HelpSection
         title="Dashboard"
@@ -321,12 +325,13 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
         faq={[
           { q: "Omluva, nebo absence?", a: HELP_ATTENDANCE_TERMS },
           {
-            q: "Proč nemám záložky Moje, Zápis, Omluvy a Přehled?",
-            a: "Záložky vidí jen správci docházky a vedení. Vy máte rovnou svou stránku s kalendářem.",
+            q: "Proč nemám záložky Zápis, Omluvy a Přehled?",
+            a: "Záložky vidí jen správci docházky a vedení. Vy máte Moje a Členové.",
           },
+          { q: "Co je záložka Členové?", a: HELP_ATTENDANCE_MEMBERS },
           {
             q: "Kdo vidí, že chybím?",
-            a: "Správci docházky, Prezident, Viceprezident a admin. Ostatní členové ne.",
+            a: "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí jen to, že jste na daný den omluvený(á), a počet vašich absencí.",
           },
           {
             q: "Proč mám absenci, i když jsem se omluvil(a)?",

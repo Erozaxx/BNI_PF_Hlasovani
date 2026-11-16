@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
+import { memberMayVoteNow } from "@/lib/db/queries/member-medical";
 import {
   meeting,
   meetingGuest,
@@ -228,6 +229,8 @@ export async function GET(
       ? meetingData.votingClosesAt.toISOString()
       : null,
     memberName,
+    // iter-046 (arch 6.2 V1a): člen s medical hlasovací tlačítka nevidí, prohlížení a poznámky zůstávají.
+    voteBlocked: (await memberMayVoteNow(memberId)) ? null : "medical",
     guests,
   });
 }

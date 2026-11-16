@@ -19,6 +19,12 @@ import {
 } from "@/lib/attendance/rules";
 import { UNEXCUSED_TEXTS } from "@/lib/attendance/texts";
 
+/** iter-046 (gate bod 6): období medical z člena, mění se v menu Členové. */
+export function medicalPeriodText(until: string): string {
+  const [, m, d] = until.split("-").map(Number);
+  return `Medical do ${d}. ${m}., nastavuje se v menu Členové.`;
+}
+
 // ── Texty správce (gate sekce 5, doslova) ────────────────────
 
 export const SHEET_TEXTS = {
@@ -27,6 +33,11 @@ export const SHEET_TEXTS = {
   present: "Přítomen",
   withSubstitute: "s náhradníkem",
   excused: "Omluven(a)",
+  /** iter-046 (arch 5.3): jednorázový příznak Medical u omluvy bez náhradníka. */
+  medical: "Medical",
+  errNoMedical: "Medical zaškrtává jen člen výboru, Prezident, Viceprezident nebo admin.",
+  errNoExcuseForMedical: "Medical jde jen u omluvy bez náhradníka.",
+  medicalAnnounced: "Omluva, medical: počítá se jako omluven(a), do absencí ne.",
   /** iter-041 (T-005b), iter-042 (#13): úvod Zápisu nahoře na stránce: dva způsoby zápisu, náhradník, bez zápisu, odškrtnutí omluvy. */
   introTitle: "Jak zapisovat",
   introWays:
@@ -87,6 +98,7 @@ export function conflictText(updatedByName: string | null): string {
 export const OVERVIEW_TEXTS = {
   title: "Přehled docházky",
   tabMine: "Moje",
+  tabMembers: "Členové",
   tabSheet: "Zápis",
   tabPlan: "Omluvy",
   tabOverview: "Přehled",
@@ -111,7 +123,7 @@ export function sheetTitle(date: string): string {
 
 export type PresenceStatus = "present" | "substitute" | "absent" | "unexcused";
 export type WriteMode = "normal" | "history" | "denied";
-export type WriteOp = "presence" | "excuse";
+export type WriteOp = "presence" | "excuse" | "medical";
 
 export interface WriteCan {
   record: boolean;
@@ -147,7 +159,7 @@ export function decideAttendanceWriteMode(input: {
     return { mode: "denied", message: MEMBER_TEXTS.errTooFar };
   }
   if (date > today) {
-    if (op === "excuse" && can.editHistory) return { mode: "history", message: null };
+    if ((op === "excuse" || op === "medical") && can.editHistory) return { mode: "history", message: null };
     return { mode: "denied", message: SHEET_TEXTS.errFutureDay };
   }
   if (date === today && !finalized && can.record) return { mode: "normal", message: null };
@@ -198,8 +210,12 @@ export interface SheetRow {
   updatedByName: string | null;
   /** ISO čas poslední změny, `null` bez řádku. */
   updatedAt: string | null;
-  /** Člen má na den omluvu (řádek v `member_absence`). */
+  /** Člen má na den omluvu (řádek v `member_absence`, nebo odvozená z období medical). */
   excused: boolean;
+  /** iter-046: omluva je medical (uložená, nebo z období). */
+  medical: boolean;
+  /** iter-046: konec období medical, ze kterého je omluva odvozená (`null` = vlastní řádek nebo bez medical). */
+  medicalPeriodUntil: string | null;
   /** Jméno ohlášeného náhradníka, `null` = bez náhradníka. */
   announcedName: string | null;
   /** Dřívější jména náhradníků člena (nejvýš 8, nejnovější první). */
@@ -258,10 +274,13 @@ export function targetsEqual(a: PresenceTarget | null, b: PresenceTarget | null)
  * a řádek bez omluvy s rozhodnutým zápisem nemá řádek žádný (`null`).
  */
 export function announcedText(
-  row: Pick<SheetRow, "excused" | "announcedName"> & { status?: PresenceStatus | null }
+  row: Pick<SheetRow, "excused" | "announcedName"> & { status?: PresenceStatus | null; medical?: boolean }
 ): string | null {
   const status = row.status ?? null;
   if (!row.excused) return status === null ? "Bez zápisu: počítá se jako přítomen(a)." : null;
+  if (row.medical && !row.announcedName && (status === null || status === "absent")) {
+    return SHEET_TEXTS.medicalAnnounced;
+  }
   const head = row.announcedName ? `Omluva, náhradník ${row.announcedName}` : "Omluva bez náhradníka";
   const effective: PresenceStatus = status ?? (row.announcedName ? "substitute" : "absent");
   if (effective === "present") return `${head}.`;
@@ -329,7 +348,8 @@ export type WriteBody =
       substituteName: string | null;
       expectedVersion: number;
     }
-  | { op: "excuse"; memberId: string; excused: boolean };
+  | { op: "excuse"; memberId: string; excused: boolean }
+  | { op: "medical"; memberId: string; medical: boolean };
 
 export type WriteBodyResult = { ok: true; value: WriteBody } | { ok: false; error: string };
 
@@ -348,6 +368,10 @@ export function parseWriteBody(raw: unknown): WriteBodyResult {
   if (b.op === "excuse") {
     if (typeof b.excused !== "boolean") return { ok: false, error: INVALID_INPUT };
     return { ok: true, value: { op: "excuse", memberId: b.memberId, excused: b.excused } };
+  }
+  if (b.op === "medical") {
+    if (typeof b.medical !== "boolean") return { ok: false, error: INVALID_INPUT };
+    return { ok: true, value: { op: "medical", memberId: b.memberId, medical: b.medical } };
   }
   if (b.op !== "presence") return { ok: false, error: INVALID_INPUT };
   if (
@@ -483,7 +507,7 @@ export interface AuditRow {
   memberName: string;
   /** Den, kterého se oprava týká, `YYYY-MM-DD`. */
   date: string;
-  field: "presence" | "absence";
+  field: "presence" | "absence" | "medical";
   oldValue: string | null;
   newValue: string | null;
 }
@@ -553,6 +577,12 @@ function shortDate(date: string): string {
  * „21. 10. 2026 9:14 · {jméno} opravil(a) u {člen} den 15. 10.: Přítomen → Náhradník {jméno}“
  */
 export function auditLine(row: AuditRow): string {
+  if (row.field === "medical") {
+    const v = (x: string | null) => `Medical: ${x === "ano" ? "ano" : "ne"}`;
+    return `${formatPragueDateTime(row.at)} · ${row.actorName} opravil(a) u ${row.memberName} den ${shortDate(
+      row.date
+    )}: ${v(row.oldValue)} → ${v(row.newValue)}`;
+  }
   return `${formatPragueDateTime(row.at)} · ${row.actorName} opravil(a) u ${row.memberName} den ${shortDate(
     row.date
   )}: ${auditValueText(row.oldValue)} → ${auditValueText(row.newValue)}`;
@@ -577,6 +607,8 @@ export interface DayPayload {
   mode: WriteMode;
   /** Režim „Omluven(a)“ (u budoucích dnů jde jen jako oprava). */
   excuseMode: WriteMode;
+  /** iter-046 (Q1 A): volající smí zaškrtnout Medical (`members.medical`). */
+  canMedical: boolean;
   /** Banner nad seznamem, `null` = žádný. */
   banner: string | null;
   /** Den se nezapisoval a byl uzavřen jako `unrecorded`. */

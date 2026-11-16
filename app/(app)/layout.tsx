@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { requirePageSession } from "@/lib/auth/page-guard";
-import { can, hasPasswordSession } from "@/lib/auth/permissions";
+import { can } from "@/lib/auth/permissions";
+import { PASSWORD_TEXTS } from "@/lib/auth/password-texts";
 import { sessionHeaderLabel } from "@/lib/members/labels";
 import { getChapterSettings } from "@/lib/db/queries/chapter-settings";
 import { logoutAction } from "@/actions/auth";
@@ -33,9 +34,15 @@ export default async function AppLayout({
     timers: can(session, "timers.manage"),
     interviews: can(session, "interviews.manage"),
     status: can(session, "ops.view"),
-    members: can(session, "members.manage") || can(session, "access.password_reset"),
+    members:
+      can(session, "members.manage") ||
+      can(session, "access.password_reset") ||
+      can(session, "members.medical"),
     categories: can(session, "categories.manage"),
-    settings: hasPasswordSession(session),
+    // iter-046 (P1): sekce Účet pro každého přihlášeného, heslo smí mít každý člen.
+    settings: true,
+    passwordLabel:
+      session.passwordMode === "set" ? PASSWORD_TEXTS.menuSet : PASSWORD_TEXTS.menuChange,
   };
 
   // iter-037 (T-003c): v záhlaví funkce a role, ne jen technická role.
@@ -88,7 +95,7 @@ export default async function AppLayout({
                   Účet
                 </span>
               </div>
-              <NavLink href="/settings">Heslo</NavLink>
+              <NavLink href="/settings">{show.passwordLabel}</NavLink>
             </>
           )}
         </nav>

@@ -364,3 +364,25 @@ CREATE TABLE IF NOT EXISTS semafor_name_alias (
     CONSTRAINT semafor_alias_key_len CHECK (char_length(name_key) BETWEEN 2 AND 120)
 );
 CREATE INDEX IF NOT EXISTS idx_semafor_alias_member ON semafor_name_alias (member_id);
+
+-- ============================================================
+-- MEDICAL (iter-046) - zdroj pravdy: scripts/migrate-iter-046-medical.ts
+-- ============================================================
+ALTER TABLE member ADD COLUMN IF NOT EXISTS medical_from   DATE;
+ALTER TABLE member ADD COLUMN IF NOT EXISTS medical_until  DATE;
+ALTER TABLE member ADD COLUMN IF NOT EXISTS medical_set_by UUID REFERENCES member(id) ON DELETE SET NULL;
+ALTER TABLE member ADD COLUMN IF NOT EXISTS medical_set_at TIMESTAMPTZ;
+ALTER TABLE member ADD CONSTRAINT member_medical_range CHECK (
+    (medical_from IS NULL AND medical_until IS NULL)
+    OR (medical_from IS NOT NULL AND medical_until IS NOT NULL AND medical_from <= medical_until)
+);
+
+ALTER TABLE member_absence ADD COLUMN IF NOT EXISTS medical BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE member_absence ADD CONSTRAINT ma_medical_no_sub CHECK (
+    NOT medical OR substitute_name IS NULL
+);
+
+ALTER TABLE attendance_audit DROP CONSTRAINT IF EXISTS aa_field;
+ALTER TABLE attendance_audit ADD CONSTRAINT aa_field CHECK (
+    field IN ('presence', 'absence', 'medical')
+);

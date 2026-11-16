@@ -57,6 +57,7 @@ export async function loadDayPayload(
     viewerId: session.memberId,
     mode: modes.presence.mode,
     excuseMode: modes.excuse.mode,
+    canMedical: can(session, "members.medical"),
     banner: dayBannerText({
       mode: modes.presence.mode,
       date,
