@@ -3,7 +3,14 @@ import { getIronSession, type SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
 import { getMemberAuthState } from "@/lib/db/queries/members";
 import { checkSession, type AuthMethod } from "@/lib/auth/session-check";
-import { permissionsFor, type Permission } from "@/lib/auth/permissions";
+import {
+  decideOwnPasswordMode,
+  hasRealPassword,
+  isLeadershipAccount,
+  permissionsFor,
+  type OwnPasswordMode,
+  type Permission,
+} from "@/lib/auth/permissions";
 import { EMAIL_LINK_SESSION_HOURS } from "@/lib/auth/login-link-core";
 
 /**
@@ -26,13 +33,19 @@ export interface SessionData {
    */
   permissions: Permission[];
   functionNames: string[];
+  /**
+   * iter-046 (arch 8.3): jak si člen mění vlastní heslo (`decideOwnPasswordMode`),
+   * vypočtené z DB při každém požadavku, do cookie se neukládá. Prázdná
+   * session má `via-link` (nic nenabízí).
+   */
+  passwordMode: OwnPasswordMode;
 }
 
 /**
  * Vstup `createSession`: verze jde zvlášť jako povinný parametr (F13).
- * Vypočtená pole (`permissions`, `functionNames`) do cookie nepatří.
+ * Vypočtená pole (`permissions`, `functionNames`, `passwordMode`) do cookie nepatří.
  */
-export type NewSession = Omit<SessionData, "sv" | "permissions" | "functionNames">;
+export type NewSession = Omit<SessionData, "sv" | "permissions" | "functionNames" | "passwordMode">;
 
 /** Cookie name for the session. */
 const COOKIE_NAME = "bni_session";
@@ -80,6 +93,7 @@ function emptySession(): SessionData {
     name: "",
     permissions: [],
     functionNames: [],
+    passwordMode: "via-link",
   };
 }
 
@@ -105,6 +119,7 @@ export const getSession = cache(async (): Promise<SessionData> => {
     sv: raw.sv,
     permissions: [],
     functionNames: [],
+    passwordMode: "via-link",
   };
 
   try {
@@ -120,6 +135,17 @@ export const getSession = cache(async (): Promise<SessionData> => {
       }),
     ];
     snapshot.functionNames = row.functions.map((f) => f.name);
+    snapshot.passwordMode = decideOwnPasswordMode({
+      hasRealPassword: hasRealPassword({
+        hasHash: !!row.hasHash,
+        pendingSetPasswordLink: !!row.pendingSetPassword,
+      }),
+      hasHash: !!row.hasHash,
+      leadership: isLeadershipAccount({
+        managementRole: snapshot.managementRole,
+        hasFunction: !!row.hasFunction,
+      }),
+    });
   } catch (err) {
     const cls = err instanceof Error ? err.name : typeof err;
     console.error(`[session] auth state check failed memberId=${snapshot.memberId}: ${cls}`);

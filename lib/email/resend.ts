@@ -3,6 +3,7 @@ import { getMeetingWithGuests } from "@/lib/db/queries/meetings";
 import { getVotingResults } from "@/lib/db/queries/votes";
 import { getNotesForGuest } from "@/lib/db/queries/notes";
 import { getManagementRecipients } from "@/lib/db/queries/members";
+import { PASSWORD_NOTICE_TEXTS } from "@/lib/auth/password-texts";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -558,7 +559,8 @@ function accessEmailHtml(opts: {
   heading: string;
   paragraphs: string[];
   buttonLabel: string;
-  url: string;
+  /** iter-046: bez odkazu (kontrolní mail po nastavení hesla) se tlačítko vynechá. */
+  url: string | null;
   footer: string[];
 }): string {
   const paragraphs = opts.paragraphs
@@ -567,6 +569,12 @@ function accessEmailHtml(opts: {
   const footer = opts.footer
     .map((p) => `<p style="color:#666;font-size:13px;margin:0 0 8px;">${escapeHtml(p)}</p>`)
     .join("\n  ");
+  const button = opts.url
+    ? `<div style="text-align:center;margin:24px 0;">
+    <a href="${escapeHtml(opts.url)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">${escapeHtml(opts.buttonLabel)}</a>
+  </div>
+  <p style="color:#666;font-size:13px;margin:0 0 16px;word-break:break-all;">Když tlačítko nefunguje, zkopíruj si do prohlížeče tenhle odkaz:<br>${escapeHtml(opts.url)}</p>`
+    : "";
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -575,10 +583,7 @@ function accessEmailHtml(opts: {
     <h1 style="margin:0;color:#cf2e2e;font-size:20px;">${escapeHtml(opts.heading)}</h1>
   </div>
   ${paragraphs}
-  <div style="text-align:center;margin:24px 0;">
-    <a href="${escapeHtml(opts.url)}" style="display:inline-block;padding:12px 32px;background:#cf2e2e;color:#fff;text-decoration:none;border-radius:30px;font-weight:600;">${escapeHtml(opts.buttonLabel)}</a>
-  </div>
-  <p style="color:#666;font-size:13px;margin:0 0 16px;word-break:break-all;">Když tlačítko nefunguje, zkopíruj si do prohlížeče tenhle odkaz:<br>${escapeHtml(opts.url)}</p>
+  ${button}
   ${footer}
 </body>
 </html>`;
@@ -591,12 +596,13 @@ async function sendAccessEmail(opts: {
   subject: string;
   html: string;
   text: string;
-  url: string;
+  /** `null` = mail bez odkazu (kontrolní mail po nastavení hesla). */
+  url: string | null;
 }): Promise<AccessEmailResult> {
   if (!process.env.RESEND_API_KEY) {
     if (process.env.NODE_ENV !== "production") {
-      console.warn(`[${opts.logTag}] RESEND_API_KEY chybí, odkaz jen do konzole (mimo produkci)`);
-      console.log(`[${opts.logTag}] memberId=${opts.memberId}: ${opts.url}`);
+      console.warn(`[${opts.logTag}] RESEND_API_KEY chybí, mail jen do konzole (mimo produkci)`);
+      console.log(`[${opts.logTag}] memberId=${opts.memberId}: ${opts.url ?? "bez odkazu"}`);
       return { success: true };
     }
     console.error(`[${opts.logTag}] RESEND_API_KEY chybí memberId=${opts.memberId}`);
@@ -677,13 +683,17 @@ export async function sendSetPasswordLinkEmail(opts: {
   name: string;
   url: string;
   reason: "promoted" | "reset" | "resend";
-  /** iter-037 (T-003b): `function` = držitel funkce bez role (funkce stačí k heslu). */
-  role: "admin" | "moderator" | "function";
+  /**
+   * iter-037 (T-003b): `function` = držitel funkce bez role (funkce stačí k heslu).
+   * iter-046: `member` = běžný člen (reset hesla komukoli s e-mailem).
+   */
+  role: "admin" | "moderator" | "function" | "member";
   actorName: string;
   appUrl: string;
 }): Promise<AccessEmailResult> {
   const roleLabel =
     opts.role === "admin" ? "admin" : opts.role === "function" ? "funkce" : "moderátor";
+  const noRole = opts.role === "function" || opts.role === "member";
   const reasonLine =
     opts.reason === "promoted"
       ? opts.role === "function"
@@ -691,7 +701,7 @@ export async function sendSetPasswordLinkEmail(opts: {
         : `${opts.actorName} ti v aplikaci BNI Plzeň dal(a) roli ${roleLabel}. Pro správu si nastav vlastní heslo.`
       : opts.reason === "reset"
         ? `${opts.actorName} ti zrušil(a) heslo do aplikace BNI Plzeň a posílá odkaz pro nové.`
-        : `${opts.actorName} ti posílá znovu odkaz pro nastavení hesla do aplikace BNI Plzeň${opts.role === "function" ? "" : ` (role ${roleLabel})`}. Předchozí odkaz už neplatí.`;
+        : `${opts.actorName} ti posílá znovu odkaz pro nastavení hesla do aplikace BNI Plzeň${noRole ? "" : ` (role ${roleLabel})`}. Předchozí odkaz už neplatí.`;
   const loginUrl = `${opts.appUrl.replace(/\/+$/, "")}/login`;
   const lines = [
     `Ahoj ${opts.name},`,
@@ -708,7 +718,8 @@ export async function sendSetPasswordLinkEmail(opts: {
     logTag: "sendSetPasswordLinkEmail",
     memberId: opts.memberId,
     to: opts.to,
-    subject: "BNI Plzeň: nastav si heslo pro vedení",
+    subject:
+      opts.role === "member" ? "BNI Plzeň: nastav si heslo" : "BNI Plzeň: nastav si heslo pro vedení",
     html: accessEmailHtml({
       heading: "BNI Plzeň",
       paragraphs: lines,
@@ -718,5 +729,33 @@ export async function sendSetPasswordLinkEmail(opts: {
     }),
     text,
     url: opts.url,
+  });
+}
+
+/**
+ * iter-046 (gate změna 2, R6): kontrolní mail po nastavení nebo změně hesla
+ * členem samotným. Bez hesla a bez odkazu. Odesílá se až po zápisu hesla,
+ * selhání uložení nezastaví (volající ho jen zaloguje bez adresy).
+ */
+export async function sendPasswordChangedNoticeEmail(opts: {
+  memberId: string;
+  to: string;
+  name: string;
+}): Promise<AccessEmailResult> {
+  const lines = [`Ahoj ${opts.name},`, ...PASSWORD_NOTICE_TEXTS.lines];
+  return sendAccessEmail({
+    logTag: "sendPasswordChangedNoticeEmail",
+    memberId: opts.memberId,
+    to: opts.to,
+    subject: PASSWORD_NOTICE_TEXTS.subject,
+    html: accessEmailHtml({
+      heading: "BNI Plzeň",
+      paragraphs: lines,
+      buttonLabel: "",
+      url: null,
+      footer: [],
+    }),
+    text: lines.join("\n"),
+    url: null,
   });
 }

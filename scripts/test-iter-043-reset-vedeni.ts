@@ -43,7 +43,8 @@ function declaration(src: string, name: string): string {
 // R1
 test("R1. právo je v katalogu (30, iter-044 přidala semafor.points), delegovatelné, v sadě role moderátor i výchozí sadě funkce", () => {
   assert.ok(PERMISSIONS.includes(RESET));
-  assert.equal(PERMISSIONS.length, 30);
+  // iter-046 (M2): +members.medical
+  assert.equal(PERMISSIONS.length, 31);
   assert.ok(!NON_DELEGABLE.includes(RESET));
   assert.ok(MODERATOR_ROLE_PERMISSIONS.includes(RESET));
   assert.ok(DEFAULT_FUNCTION_PERMISSIONS.includes(RESET));
@@ -103,11 +104,13 @@ test("R3. decidePasswordReset: matice 5 volajících krát 5 cílů a pořadí d
     prezident: { id: "p", isAdmin: false, mayReset: true },
     clen: { id: "x", isAdmin: false, mayReset: false },
   };
-  const targets: Record<string, { id: string; managementRole: string | null; hasPasswordAccess: boolean } | null> = {
-    admin: { id: "t-admin", managementRole: "admin", hasPasswordAccess: true },
-    moderator: { id: "t-mod", managementRole: "moderator", hasPasswordAccess: true },
-    funkce: { id: "t-fn", managementRole: null, hasPasswordAccess: true },
-    clen: { id: "t-clen", managementRole: null, hasPasswordAccess: false },
+  // iter-046 (P1): reset jde komukoli s e-mailem, `clen` je teď člen BEZ e-mailu
+  // a důvod se jmenuje `no-email` (dřív `no-access`)
+  const targets: Record<string, { id: string; managementRole: string | null; hasEmail: boolean } | null> = {
+    admin: { id: "t-admin", managementRole: "admin", hasEmail: true },
+    moderator: { id: "t-mod", managementRole: "moderator", hasEmail: true },
+    funkce: { id: "t-fn", managementRole: null, hasEmail: true },
+    clen: { id: "t-clen", managementRole: null, hasEmail: false },
     nikdo: null,
   };
   const decide = (c: Caller, t: (typeof targets)[string]) =>
@@ -124,7 +127,7 @@ test("R3. decidePasswordReset: matice 5 volajících krát 5 cílů a pořadí d
       } else if (tn === "admin" && !c.isAdmin) {
         assert.deepEqual(r, { ok: false, reason: "admin-target" }, label);
       } else if (tn === "clen") {
-        assert.deepEqual(r, { ok: false, reason: "no-access" }, label);
+        assert.deepEqual(r, { ok: false, reason: "no-email" }, label);
       } else {
         assert.deepEqual(r, { ok: true }, label);
       }
@@ -136,7 +139,7 @@ test("R3. decidePasswordReset: matice 5 volajících krát 5 cílů a pořadí d
       actorId: "a",
       actorIsAdmin: true,
       actorMayReset: true,
-      target: { id: "a", managementRole: "admin", hasPasswordAccess: true },
+      target: { id: "a", managementRole: "admin", hasEmail: true },
     }),
     { ok: false, reason: "self" }
   );
@@ -146,7 +149,7 @@ test("R3. decidePasswordReset: matice 5 volajících krát 5 cílů a pořadí d
       actorId: "m",
       actorIsAdmin: false,
       actorMayReset: false,
-      target: { id: "m", managementRole: "admin", hasPasswordAccess: false },
+      target: { id: "m", managementRole: "admin", hasEmail: false },
     }).ok,
     false
   );
@@ -154,14 +157,14 @@ test("R3. decidePasswordReset: matice 5 volajících krát 5 cílů a pořadí d
     actorId: "m",
     actorIsAdmin: false,
     actorMayReset: true,
-    target: { id: "t", managementRole: "admin", hasPasswordAccess: false },
+    target: { id: "t", managementRole: "admin", hasEmail: false },
   });
   assert.deepEqual(order, { ok: false, reason: "admin-target" });
   const selfFirst = decidePasswordReset({
     actorId: "m",
     actorIsAdmin: false,
     actorMayReset: true,
-    target: { id: "m", managementRole: "admin", hasPasswordAccess: false },
+    target: { id: "m", managementRole: "admin", hasEmail: false },
   });
   assert.deepEqual(selfFirst, { ok: false, reason: "self" });
 });
@@ -183,15 +186,19 @@ test("R4. akce: reset a poslat znovu chtějí právo reset, kopírování, role 
   const iDecide = reset.indexOf("decidePasswordReset(");
   const iWrite = reset.indexOf("resetPasswordGuarded(");
   assert.ok(iGuard >= 0 && iDenied > iGuard && iDecide > iDenied && iWrite > iDecide, "pořadí guard, admin, decide, zápis");
-  assert.ok(src.includes('"Heslo mají jen členové vedení."'));
+  // iter-046 (P1): hláška „Heslo mají jen členové vedení.“ je pryč, reset jde komukoli s e-mailem
+  assert.ok(!src.includes('"Heslo mají jen členové vedení."'));
   assert.ok(src.includes('"Vlastní heslo změníš v Nastavení."'));
 });
 
 // R5
 test("R5. resetPasswordGuarded: jedno getDb, SQL pojistka podle práva, ne podle role admin", () => {
   const src = read("lib/db/queries/members.ts");
-  const d = declaration(src, "resetPasswordGuarded");
-  assert.equal((d.match(/getDb\(\)/g) ?? []).length, 1);
+  // iter-046 (P1): SQL je ve stavebnici `resetPasswordSql` (kvůli testu nad PGlite),
+  // `resetPasswordGuarded` ji jen spustí jedním getDb()
+  const guarded = declaration(src, "resetPasswordGuarded");
+  assert.equal((guarded.match(/getDb\(\)/g) ?? []).length, 1);
+  const d = declaration(src, "resetPasswordSql");
   assert.ok(d.includes('actorHasPermissionSql(actorId, "access.password_reset")'));
   assert.ok(d.includes('actorMayChangeSql("member", actorId)'));
   assert.ok(d.includes("id <> "));
@@ -222,7 +229,8 @@ test("R6. actorHasPermissionSql vyrenderované bez DB: větev role a funkce podl
 // R7
 test("R7. /admin/members: anyOf, zúžená větev bez formulářů, detail dál members.manage", () => {
   const page = read("app/(app)/admin/members/page.tsx");
-  assert.ok(page.includes('anyOf: ["members.manage", "access.password_reset"]'));
+  // iter-046 (M2): karta Medical pro `members.medical`
+  assert.ok(page.includes('anyOf: ["members.manage", "access.password_reset", "members.medical"]'));
   const start = page.indexOf('if (!can(session, "members.manage"))');
   const end = page.indexOf("<LeadershipPasswordList", start);
   assert.ok(start >= 0 && end > start, "větev bez members.manage");
@@ -253,7 +261,9 @@ test("R8. LeadershipPasswordList: bez odkazu na detail a bez hashů a osobních 
   const start = page.indexOf('if (!can(session, "members.manage"))');
   const branch = page.slice(start, page.indexOf("<LeadershipPasswordList", start));
   assert.ok(!branch.includes("passwordHash:") && !branch.includes("passwordHash="), "hash se do řádků nepřenáší");
-  assert.ok(branch.includes("managementRole !== null || functions.has(m.id)"), "jen vedení");
+  // iter-046 (P1): seznam obsahuje všechny členy, bez e-mailů (jen hasEmail)
+  assert.ok(!branch.includes("managementRole !== null || functions.has(m.id)"), "všichni členové");
+  assert.ok(branch.includes("hasEmail: Boolean(m.email?.trim())"));
 });
 
 // R9
@@ -270,7 +280,12 @@ test("R9. PasswordResetControls volá reset a poslat znovu, kopírování ne", (
 // R10
 test("R10. menu Členové pro members.manage nebo access.password_reset, nic dalšího z Admin skupiny", () => {
   const layout = read("app/(app)/layout.tsx");
-  assert.ok(layout.includes('members: can(session, "members.manage") || can(session, "access.password_reset")'));
+  // iter-046 (M2): menu Členové i pro `members.medical`
+  assert.ok(
+    layout.includes(
+      'members:\n      can(session, "members.manage") ||\n      can(session, "access.password_reset") ||\n      can(session, "members.medical")'
+    )
+  );
   assert.ok(layout.includes('categories: can(session, "categories.manage")'));
   assert.ok(layout.includes('chapterSettings: can(session, "chapter.settings")'));
   const nav = read("components/layout/MobileNav.tsx");
@@ -341,27 +356,31 @@ test("R11. samoobsluha hesla je pryč, kind reset adminem a CHECK zůstávají",
 test("R12. texty z gate jsou ve zdrojích a bez em dash", () => {
   const moderator = read("components/help/sections/ModeratorHelp.tsx");
   assert.ok(moderator.includes("Napište adminovi nebo moderátorovi. V menu Členové vám pošle nový odkaz pro nastavení hesla."));
-  assert.ok(moderator.includes("Člen vedení zapomněl heslo."));
+  // iter-046 (P1): otázka platí pro každého člena
+  assert.ok(moderator.includes("Člen zapomněl heslo."));
   assert.ok(moderator.includes("V menu Členové u něj dejte „Poslat odkaz pro nové heslo“. Jeho dosavadní heslo hned přestane platit a odhlásí se. Odkaz platí 24 hodin, může skončit ve spamu. Účet admina ani vlastní heslo tudy nezměníte."));
   assert.ok(/passwordReset\s*\?/.test(moderator), "otázka jen s právem");
   // review F-01: sekce „Co dělá jen admin“ nesmí tvrdit, že hesla (ani sekci Admin) vidí jen admin
   assert.ok(!moderator.includes("nemění cizí hesla"));
   assert.ok(!moderator.includes("přidělování admina, funkcí a hesel"));
   assert.ok(!moderator.includes("Sekci Admin s položkami Členové, Kategorie a Nastavení chapteru vidí v menu jen oni"));
-  assert.ok(moderator.includes("Z hesel mohou jen členovi vedení poslat odkaz pro nové heslo."));
-  assert.ok(moderator.includes("vidí moderátor a Člen výboru jen Členové, a v nich seznam Hesla vedení"));
+  assert.ok(moderator.includes("Z hesel mohou jen poslat členovi odkaz pro nové heslo."));
+  assert.ok(moderator.includes("vidí moderátor a Člen výboru jen Členové, a v nich seznam Hesla členů"));
   // review F-02: text pro Prezidenta a Viceprezidenta, bez „musí doplnit admin“
   assert.ok(moderator.includes("Prezident a Viceprezident to dělají na stránce člena, karta Heslo"));
   assert.ok(!read("app/(app)/admin/members/PasswordResetControls.tsx").includes("musí doplnit admin"));
   const admin = read("components/help/sections/AdminHelp.tsx");
-  assert.ok(admin.includes("kromě přidělování admina a funkcí, to dělá jen admin. Reset hesla členovi vedení smí i moderátor a funkce Prezident, Viceprezident a Člen výboru. Odkaz ke zkopírování vidí jen admin."));
+  assert.ok(admin.includes("kromě přidělování admina a funkcí, to dělá jen admin. Reset hesla člena smí i moderátor a funkce Prezident, Viceprezident a Člen výboru. Odkaz ke zkopírování vidí jen admin."));
   assert.ok(!admin.includes("přidělování admina, funkcí a hesel"));
   const access = read("app/(app)/admin/members/MemberAccessControls.tsx");
   assert.ok(access.includes("jen nepřidělují admina a funkce."));
   assert.ok(read("app/(auth)/login/heslo/SetPasswordForm.tsx").includes("Odkaz už neplatí. Požádej admina nebo moderátora o nový."));
   const list = read("app/(app)/admin/members/LeadershipPasswordList.tsx").replace(/\s+/g, " ");
-  assert.ok(list.includes("Hesla vedení"));
-  assert.ok(list.includes("Členovi vedení, který zapomněl heslo, tady pošleš odkaz pro nové. Jeho dosavadní heslo hned přestane platit a odhlásí se."));
+  // iter-046 (P1): texty seznamu jsou v PASSWORD_TEXTS (lib/auth/password-texts.ts)
+  const pwTexts = read("lib/auth/password-texts.ts").replace(/\s+/g, " ");
+  assert.ok(pwTexts.includes('listTitle: "Hesla členů"'));
+  assert.ok(pwTexts.includes("Členovi, který zapomněl heslo, tady pošleš odkaz pro nové. Jeho dosavadní heslo hned přestane platit a odhlásí se."));
+  assert.ok(list.includes("PASSWORD_TEXTS.listTitle") && list.includes("PASSWORD_TEXTS.listIntro"));
   assert.ok(list.includes("Vlastní heslo změníš v menu"));
   const dash = String.fromCharCode(0x2014);
   for (const f of [

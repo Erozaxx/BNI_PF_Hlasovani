@@ -42,6 +42,68 @@ export interface PlanEntry {
   substituteName: string | null;
   /** `YYYY-MM-DD`, kdy byla omluva zapsána (pražský den). */
   announcedOn: string;
+  /** iter-046: medical omluva (uložená, nebo odvozená z období člena). */
+  medical?: boolean;
+}
+
+/** iter-046: období medical aktivního člena (jen pro odvození v kalendáři). */
+export interface MedicalPeriod {
+  memberId: string;
+  name: string;
+  medicalFrom: string;
+  medicalUntil: string;
+}
+
+/**
+ * iter-046 (arch 5.6): odvozené medical omluvy pro členy s obdobím. Pro každý
+ * schůzkový den v `[from, to]` a v období člena, který v `existing` nemá vlastní
+ * omluvu, vrátí položku `{ medical: true, substituteName: null, announcedOn:
+ * medicalFrom }`. `scheduleDays` jsou schůzkové dny (pravidelný den, den
+ * schůzky, interní den), pořadí nevadí.
+ */
+export function expandMedicalPeriods(
+  periods: readonly MedicalPeriod[],
+  scheduleDays: readonly string[],
+  from: string,
+  to: string,
+  existing: readonly Pick<PlanEntry, "date" | "memberId">[]
+): PlanEntry[] {
+  const have = new Set(existing.map((e) => `${e.memberId}|${e.date}`));
+  const out: PlanEntry[] = [];
+  for (const day of scheduleDays) {
+    if (day < from || day > to) continue;
+    for (const p of periods) {
+      if (day < p.medicalFrom || day > p.medicalUntil) continue;
+      if (have.has(`${p.memberId}|${day}`)) continue;
+      out.push({
+        date: day,
+        memberId: p.memberId,
+        name: p.name,
+        substituteName: null,
+        announcedOn: p.medicalFrom,
+        medical: true,
+      });
+    }
+  }
+  return out;
+}
+
+/** Schůzkové dny v `[from, to]`: pravidelný den týdne plus dané dny (bez duplicit, vzestupně). */
+export function scheduleDaysInRange(
+  from: string,
+  to: string,
+  regularWeekday: number,
+  extraDays: readonly string[]
+): string[] {
+  const days = new Set<string>();
+  for (const d of extraDays) if (d >= from && d <= to) days.add(d);
+  let cur = from;
+  for (let i = 0; i < 800 && cur <= to; i++) {
+    const [y, m, d] = cur.split("-").map(Number);
+    if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() === regularWeekday) days.add(cur);
+    cur = addDaysToDateString(cur, 1);
+  }
+  return [...days].sort();
 }
 
 export interface PlanRange {
@@ -110,7 +172,11 @@ export function planEntryLine(row: Pick<PlanEntry, "substituteName">): string {
  * Šedý řádek: „omluveno 15. 10.“ (jen datum, K2). Když omluva není v roce
  * `today`, přidá se rok („omluveno 30. 12. 2025“), ať se nepletou dva roky.
  */
-export function planEntryMeta(row: Pick<PlanEntry, "announcedOn">, today: string): string {
+export function planEntryMeta(
+  row: Pick<PlanEntry, "announcedOn"> & { medical?: boolean },
+  today: string
+): string {
+  if (row.medical) return "medical";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(row.announcedOn);
   if (!m) return "omluveno";
   const base = `omluveno ${Number(m[3])}. ${Number(m[2])}.`;

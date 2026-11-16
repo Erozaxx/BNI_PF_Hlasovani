@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { castVote as dbCastVote } from "@/lib/db/queries/votes";
+import { memberMayVoteNow, voteBlockedText } from "@/lib/db/queries/member-medical";
 import type { ActionResult } from "@/lib/types";
 
 const castVoteSchema = z.object({
@@ -54,6 +55,11 @@ export async function castVoteAction(
   }
 
   try {
+    // iter-046 (arch 6.2 V2): člen s medical nehlasuje, server rozhoduje (fail closed).
+    if (!(await memberMayVoteNow(auth.session.memberId))) {
+      return { success: false, error: await voteBlockedText(auth.session.memberId) };
+    }
+
     // Check meeting exists and is in voting status
     const mtg = await getMeetingById(meetingId);
     if (!mtg) {

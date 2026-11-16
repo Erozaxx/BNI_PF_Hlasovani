@@ -13,7 +13,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
-import { memberActiveSql } from "@/lib/db/queries/member-active";
+import { medicalPeriodAppliesSql, memberActiveSql } from "@/lib/db/queries/member-active";
 import {
   ATTENDANCE_LINK_VALID_HOURS,
   ATTENDANCE_REPORT_FUNCTIONS,
@@ -189,18 +189,58 @@ export async function markLinkSent(linkId: string, resendId: string | null): Pro
 
 /** Počet předem omluvených a z nich s náhradníkem (jen aktivní členové), pro ranní mail. */
 export async function countExcusedFor(date: string): Promise<{ excused: number; withSubstitute: number }> {
-  const result = await getDb().execute<{ excused: number; with_sub: number }>(sql`
-    SELECT count(*)::int AS excused,
-           count(a.substitute_name)::int AS with_sub
-    FROM member_absence a
-    JOIN member m ON m.id = a.member_id
-    WHERE a.absence_date = ${date}::date AND ${memberActiveSql("m")}
-  `);
+  const result = await getDb().execute<{ excused: number; with_sub: number }>(countExcusedForSql(date));
   const r = result.rows[0];
   return { excused: Number(r?.excused ?? 0), withSubstitute: Number(r?.with_sub ?? 0) };
 }
 
+/**
+ * iter-046 (arch 5.4): omluvení včetně členů s obdobím medical bez řádku
+ * (samostatně kvůli testu nad pglite).
+ */
+export function countExcusedForSql(date: string): SQL {
+  return sql`
+    SELECT count(*)::int AS excused,
+           count(a.substitute_name)::int AS with_sub
+    FROM member m
+    LEFT JOIN member_absence a ON a.member_id = m.id AND a.absence_date = ${date}::date
+    WHERE ${memberActiveSql("m")}
+      AND (a.member_id IS NOT NULL OR ${medicalPeriodAppliesSql("m", sql`${date}::date`)})
+  `;
+}
+
 // ── Uzavření dne (arch 10.2) ─────────────────────────────────
+
+/**
+ * iter-046 (arch 5.4, gate změna 4): krok 0 uzávěrky. Období medical aktivního
+ * člena se pro den D uloží jako `member_absence.medical = true`, jinak by
+ * uzavřený den medical ztratil. Podmínka „období platí“ je
+ * `medicalPeriodAppliesSql` (explicitní zápis present, substitute, unexcused i
+ * omluva s náhradníkem mají přednost). Existující omluva bez náhradníka se
+ * doplní příznakem. Jeden příkaz, idempotentní (druhý běh nic nezmění), bez
+ * transakce (LL-003). `created_by NULL` jako u řádků doplněných cronem.
+ */
+export function materializeMedicalSql(date: string): SQL {
+  return sql`
+    WITH ins AS (
+      INSERT INTO member_absence (member_id, absence_date, substitute_name, medical, created_by, updated_by)
+      SELECT m.id, ${date}::date, NULL, true, NULL, NULL
+      FROM member m
+      WHERE ${memberActiveSql("m")} AND m.joined_at <= ${date}::date
+        AND ${medicalPeriodAppliesSql("m", sql`${date}::date`)}
+      ON CONFLICT (member_id, absence_date) DO UPDATE SET medical = true, updated_at = now()
+        WHERE member_absence.substitute_name IS NULL AND NOT member_absence.medical
+      RETURNING 1
+    )
+    SELECT count(*)::int AS n FROM ins
+  `;
+}
+
+/** Krok 0: uložení medical z období (viz `materializeMedicalSql`). Vrací počet nových nebo doplněných omluv. */
+export async function materializeMedical(date: string): Promise<number> {
+  const result = await getDb().execute<{ n: number }>(materializeMedicalSql(date));
+  return Number(result.rows[0]?.n ?? 0);
+}
 
 /**
  * Režim uzavřeného dne. `recorded` = správce ten den zapisoval (je aspoň jeden
@@ -386,6 +426,7 @@ export async function loadReportRows(date: string): Promise<ReportRows> {
     substitute_name: string | null;
     excused: boolean;
     ann_sub: boolean;
+    medical: boolean;
     source: string;
     updated_at: string;
     updated_by_name: string | null;
@@ -394,6 +435,7 @@ export async function loadReportRows(date: string): Promise<ReportRows> {
     SELECT m.name, r.status, r.substitute_name,
            (ma.member_id IS NOT NULL) AS excused,
            (ma.substitute_name IS NOT NULL) AS ann_sub,
+           COALESCE(ma.medical, false) AS medical,
            r.source, ${isoSql(sql`r.updated_at`)} AS updated_at, ub.name AS updated_by_name,
            CASE WHEN ${absenceStatusSql("r")} THEN (
              SELECT count(*)::int
@@ -423,6 +465,7 @@ export async function loadReportRows(date: string): Promise<ReportRows> {
       substituteName: r.substitute_name,
       excused: Boolean(r.excused),
       announcedSubstitute: Boolean(r.ann_sub),
+      medical: Boolean(r.medical),
       ordinal: isAbsenceStatus(status) && r.ordinal !== null ? Number(r.ordinal) : null,
     });
     if (r.source === "manager") {

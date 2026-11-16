@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { formatWeekdayFull } from "@/lib/attendance/rules";
+import { VOTE_TEXTS } from "@/lib/meetings/token-error-text";
 
 interface MemberLink {
   memberId: string;
@@ -13,6 +14,10 @@ interface MemberLink {
   memberEmail: string;
   /** iter-037: deaktivovaný člen, bez akcí Zkopírovat odkaz, Poslat e-mailem a Nový odkaz. */
   isInactive: boolean;
+  /** iter-046: člen má dnes medical, nehlasuje, tlačítka Zkopírovat, Poslat a Nový odkaz jsou zamčená. */
+  isMedical?: boolean;
+  /** iter-046 (L-1): člen dnes nehlasuje, důvod vidí jen držitel `members.medical` (`isMedical`). */
+  voteBlocked?: boolean;
   hasLink: boolean;
   isRevoked: boolean;
   isExpired: boolean;
@@ -255,6 +260,11 @@ export function MemberLinksManager({
                       </p>
                       {getLinkStatusBadge(link)}
                       {link.isInactive && <Badge variant="neutral">Neaktivní</Badge>}
+                      {link.voteBlocked && !link.isInactive && (
+                        <Badge variant="warning">
+                          {link.isMedical ? VOTE_TEXTS.listLabel : VOTE_TEXTS.listLabelExcused}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-text-muted mt-0.5">
                       {link.memberEmail}
@@ -288,7 +298,7 @@ export function MemberLinksManager({
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 shrink-0">
-                    {!link.isInactive && (
+                    {!link.isInactive && !link.voteBlocked && (
                       <>
                         <Button
                           variant="secondary"

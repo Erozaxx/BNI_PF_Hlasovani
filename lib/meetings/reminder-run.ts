@@ -1,6 +1,6 @@
 /**
- * Fáze 8 cronu — připomínky (iter-028, T-006, arch iter-028 T-001, sekce
- * 4.4). NENÍ čistý modul — smí a musí importovat DB vrstvu, e-mail a ops
+ * Fáze 8 cronu - připomínky (iter-028, T-006, arch iter-028 T-001, sekce
+ * 4.4). NENÍ čistý modul - smí a musí importovat DB vrstvu, e-mail a ops
  * log; rozhodovací logika (kdy, komu) žije v `lib/meetings/reminder-plan.ts`
  * a `lib/email/reminder-template.ts`, tenhle soubor je jen DB + maily podle
  * jejich rozhodnutí, v přesném pořadí zápisů z 4.4.
@@ -18,6 +18,8 @@ import {
   markReminderSent,
 } from "@/lib/db/queries/meeting-member-reminders";
 import { getActiveMembers } from "@/lib/db/queries/members";
+import { pragueToday } from "@/lib/members/activity";
+import { isMedicalOn } from "@/lib/members/medical";
 import { getMeetingLinkRows } from "@/lib/db/queries/meeting-member-links";
 import { hashMeetingToken, buildMeetingMagicUrl } from "@/lib/auth/meeting-magic";
 import {
@@ -54,8 +56,8 @@ const EMPTY_RESULT: ReminderRunResult = {
 
 /**
  * Provede fázi 8 pro jedno spuštění cronu (4.4, kroky 1–6). `runId`/`nextSeq`
- * sdílí volající (route.ts) se zbytkem běhu (arch 5.3, 13.2 bod 9 — fáze 8
- * je poslední). `cronStartedAt` je `t0` HANDLERU, ne začátek téhle funkce —
+ * sdílí volající (route.ts) se zbytkem běhu (arch 5.3, 13.2 bod 9 - fáze 8
+ * je poslední). `cronStartedAt` je `t0` HANDLERU, ne začátek téhle funkce -
  * brzda rozpočtu (arch 5.4) počítá od začátku celého běhu cronu.
  */
 export async function runReminders(
@@ -66,23 +68,23 @@ export async function runReminders(
 ): Promise<ReminderRunResult> {
   // Krok 1: schůzka 'voting' s vyplněnou uzávěrkou. Žádná -> konec, bez
   // zápisu. Když tabulka meeting_member_reminder chybí (merge před migrací),
-  // TENHLE krok ještě nesahá na ni — padne až krok 3 níže (6.5).
+  // TENHLE krok ještě nesahá na ni - padne až krok 3 níže (6.5).
   const meeting = await getVotingMeetingForReminders();
   if (!meeting) {
     return EMPTY_RESULT;
   }
 
   // Krok 2: den kola? Mimo dny kol stojí fáze jeden SELECT (krok 1 výše).
-  // `planReminders` (krok 4) round počítá znovu ze stejných vstupů — jedno
-  // místo pravdy (reminder-plan.ts) — tenhle krok je jen levný pre-check,
+  // `planReminders` (krok 4) round počítá znovu ze stejných vstupů - jedno
+  // místo pravdy (reminder-plan.ts) - tenhle krok je jen levný pre-check,
   // aby se kroky 3–4 vůbec nevolaly mimo dny kol.
   if (reminderRoundFor(meeting.votingClosesAt, now) === null) {
     return EMPTY_RESULT;
   }
 
-  // Krok 3: čtení — počet hlasovatelných hostů, členové, odkazy, hlasy,
+  // Krok 3: čtení - počet hlasovatelných hostů, členové, odkazy, hlasy,
   // zabraná kola. Chybějící tabulka meeting_member_reminder padne tady na
-  // 42P01, DŘÍV, než cokoli pošle mail (6.5) — volající (route.ts) to
+  // 42P01, DŘÍV, než cokoli pošle mail (6.5) - volající (route.ts) to
   // zachytí vlastním try/catch fáze 8.
   const [votableGuestCount, members, links, votedMemberIds, claimed] = await Promise.all([
     getVotableGuestCount(meeting.id),
@@ -94,7 +96,7 @@ export async function runReminders(
   ]);
 
   // Krok 4: čistý plán (planReminders odvodí round znovu ze stejného
-  // votingClosesAt/now — jedno místo pravdy, viz reminder-plan.ts).
+  // votingClosesAt/now - jedno místo pravdy, viz reminder-plan.ts).
   const plan = planReminders({
     now,
     meeting: {
@@ -104,11 +106,14 @@ export async function runReminders(
       votingClosesAt: meeting.votingClosesAt,
       votableGuestCount,
     },
-    members: members.map((m) => ({
-      memberId: m.id,
-      memberName: m.name,
-      memberEmail: m.email ?? null,
-    })),
+    // iter-046 (arch 6.3): připomínky jen členům bez medical.
+    members: members
+      .filter((m) => !isMedicalOn(m, pragueToday(now)))
+      .map((m) => ({
+        memberId: m.id,
+        memberName: m.name,
+        memberEmail: m.email ?? null,
+      })),
     links: links.map((l) => ({
       memberId: l.memberId,
       revokedAt: l.revokedAt,
@@ -137,21 +142,21 @@ export async function runReminders(
   let claimRejected = 0;
   let budgetStopped = 0;
 
-  // Krok 5: sekvenčně, jeden po druhém — bez db.transaction() (LL-003).
+  // Krok 5: sekvenčně, jeden po druhém - bez db.transaction() (LL-003).
   for (const row of plan.toSend) {
-    // a) brzda rozpočtu — zbytek do souhrnu budgetStopped, bez dalšího pokusu.
+    // a) brzda rozpočtu - zbytek do souhrnu budgetStopped, bez dalšího pokusu.
     if (shouldStopForBudget(cronStartedAt, new Date())) {
       budgetStopped++;
       continue;
     }
 
-    // b) nový token/odkaz — D4 C, vlastní alias, meeting_member_link se
+    // b) nový token/odkaz - D4 C, vlastní alias, meeting_member_link se
     // nemění vůbec.
     const rawToken = randomUUID();
     const tokenHash = hashMeetingToken(rawToken);
     const magicUrl = buildMeetingMagicUrl(rawToken);
 
-    // c) zabrání (4.3, vrstva 2) — žádný řádek znamená nic neposílat.
+    // c) zabrání (4.3, vrstva 2) - žádný řádek znamená nic neposílat.
     const claimedId = await claimReminder(meeting.id, row.memberId, plan.round, tokenHash);
     if (!claimedId) {
       claimRejected++;
@@ -159,7 +164,7 @@ export async function runReminders(
     }
 
     // d) sestavit a odeslat mail. `row.memberEmail` je tu vždy vyplněné
-    // (planReminders garantuje e-mail pro "send", pravidlo 1) — přesto beze
+    // (planReminders garantuje e-mail pro "send", pravidlo 1) - přesto beze
     // non-null assertion, stejný vzor jako krok 8 ve voting-dispatch.ts.
     const { subject, html } = buildReminderEmail({
       meetingDate: meeting.date,

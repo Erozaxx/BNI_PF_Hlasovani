@@ -3,6 +3,9 @@ import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { getMemberById } from "@/lib/db/queries/members";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { isMedicalOn } from "@/lib/members/medical";
+import { can } from "@/lib/auth/permissions";
+import { VOTE_TEXTS } from "@/lib/meetings/token-error-text";
 import {
   regenerateMeetingToken,
   buildMeetingMagicUrl,
@@ -45,6 +48,10 @@ export async function POST(
   }
   if (!isMemberActive(memberData, pragueToday())) {
     return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
+  }
+  // iter-046 (arch 6.3): člen s medical hlasovat nemůže, odkaz se mu neposílá ani neobnovuje.
+  if (isMedicalOn(memberData, pragueToday())) {
+    return err(409, can(session, "members.medical") ? VOTE_TEXTS.linkMedical : VOTE_TEXTS.linkExcused);
   }
 
   // 3. Regenerate token (UPDATE existing row - no INSERT, preserves UNIQUE)

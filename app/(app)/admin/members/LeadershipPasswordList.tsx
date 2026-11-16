@@ -3,21 +3,25 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ADMIN_ONLY_MESSAGE } from "@/lib/auth/permissions";
+import { PASSWORD_TEXTS } from "@/lib/auth/password-texts";
 import { PasswordResetControls } from "./PasswordResetControls";
 
 /**
  * iter-043 (gate K16 A): zúžený pohled na `/admin/members` pro volajícího jen
- * s právem `access.password_reset` (moderátor, Člen výboru). Jen členové
- * s rolí nebo funkcí, jméno, štítek, stav hesla a tlačítko pro reset. Žádný
- * odkaz na detail člena, žádná firma, obor, datum vstupu, osobní odkaz ani
- * pohovory. Do klienta jde jen `PasswordResetControls` s id, jménem, e-mailem
- * a příznakem neaktivity.
+ * s právem `access.password_reset` (moderátor, Člen výboru). Jméno, štítek,
+ * stav hesla a tlačítko pro reset. Žádný odkaz na detail člena, žádná firma,
+ * obor, datum vstupu, osobní odkaz ani pohovory.
+ *
+ * iter-046 (P1, gate změna 3): seznam obsahuje všechny členy, heslo smí mít
+ * každý. Řádek nemá e-mail (`hasEmail` místo něj), moderátor bez funkce
+ * e-maily členů nevidí, do klienta nejdou. Potvrzení resetu je se jménem.
  */
 
 export interface LeadershipRow {
   id: string;
   name: string;
-  email: string | null;
+  /** Člen má e-mail. Samotná adresa do klienta nejde. */
+  hasEmail: boolean;
   functionName: string | null;
   /** Štítek role (Admin, Moderátor) nebo `null`. */
   roleLabel: string | null;
@@ -32,10 +36,9 @@ export function LeadershipPasswordList({ rows }: { rows: LeadershipRow[] }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-text-main">Hesla vedení</h1>
+        <h1 className="text-2xl font-bold text-text-main">{PASSWORD_TEXTS.listTitle}</h1>
         <p className="mt-2 text-sm text-text-muted">
-          Členovi vedení, který zapomněl heslo, tady pošleš odkaz pro nové. Jeho dosavadní
-          heslo hned přestane platit a odhlásí se.
+          {PASSWORD_TEXTS.listIntro}
         </p>
       </div>
 
@@ -43,7 +46,7 @@ export function LeadershipPasswordList({ rows }: { rows: LeadershipRow[] }) {
         <Card>
           <EmptyState
             title="Zatím tu nikdo není"
-            description="Seznam obsahuje členy s rolí nebo funkcí."
+            description="Seznam obsahuje všechny členy."
           />
         </Card>
       ) : (
@@ -60,6 +63,7 @@ export function LeadershipPasswordList({ rows }: { rows: LeadershipRow[] }) {
                         <Badge variant={r.isAdmin ? "danger" : "info"}>{r.roleLabel}</Badge>
                       )}
                       {r.isInactive && <Badge variant="warning">Neaktivní</Badge>}
+                      {!r.hasEmail && <Badge variant="warning">{PASSWORD_TEXTS.noEmailBadge}</Badge>}
                       {!r.isAdmin && (
                         <Badge variant={r.hasPassword ? "success" : "neutral"}>
                           {r.hasPassword ? "Heslo nastavené" : "Čeká na nastavení hesla"}
@@ -74,7 +78,7 @@ export function LeadershipPasswordList({ rows }: { rows: LeadershipRow[] }) {
                     <p className="text-sm text-text-muted">
                       Vlastní heslo změníš v menu{" "}
                       <Link href="/settings" className="text-primary hover:underline">
-                        Heslo
+                        {PASSWORD_TEXTS.menuChange}
                       </Link>
                       .
                     </p>
@@ -82,7 +86,8 @@ export function LeadershipPasswordList({ rows }: { rows: LeadershipRow[] }) {
                     <PasswordResetControls
                       memberId={r.id}
                       memberName={r.name}
-                      email={r.email}
+                      email={null}
+                      hasEmail={r.hasEmail}
                       isInactive={r.isInactive}
                     />
                   )}

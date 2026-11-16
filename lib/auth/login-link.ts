@@ -9,7 +9,7 @@
 import { waitUntil } from "@vercel/functions";
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { getMemberByEmail, getMemberById, setOwnPassword } from "@/lib/db/queries/members";
+import { getMemberByEmail, getMemberById, setPasswordFromLink } from "@/lib/db/queries/members";
 import {
   consumeLinkByHash,
   findActiveLinkMemberId,
@@ -233,7 +233,7 @@ export async function consumeSetPasswordLink(
         findActiveLink: (tokenHash) => findActiveLinkMemberId(tokenHash, "set-password"),
         hashPassword: (pw) => hash(pw, 12),
         consumeLink: (tokenHash) => consumeLinkByHash(tokenHash, "set-password"),
-        setPassword: (memberId, passwordHash) => setOwnPassword(memberId, passwordHash),
+        setPassword: (memberId, passwordHash) => setPasswordFromLink(memberId, passwordHash),
       },
       { token, password, confirm }
     );

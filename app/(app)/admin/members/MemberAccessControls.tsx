@@ -123,7 +123,8 @@ export function MemberAccessControls({
     (mode === "confirm-function" && fnFirstAccess && !isInactive);
   // Reset jde i členovi, který čeká na odkaz (zámkový hash není heslo, MIN-1):
   // jen tudy se po zavření okna dá odkaz poslat znovu.
-  const canReset = (managementRole !== null || hasFunction) && !isSelf;
+  // iter-046 (P1): reset jde komukoli s e-mailem, ne jen vedení.
+  const canReset = !isSelf;
 
   function resetUi() {
     setMode("idle");

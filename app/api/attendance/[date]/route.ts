@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { requirePermissionForRoute } from "@/lib/auth/guards";
-import { NO_PERMISSION_MESSAGE, canAny } from "@/lib/auth/permissions";
+import { NO_PERMISSION_MESSAGE, can as hasPermission, canAny } from "@/lib/auth/permissions";
 import { isSameOrigin } from "@/lib/auth/same-origin";
 import { MAX_ADVANCE_DAYS } from "@/lib/attendance/rules";
 import { UNEXCUSED_TEXTS, unexcusedTooEarlyText } from "@/lib/attendance/texts";
@@ -19,6 +19,7 @@ import {
   getDayMeta,
   listSheetRows,
   setExcuseGuarded,
+  setMedicalFlagGuarded,
   writePresenceGuarded,
 } from "@/lib/db/queries/attendance";
 import { logOpsEvent } from "@/lib/ops/event-log";
@@ -111,6 +112,11 @@ export async function POST(
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   const body = parsed.value;
 
+  // iter-046 (Q1 A): Medical u omluvy zaškrtne jen držitel `members.medical`.
+  if (body.op === "medical" && !hasPermission(session, "members.medical")) {
+    return json({ error: SHEET_TEXTS.errNoMedical }, 403);
+  }
+
   const can = writeCanFor(session);
   const today = pragueToday();
 
@@ -153,6 +159,18 @@ export async function POST(
       else if (res.result === "too-early") blocked = unexcusedTooEarlyText(meetingTime);
       else if (res.result === "excused-conflict") blocked = UNEXCUSED_TEXTS.excusedConflict;
       else conflict = true;
+    } else if (body.op === "medical") {
+      const res = await setMedicalFlagGuarded({
+        date,
+        memberId: body.memberId,
+        medical: body.medical,
+        actorId: session.memberId,
+        mode,
+      });
+      if (res.result === "ok") audited = res.audited;
+      else if (res.result === "day-closed") closed = true;
+      else if (res.result === "no-excuse") blocked = SHEET_TEXTS.errNoExcuseForMedical;
+      else inactive = true;
     } else {
       const res = await setExcuseGuarded({
         date,

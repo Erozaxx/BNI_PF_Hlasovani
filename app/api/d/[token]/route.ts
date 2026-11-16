@@ -85,6 +85,8 @@ export async function POST(
     const parsed = parseWriteBody(raw);
     if (!parsed.ok) return json({ error: parsed.error }, 400);
     const body = parsed.value;
+    // iter-046: ranní odkaz nemá právo `members.medical` (Medical jen se session heslem).
+    if (body.op === "medical") return json({ error: SHEET_TEXTS.errNoMedical }, 403);
 
     const date = v.date;
     const today = pragueToday();

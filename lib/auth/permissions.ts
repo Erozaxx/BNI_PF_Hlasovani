@@ -77,6 +77,10 @@ export const PERMISSIONS = [
   // role moderátor, takže ho má i Člen výboru, Prezident a Viceprezident.
   // `access.manage` (role, funkce, odkaz ke zkopírování) zůstává jen adminovi.
   "access.password_reset",
+  // iter-046 (arch D5): medical člena (období u člena, Medical v zápisu).
+  // Výchozí sada FUNKCE (Člen výboru), P a VP značkou, admin vždy; ne role
+  // moderátor ani příznak Správce docházky.
+  "members.medical",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -120,6 +124,7 @@ export const DEFAULT_FUNCTION_PERMISSIONS: readonly Permission[] = [
   ...MODERATOR_ROLE_PERMISSIONS,
   "semafor.view_all",
   "semafor.points",
+  "members.medical",
 ];
 
 /**
@@ -221,18 +226,19 @@ export type PasswordResetDenied =
   | "self"
   | "admin-target"
   | "not-found"
-  | "no-access";
+  | "no-email";
 
 /**
  * iter-043 (gate změna 3): jediné místo pravdy pro „smí volající resetovat
  * heslo cíli“. Pořadí kontrol: právo, sebe, cíl existuje, účet admina, cíl má
- * přístup k heslu (role nebo funkce). Hlášky zůstávají v akcích.
+ * e-mail (iter-046, P1: heslo smí mít každý člen, reset jde komukoli s e-mailem).
+ * Hlášky zůstávají v akcích.
  */
 export function decidePasswordReset(input: {
   actorId: string;
   actorIsAdmin: boolean;
   actorMayReset: boolean;
-  target: { id: string; managementRole: string | null; hasPasswordAccess: boolean } | null;
+  target: { id: string; managementRole: string | null; hasEmail: boolean } | null;
 }): { ok: true } | { ok: false; reason: PasswordResetDenied } {
   if (!input.actorMayReset) return { ok: false, reason: "no-permission" };
   if (input.target && input.target.id === input.actorId) return { ok: false, reason: "self" };
@@ -240,7 +246,7 @@ export function decidePasswordReset(input: {
   if (!mayChangeMember(input.actorIsAdmin, input.target.managementRole)) {
     return { ok: false, reason: "admin-target" };
   }
-  if (!input.target.hasPasswordAccess) return { ok: false, reason: "no-access" };
+  if (!input.target.hasEmail) return { ok: false, reason: "no-email" };
   return { ok: true };
 }
 
@@ -263,16 +269,39 @@ export function hasRealPassword(input: {
 }
 
 /**
- * Jedno místo pravdy pro „smí mít heslo a přihlásit se jím“ (T-003b): člen má
- * roli (admin, moderator), NEBO aspoň jednu funkci. Dřív to hlídal CHECK
- * `member_password_only_for_management` (jen role), ten CHECK nemůže číst
- * `member_function`, proto je pravidlo v aplikaci.
+ * iter-046 (P1): účet vedení = role (admin, moderator) NEBO aspoň jedna funkce.
+ * Dřív `hasPasswordAccess` (heslo smělo jen vedení), teď heslo smí mít každý
+ * člen a tohle rozlišení určuje jen to, kdo si heslo v aplikaci sám nenastaví
+ * (`decideOwnPasswordMode`, režim `via-link`) a komu heslo povýšením zamkneme.
+ * CHECK `member_password_only_for_management` už neexistuje (iter-037).
  */
-export function hasPasswordAccess(input: {
+export function isLeadershipAccount(input: {
   managementRole: string | null | undefined;
   hasFunction: boolean;
 }): boolean {
   return !!input.managementRole || input.hasFunction;
+}
+
+/** @deprecated iter-046: přejmenováno na `isLeadershipAccount`, jen alias pro staré testy. */
+export const hasPasswordAccess = isLeadershipAccount;
+
+export type OwnPasswordMode = "set" | "change" | "via-link";
+
+/**
+ * iter-046 (arch 8.1, D9): jak si člen mění vlastní heslo v aplikaci.
+ * `set`: běžný člen bez jakéhokoli hashe (`password_hash IS NULL`), bez
+ * starého hesla. `change`: kdokoli se skutečným heslem, se starým heslem.
+ * `via-link`: vedení bez skutečného hesla a kdokoli se zámkovým hashem (reset,
+ * povýšení), heslo mu pošle odkazem vedení. Zámek po resetu nesmí jít přepsat
+ * ze session, jinak reset nezavře ukradený přístup (iter-046, M-1).
+ */
+export function decideOwnPasswordMode(input: {
+  hasRealPassword: boolean;
+  hasHash: boolean;
+  leadership: boolean;
+}): OwnPasswordMode {
+  if (input.hasRealPassword) return "change";
+  return input.leadership || input.hasHash ? "via-link" : "set";
 }
 
 /** Session s heslem a přístupem (role nebo funkce). Pro nastavení hesla a menu. */
@@ -287,7 +316,7 @@ export function hasPasswordSession(
     | undefined
 ): boolean {
   if (!session || session.authMethod !== "password") return false;
-  return hasPasswordAccess({
+  return isLeadershipAccount({
     managementRole: session.managementRole,
     hasFunction: (session.functionNames?.length ?? 0) > 0,
   });

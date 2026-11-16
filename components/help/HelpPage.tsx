@@ -27,6 +27,8 @@ interface HelpPageProps {
   showSemaforPointsHelp?: boolean;
   /** iter-044: držitel funkce Člen výboru (bod o udělování ostatní práce). */
   showSemaforCommitteeHelp?: boolean;
+  /** iter-046: právo `members.medical` (sekce Medical v nápovědě pro vedení). */
+  showMedicalHelp?: boolean;
   /**
    * iter-042: nastavení chapteru. Vypnutý Master mind, Burza a Semafor v nápovědě
    * zmizí (sekce i věty o nich), den a začátek schůzky se berou odsud.
@@ -48,6 +50,7 @@ export function HelpPage({
   showSemaforImportHelp = false,
   showSemaforPointsHelp = false,
   showSemaforCommitteeHelp = false,
+  showMedicalHelp = false,
   settings = DEFAULT_CHAPTER_SETTINGS,
   canManageSettings = false,
 }: HelpPageProps) {
@@ -58,7 +61,7 @@ export function HelpPage({
       label: "Pro člena",
       content: <MemberHelp settings={settings} />,
     },
-    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp || semaforHelp
+    ...(showLeadershipHelp || showAttendanceHelp || showInternalMeetingHelp || showMedicalHelp || semaforHelp
       ? [
           {
             id: "moderator",
@@ -74,6 +77,7 @@ export function HelpPage({
                 semaforImport={showSemaforImportHelp}
                 semaforPoints={showSemaforPointsHelp}
                 semaforCommittee={showSemaforCommitteeHelp}
+                medical={showMedicalHelp}
                 settings={settings}
               />
             ),

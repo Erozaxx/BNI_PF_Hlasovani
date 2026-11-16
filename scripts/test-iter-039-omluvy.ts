@@ -250,11 +250,13 @@ const tests: TestCase[] = [
       const order = ["tabMine", "tabSheet", "tabPlan", "tabOverview"].map((k) => tabs.indexOf(`OVERVIEW_TEXTS.${k}`));
       assert.ok(order.every((i) => i > 0));
       assert.deepEqual([...order].sort((a, b) => a - b), order, "pořadí záložek");
-      assert.ok(tabs.includes('"mine" | "sheet" | "plan" | "overview"'));
+      // iter-046 (P1): přibyla záložka Členové pro každého
+      assert.ok(tabs.includes('"mine" | "members" | "sheet" | "plan" | "overview"'));
       assert.ok(tabs.includes("px-3") && tabs.includes("sm:px-4") && tabs.includes("whitespace-nowrap"));
       assert.ok(!tabs.includes("overflow-x-auto"), "overflow ořezává fokusový rámeček");
       assert.ok(tabs.includes("min-h-[44px]") && tabs.includes("whitespace-nowrap"));
-      assert.ok(tabs.includes("if (!canViewAll) return null"));
+      // iter-046 (P1): záložky se ukazují každému, Zápis, Omluvy a Přehled jen s právem
+      assert.ok(!tabs.includes("if (!canViewAll) return null") && /canViewAll\s*\?\s*\[/.test(tabs));
       assert.match(read("lib/attendance/sheet.ts"), /tabPlan: "Omluvy"/);
     },
   },

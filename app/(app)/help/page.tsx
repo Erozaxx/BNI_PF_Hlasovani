@@ -23,6 +23,7 @@ export default async function HelpPageRoute() {
       showSemaforImportHelp={can(session, "semafor.import")}
       showSemaforPointsHelp={showPoints}
       showSemaforCommitteeHelp={showCommittee}
+      showMedicalHelp={can(session, "members.medical")}
       settings={settings}
       canManageSettings={can(session, "chapter.settings")}
     />

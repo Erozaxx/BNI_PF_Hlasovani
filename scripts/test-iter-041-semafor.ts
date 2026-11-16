@@ -854,8 +854,11 @@ const tests: TestCase[] = [
       // 23h konstanty
       assert.ok(!MODERATOR_ROLE_PERMISSIONS.some((p) => p.startsWith("semafor.")), "role moderátor bez semafor.*");
       assert.ok(!ATTENDANCE_MANAGER_PERMISSIONS.some((p) => p.startsWith("semafor.")));
-      // iter-044: výchozí sada funkce má navíc `semafor.points`.
-      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...MODERATOR_ROLE_PERMISSIONS, VIEW, "semafor.points"].sort());
+      // iter-044: výchozí sada funkce má navíc `semafor.points`; iter-046 (M2): a `members.medical`.
+      assert.deepEqual(
+        [...DEFAULT_FUNCTION_PERMISSIONS].sort(),
+        [...MODERATOR_ROLE_PERMISSIONS, VIEW, "semafor.points", "members.medical"].sort()
+      );
       assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(IMP));
       assert.equal(functionGrants(null, VIEW), true);
       assert.equal(functionGrants(null, IMP), false);

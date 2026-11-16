@@ -311,7 +311,8 @@ const tests: TestCase[] = [
     run: () => {
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
-      assert.equal(PERMISSIONS.length, 30, "iter-044: +semafor.points, iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
+      // iter-046 (M2): +members.medical
+      assert.equal(PERMISSIONS.length, 31, "iter-046: +members.medical, iter-044: +semafor.points, iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));
@@ -678,7 +679,8 @@ const tests: TestCase[] = [
         "memberDeadlineHelp(settings)",
         "Bez záznamu počítáme, že přijdete. Náhradník se jako absence nepočítá. Na dashboardu vidíte své absence za posledních 6 měsíců.",
         "Kdo vidí, že chybím?",
-        "Správci docházky, Prezident, Viceprezident a admin. Ostatní členové ne.",
+        // iter-046 (P1): záložka Členové, odpověď upravena (ostatní vidí omluvu a počet absencí)
+        "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí jen to, že jste na daný den omluvený(á), a počet vašich absencí.",
         "Proč mám absenci, i když jsem se omluvil(a)?",
         "Omluva bez náhradníka se podle pravidel počítá jako absence. Když pošlete náhradníka, absence to není.",
         "Jak smažu jméno náhradníka?",
@@ -1010,7 +1012,8 @@ const tests: TestCase[] = [
       const help = read("app/(app)/help/page.tsx");
       assert.ok(help.includes('can(session, "attendance.view_all")') && help.includes('can(session, "attendance.edit_history")'));
       const tabs = read("components/attendance/AttendanceTabs.tsx");
-      assert.ok(tabs.includes("if (!canViewAll) return null"));
+      // iter-046 (P1): záložky vidí každý, Zápis, Omluvy a Přehled jen s právem
+      assert.ok(!tabs.includes("if (!canViewAll) return null") && /canViewAll\s*\?\s*\[/.test(tabs));
       assert.ok(read("app/(app)/dochazka/page.tsx").includes('can(session, "attendance.view_all")'));
     },
   },
@@ -1041,13 +1044,15 @@ const tests: TestCase[] = [
       assert.ok(presence.includes('mode === "history"') && presence.includes("INSERT INTO attendance_audit"));
       assert.ok(presence.includes("IS DISTINCT FROM"), "audit jen při skutečné změně");
       const k = src.indexOf("export async function setExcuseGuarded");
-      const l = src.indexOf("type AuditDbRow");
+      // iter-046 (M2): mezi setExcuseGuarded a AuditDbRow přibyl setMedicalFlagGuarded, řez končí před ním.
+      const l = src.indexOf("export type MedicalFlagResult");
       const excuse = src.slice(k, l);
       assert.equal((excuse.match(/getDb\(\)\.execute/g) ?? []).length, 1, "Omluven(a) je jeden příkaz");
       assert.ok(excuse.includes('mode === "history"') && excuse.includes("INSERT INTO attendance_audit"));
       assert.ok(!/\.transaction\(/.test(src), "LL-003: žádná transakce");
       // režim normal nezapisuje audit: INSERT do auditu je jen uvnitř větve history
-      assert.equal((src.match(/INSERT INTO attendance_audit/g) ?? []).length, 2);
+      // iter-046 (M2): třetí audit patří setMedicalFlagGuarded (field = 'medical').
+      assert.equal((src.match(/INSERT INTO attendance_audit/g) ?? []).length, 3);
       // pojistky ve WHERE: den a člen
       assert.ok(src.includes("function dayGuardSql") && src.includes("function memberGuardSql"));
       assert.ok(/fd\.finalized_at IS NOT NULL/.test(src), "normal: uzavřený den se nepřepíše");

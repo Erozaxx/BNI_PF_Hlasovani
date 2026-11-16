@@ -2,12 +2,13 @@ import { HelpSection } from "@/components/help/HelpParts";
 import { DEFAULT_CHAPTER_SETTINGS, weekdayAccusative, type ChapterSettings } from "@/lib/chapter/settings";
 import { bonusSources } from "@/lib/semafor/bonus";
 import { helpAttendanceManagerUnexcused, helpSemaforLeadership } from "@/lib/semafor/texts";
+import { MEDICAL_TEXTS } from "@/lib/members/medical";
 import { autostartHelp, closeVotingHelp, warningMailHelp } from "@/components/help/help-texts";
 
 interface ModeratorHelpProps {
   /** Funkce vedení (session s heslem). Správce docházky přihlášený odkazem je nemá. */
   showLeadership?: boolean;
-  /** iter-043: právo `access.password_reset`: otázka, jak členovi vedení poslat odkaz pro nové heslo. */
+  /** iter-043: právo `access.password_reset`: otázka, jak členovi poslat odkaz pro nové heslo. */
   passwordReset?: boolean;
   /** Právo `attendance.view_all`: sekce „Docházka pro správce“. */
   attendance?: boolean;
@@ -23,6 +24,8 @@ interface ModeratorHelpProps {
   semaforPoints?: boolean;
   /** iter-044: držitel funkce Člen výboru: bod o udělování ostatní práce. */
   semaforCommittee?: boolean;
+  /** iter-046: právo `members.medical`: sekce „Medical“. */
+  medical?: boolean;
   /** iter-042: nastavení chapteru (den a začátek schůzky, zapnuté části). Bez něj platí výchozí stav. */
   settings?: ChapterSettings;
 }
@@ -37,12 +40,21 @@ export function ModeratorHelp({
   semaforImport = false,
   semaforPoints = false,
   semaforCommittee = false,
+  medical = false,
   settings = DEFAULT_CHAPTER_SETTINGS,
 }: ModeratorHelpProps = {}) {
   const sources = bonusSources(settings);
   const day = weekdayAccusative(settings.meetingWeekday);
   return (
     <div className="space-y-8">
+      {medical && (
+        <HelpSection
+          title="Medical"
+          intro={`${MEDICAL_TEXTS.intro} Nastavíte ho v menu Členové: u člena zvolte datum „Medical do“ a uložte, „Zrušit medical“ ho vypne.`}
+          note="Medical vidí vedení a správci docházky. Ostatní členové vidí jen omluvu a počet absencí."
+        />
+      )}
+
       {attendance && (
         <>
           <HelpSection
@@ -138,7 +150,7 @@ export function ModeratorHelp({
           ...(passwordReset
             ? [
                 {
-                  q: "Člen vedení zapomněl heslo.",
+                  q: "Člen zapomněl heslo.",
                   a: "V menu Členové u něj dejte „Poslat odkaz pro nové heslo“. Jeho dosavadní heslo hned přestane platit a odhlásí se. Odkaz platí 24 hodin, může skončit ve spamu. Účet admina ani vlastní heslo tudy nezměníte. Prezident a Viceprezident to dělají na stránce člena, karta Heslo.",
                 },
               ]
@@ -412,7 +424,7 @@ export function ModeratorHelp({
 
       <HelpSection
         title="Co dělá jen admin"
-        intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. Z hesel mohou jen členovi vedení poslat odkaz pro nové heslo. To dělá admin, Prezident a Viceprezident. V sekci Admin vidí moderátor a Člen výboru jen Členové, a v nich seznam Hesla vedení. Kategorie a Nastavení chapteru vidí jen admin, Prezident a Viceprezident. Přidělování admina a funkcí, odkaz ke zkopírování a změny v účtu admina dělá jen admin."
+        intro="Člen výboru a moderátor nespravují členy ani funkce, nedeaktivují členy, nemažou hosty, schůzky ani akce a nepřejmenovávají ani nemažou kategorie. Z hesel mohou jen poslat členovi odkaz pro nové heslo. To dělá admin, Prezident a Viceprezident. V sekci Admin vidí moderátor a Člen výboru jen Členové, a v nich seznam Hesla členů. Kategorie a Nastavení chapteru vidí jen admin, Prezident a Viceprezident. Přidělování admina a funkcí, odkaz ke zkopírování a změny v účtu admina dělá jen admin."
       />
       </>
       )}

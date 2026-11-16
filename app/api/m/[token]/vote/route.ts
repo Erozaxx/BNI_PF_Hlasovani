@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { getSql } from "@/lib/db/client";
 import { verifyMeetingToken } from "@/lib/auth/meeting-magic";
+import { memberMayVoteNow, voteBlockedText } from "@/lib/db/queries/member-medical";
 
 export const dynamic = "force-dynamic";
 import { meeting, meetingGuest, vote } from "@/lib/db/schema";
@@ -50,6 +51,11 @@ export async function POST(
 
   // meetingId is server-side only - never from body
   const { meetingId, memberId } = tokenResult;
+
+  // 1b. iter-046 (arch 6.2 V1): člen s medical nehlasuje, server rozhoduje (fail closed).
+  if (!(await memberMayVoteNow(memberId))) {
+    return err(403, await voteBlockedText(memberId));
+  }
 
   // 2. Check meeting is in voting phase
   const meetingRows = await getDb()

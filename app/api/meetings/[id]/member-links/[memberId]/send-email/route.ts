@@ -4,6 +4,9 @@ import { requirePermissionForRoute } from "@/lib/auth/guards";
 import { getMeetingById } from "@/lib/db/queries/meetings";
 import { getMemberById } from "@/lib/db/queries/members";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
+import { isMedicalOn } from "@/lib/members/medical";
+import { can } from "@/lib/auth/permissions";
+import { VOTE_TEXTS } from "@/lib/meetings/token-error-text";
 import { markLinkEmailSent } from "@/lib/db/queries/meeting-member-links";
 import {
   regenerateMeetingToken,
@@ -61,6 +64,10 @@ export async function POST(
   // iter-037 (T-003b, gate sekce 5): neaktivnímu členovi odkaz neposíláme.
   if (!isMemberActive(memberData, pragueToday())) {
     return err(409, "Člen je neaktivní, odkaz mu teď poslat nejde.");
+  }
+  // iter-046 (arch 6.3): člen s medical hlasovat nemůže, odkaz se mu neposílá ani neobnovuje.
+  if (isMedicalOn(memberData, pragueToday())) {
+    return err(409, can(session, "members.medical") ? VOTE_TEXTS.linkMedical : VOTE_TEXTS.linkExcused);
   }
 
   // iter-027 (T-005, arch 6.5): ruční "Poslat odkaz" - jeden běh, source

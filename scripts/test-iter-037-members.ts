@@ -77,7 +77,9 @@ const allSources = ALL_SRC_DIRS.flatMap((d) => walk(d));
 
 /** Tělo exportované funkce: od `export async function name(` po další export. */
 function functionBody(src: string, name: string): string {
-  const start = src.indexOf(`export async function ${name}(`);
+  // iter-046 (P1): i `export function` (stavebnice SQL `resetPasswordSql`)
+  const m = new RegExp(`export (?:async )?function ${name}\\(`).exec(src);
+  const start = m ? m.index : -1;
   assert.ok(start >= 0, `funkce ${name} nenalezena`);
   const next = src.indexOf("\nexport ", start + 10);
   return src.slice(start, next === -1 ? src.length : next);
@@ -200,9 +202,10 @@ const PAGE_TABLE: Array<[string, string]> = [
   ["app/(app)/interviews/questions/page.tsx", 'permission: "interviewQuestions.manage"'],
   ["app/(app)/status/page.tsx", 'permission: "ops.view"'],
   ["app/(app)/status/[runId]/page.tsx", 'permission: "ops.view"'],
-  ["app/(app)/settings/page.tsx", "passwordSession: true"],
+  // iter-046 (P1): settings je pro každého přihlášeného (requirePageSession() bez volby), řádek zrušen
   ["app/(app)/burza/pomoc/page.tsx", 'permission: "burza.manage"'],
-  ["app/(app)/admin/members/page.tsx", 'anyOf: ["members.manage", "access.password_reset"]'],
+  // iter-046 (M2): + members.medical
+  ["app/(app)/admin/members/page.tsx", 'anyOf: ["members.manage", "access.password_reset", "members.medical"]'],
   ["app/(app)/admin/categories/page.tsx", 'permission: "categories.manage"'],
 ];
 
@@ -215,7 +218,11 @@ const tests: TestCase[] = [
     run: () => {
       assert.deepEqual([...MODERATOR_ROLE_PERMISSIONS].sort(), [...TODAY_MODERATOR].sort());
       // iter-044: výchozí sada funkce má navíc semafor.points.
-      assert.deepEqual([...DEFAULT_FUNCTION_PERMISSIONS].sort(), [...TODAY_MODERATOR, "semafor.view_all", "semafor.points"].sort());
+      // iter-046 (M2): a members.medical.
+      assert.deepEqual(
+        [...DEFAULT_FUNCTION_PERMISSIONS].sort(),
+        [...TODAY_MODERATOR, "semafor.view_all", "semafor.points", "members.medical"].sort()
+      );
       // zpřísnění N5, N6 a nová práva jen pro admina (a funkce s plnou sadou)
       for (const p of [
         "categories.manage",
@@ -234,7 +241,8 @@ const tests: TestCase[] = [
       // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
       // iter-040: +1 (attendance.internal_manage), iter-041: +2 (semafor.view_all, semafor.import).
       // iter-042: +1 (chapter.settings). iter-043: +1 (access.password_reset). iter-044: +1 (semafor.points).
-      assert.equal(PERMISSIONS.length, 30);
+      // iter-046 (M2): +1 (members.medical).
+      assert.equal(PERMISSIONS.length, 31);
     },
   },
   {
@@ -297,7 +305,7 @@ const tests: TestCase[] = [
       // moderátor bez funkce = dnešní moderátor
       assert.deepEqual([...pw("moderator")].sort(), [...TODAY_MODERATOR].sort());
       // Člen výboru (NULL) = výchozí sada funkce (iter-041 Z7: moderátor + přehled semaforu)
-      assert.deepEqual([...pw("moderator", [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all", "semafor.points"].sort());
+      assert.deepEqual([...pw("moderator", [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all", "semafor.points", "members.medical"] /* iter-046 (M2) */.sort());
       // Prezident a Viceprezident (značka): všechna práva admina KROMĚ nedelegovatelných
       assert.deepEqual([...pw("moderator", [fn("Prezident", [ADMIN_DELEGABLE_MARKER])])].sort(), [...DELEGABLE].sort());
       // i kdyby měla funkce v datech celý katalog, nedelegovatelná práva nedostane
@@ -310,7 +318,7 @@ const tests: TestCase[] = [
       assert.ok(!([...pw("moderator", [fn("X", ["bogus"])])] as string[]).includes("bogus"));
       // T-003b: držitel funkce BEZ role má práva funkce (heslo mu stačí), bez role i funkce nic
       assert.deepEqual([...pw(null, [fn("Prezident", [ADMIN_DELEGABLE_MARKER])])].sort(), [...DELEGABLE].sort());
-      assert.deepEqual([...pw(null, [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all", "semafor.points"].sort());
+      assert.deepEqual([...pw(null, [fn("Člen výboru", null)])].sort(), [...TODAY_MODERATOR, "semafor.view_all", "semafor.points", "members.medical"] /* iter-046 (M2) */.sort());
       // funkce bez role NEdostane výchozí sadu navíc: jen to, co funkce dává
       assert.deepEqual([...pw(null, [fn("X", ["timers.manage"])])], ["timers.manage"]);
       assert.equal(pw(null).size, 0);
@@ -440,7 +448,8 @@ const tests: TestCase[] = [
       }
       assert.deepEqual(problems, []);
       const body = stripComments(functionBody(read("actions/auth.ts"), "changePasswordAction"));
-      assert.ok(body.includes("requirePasswordSession()"));
+      // iter-046 (P1): heslo si mění každý člen, guard je requireAuth (režim určuje decideOwnPasswordMode)
+      assert.ok(body.includes("requireAuth()") && body.includes("decideOwnPasswordMode("));
     },
   },
   {
@@ -652,14 +661,9 @@ const tests: TestCase[] = [
     run: () => {
       const c: SessionCookieState = { memberId: "m1", managementRole: null, authMethod: "password", sv: 2 };
       assert.equal(checkSession(c, { sessionVersion: 2, managementRole: null, hasFunction: true }, "2026-10-19").valid, true);
-      assert.deepEqual(checkSession(c, { sessionVersion: 2, managementRole: null, hasFunction: false }, "2026-10-19"), {
-        valid: false,
-        reason: "no-password-access",
-      });
-      assert.deepEqual(checkSession(c, { sessionVersion: 2, managementRole: null }, "2026-10-19"), {
-        valid: false,
-        reason: "no-password-access",
-      });
+      // iter-046 (P1): heslo bez role i bez funkce platí (dřív no-password-access), práva jsou prázdná
+      assert.equal(checkSession(c, { sessionVersion: 2, managementRole: null, hasFunction: false }, "2026-10-19").valid, true);
+      assert.equal(checkSession(c, { sessionVersion: 2, managementRole: null }, "2026-10-19").valid, true);
       // role v cookie musí dál sedět s DB
       const withRole: SessionCookieState = { ...c, managementRole: "admin" };
       assert.deepEqual(checkSession(withRole, { sessionVersion: 2, managementRole: null, hasFunction: true }, "2026-10-19"), {
@@ -705,7 +709,8 @@ const tests: TestCase[] = [
       // krok 1: heslo s rolí, s funkcí; bez obojího na odkaz
       assert.deepEqual(planLoginStart({ blocked: null, member: { email: "a@x", managementRole: null, passwordHash: "h", hasFunction: true } }), { next: "password" });
       assert.deepEqual(planLoginStart({ blocked: null, member: { email: "a@x", managementRole: "moderator", passwordHash: "h" } }), { next: "password" });
-      assert.deepEqual(planLoginStart({ blocked: null, member: { email: "a@x", managementRole: null, passwordHash: "h", hasFunction: false } }), { next: "link" });
+      // iter-046 (P1, Q8 A): člen s hashem jde na krok hesla i bez role a funkce
+      assert.deepEqual(planLoginStart({ blocked: null, member: { email: "a@x", managementRole: null, passwordHash: "h", hasFunction: false } }), { next: "password" });
       assert.deepEqual(planLoginStart({ blocked: null, member: { email: "a@x", managementRole: null, passwordHash: null, hasFunction: true } }), { next: "link" });
     },
   },
@@ -957,7 +962,7 @@ const tests: TestCase[] = [
     name: "T13. Zneplatnit odkaz: SQL nuluje všechny čtyři sloupce tokenů, token_used = true, session_version + 1, odkazy z mailu; getMemberBy*TokenHash chce token_used = false; žádný updateTokenUsed",
     run: () => {
       const src = stripComments(read("lib/db/queries/members.ts"));
-      const body = src.slice(src.indexOf("export async function revokeMagicLinkGuarded"));
+      const body = src.slice(src.indexOf("export function revokeMagicLinkSql"));
       const fn = body.slice(0, body.indexOf("\n}\n"));
       for (const col of [
         "magic_token_hash = NULL",
@@ -1045,21 +1050,23 @@ const tests: TestCase[] = [
     name: "T16. heslo držitele funkce: jedno místo pravdy hasPasswordAccess, přihlášení, nastavení hesla, reset a funkce; odebrání poslední role i funkce heslo maže",
     run: () => {
       const login = functionBody(stripComments(read("actions/auth.ts")), "loginAction");
-      assert.ok(login.includes("hasPasswordAccess("));
+      // iter-046 (P1): brána „jen vedení“ v loginAction je pryč
+      assert.ok(!login.includes("hasPasswordAccess(") && !login.includes("isLeadershipAccount("));
       assert.ok(login.indexOf("compare(password, usableHash)") < login.indexOf("isMemberActive("), "hláška o pozastavení až po ověření hesla");
       assert.ok(login.indexOf("isMemberActive(") < login.indexOf("createSession"), "session nevznikne");
       assert.ok(read("actions/auth.ts").includes("Přístup máš teď pozastavený. Když je to omyl, ozvi se adminovi."));
       const members = stripComments(read("lib/db/queries/members.ts"));
-      const setPw = members.slice(members.indexOf("export async function setOwnPassword"));
-      assert.ok(setPw.slice(0, setPw.indexOf("\n}\n")).includes("member_function"), "setOwnPassword zná funkci");
-      const reset = members.slice(members.indexOf("export async function resetPasswordGuarded"));
-      assert.ok(reset.slice(0, reset.indexOf("\n}\n")).includes("member_function"));
+      // iter-046 (P1): režim `set` zná funkci, reset už funkci nepotřebuje (stačí e-mail)
+      const setPw = members.slice(members.indexOf("export function setOwnPasswordSql"));
+      assert.ok(setPw.slice(0, setPw.indexOf("\n}\n")).includes("member_function"), "setOwnPasswordSql zná funkci");
+      const reset = members.slice(members.indexOf("export function resetPasswordSql"));
+      assert.ok(reset.slice(0, reset.indexOf("\n}\n")).includes("email IS NOT NULL"));
       // sesazení role: heslo smaže jen ten, kdo nemá ani funkci
       const role = members.slice(members.indexOf("export async function setMemberRoleGuarded"));
       const roleFn = role.slice(0, role.indexOf("\n}\n"));
       assert.ok(/CASE WHEN EXISTS \(SELECT 1 FROM member_function mf WHERE mf\.member_id = member\.id\)/.test(roleFn));
       const access = stripComments(read("actions/member-access.ts"));
-      assert.ok(access.includes("hasPasswordAccess(") && !/target\.managementRole !== "admin" && target\.managementRole !== "moderator"/.test(access));
+      assert.ok(access.includes("isLeadershipAccount(") && !/target\.managementRole !== "admin" && target\.managementRole !== "moderator"/.test(access));
       // odebrání funkce člena bez role: heslo NULL, verze + 1, odkazy set-password zneplatněné
       const fns = stripComments(read("lib/db/queries/member-functions.ts"));
       const rem = fns.slice(fns.indexOf("export async function removeMemberFunctionGuarded"));
@@ -1074,7 +1081,7 @@ const tests: TestCase[] = [
       assert.ok(ass.includes("l.purpose = 'set-password' AND l.used_at IS NULL"), "MIN-1: čekající odkaz");
       assert.ok(!/db\.transaction|\.transaction\(/.test(fns), "LL-003");
       // e-mail s odkazem jde i držiteli funkce bez role
-      assert.ok(read("lib/email/resend.ts").includes('"admin" | "moderator" | "function"'));
+      assert.ok(read("lib/email/resend.ts").includes('"admin" | "moderator" | "function" | "member"'));
       // cron a externí volající kontrolují jen stavový kód 401: cron routes mají vlastní CRON_SECRET a text
       for (const f of ["app/api/cron/close-voting/route.ts", "app/api/cron/renew-tokens/route.ts", "app/api/cron/events-done/route.ts"]) {
         const src = stripComments(read(f));
@@ -1400,14 +1407,14 @@ const tests: TestCase[] = [
       // SQL vrstva: každý zápis do člena má podmínku volajícího (UI jen skrývá, akce hlásí, SQL drží)
       const SQL_FNS: [string, string][] = [
         ["lib/db/queries/members.ts", "updateMemberCompany"],
-        ["lib/db/queries/members.ts", "updateMemberEmail"],
+        ["lib/db/queries/members.ts", "updateMemberEmailSql"],
         ["lib/db/queries/members.ts", "updateMemberJoinedAt"],
         ["lib/db/queries/members.ts", "updateMemberObor"],
         ["lib/db/queries/members.ts", "updateMagicTokenAs"],
-        ["lib/db/queries/members.ts", "revokeMagicLinkGuarded"],
+        ["lib/db/queries/members.ts", "revokeMagicLinkSql"],
         ["lib/db/queries/members.ts", "setMemberRoleGuarded"],
         ["lib/db/queries/members.ts", "deleteMemberGuarded"],
-        ["lib/db/queries/members.ts", "resetPasswordGuarded"],
+        ["lib/db/queries/members.ts", "resetPasswordSql"], // iter-046 (P1): SQL ve stavebnici
         ["lib/db/queries/member-status.ts", "deactivateMemberGuarded"],
         ["lib/db/queries/member-status.ts", "updateDeactivationGuarded"],
         ["lib/db/queries/member-status.ts", "reactivateMemberGuarded"],
@@ -1425,10 +1432,10 @@ const tests: TestCase[] = [
       assert.ok(role.includes("const adminOnlyCond = sql`AND ${actorIsAdminSql(actorId)}`") && role.includes("${adminOnlyCond}"));
       // iter-043: reset hesla hlídá v SQL právo `access.password_reset` (admin v něm je), ne jen roli admin.
       assert.ok(
-        stripComments(functionBody(read("lib/db/queries/members.ts"), "resetPasswordGuarded")).includes(
+        stripComments(functionBody(read("lib/db/queries/members.ts"), "resetPasswordSql")).includes(
           'actorHasPermissionSql(actorId, "access.password_reset")'
         ),
-        "resetPasswordGuarded: SQL pojistka podle práva"
+        "resetPasswordSql: SQL pojistka podle práva"
       );
       for (const [file, name] of [
         ["lib/db/queries/member-functions.ts", "assignMemberFunctionGuarded"],
@@ -1479,7 +1486,7 @@ const tests: TestCase[] = [
       assert.ok(/hasRealPassword\(\{\s*hasHash: !!target\.passwordHash,\s*pendingSetPasswordLink: await hasPendingSetPasswordLink\(target\.id\)/.test(access));
       assert.ok(!/const hadPassword = !!target\.passwordHash/.test(access));
       const ui = stripComments(read("app/(app)/admin/members/MemberAccessControls.tsx"));
-      assert.ok(ui.includes("const canReset = (managementRole !== null || hasFunction) && !isSelf;"), "reset i čekajícímu na odkaz");
+      assert.ok(ui.includes("const canReset = !isSelf;"), "reset i čekajícímu na odkaz");
       assert.ok(ui.includes("!hasFunction && !hasPassword"), "mail jen k první funkci");
       const links = stripComments(read("lib/db/queries/login-links.ts"));
       assert.ok(/hasPendingSetPasswordLink[\s\S]*purpose, "set-password"[\s\S]*isNull\(memberLoginLink\.usedAt\)/.test(links));
@@ -1555,7 +1562,8 @@ const tests: TestCase[] = [
       assert.ok(!read("app/api/members/reorder/route.ts").includes("behind session"));
       assert.ok(!/functions\.manage/.test(read("middleware.ts")));
       const resend = read("lib/email/resend.ts");
-      assert.ok(resend.includes('opts.role === "function" ? "" : ` (role ${roleLabel})`'));
+      // iter-046 (P1): podmínka je `noRole` (funkce nebo běžný člen)
+      assert.ok(resend.includes('noRole ? "" : ` (role ${roleLabel})`'));
       assert.ok(read("app/(app)/admin/members/[id]/page.tsx").includes("(NIT-3)"));
     },
   },
@@ -1618,8 +1626,10 @@ const tests: TestCase[] = [
         assert.ok(pw.includes(t), `auth: ${t}`);
       }
       const form = read("app/(app)/settings/ChangePasswordForm.tsx");
-      for (const t of ["Aktuální heslo", "Nové heslo", "Potvrď nové heslo", "Heslo je změněné."]) assert.ok(form.includes(t), `ChangePasswordForm: ${t}`);
-      assert.ok(read("app/(app)/settings/page.tsx").includes("Zatím nemáš nastavené heslo. Po nastavení se přihlásíš i e-mailem a heslem."));
+      for (const t of ["Aktuální heslo", "Nové heslo", "Potvrď nové heslo"]) assert.ok(form.includes(t), `ChangePasswordForm: ${t}`);
+      // iter-046 (P1): texty hesla jsou v PASSWORD_TEXTS
+      const pwTexts = read("lib/auth/password-texts.ts");
+      for (const t of ["Heslo je změněné.", "Pak se přihlásíš e-mailem a heslem. Odkaz z mailu funguje dál."]) assert.ok(pwTexts.includes(t), `PASSWORD_TEXTS: ${t}`);
       // tykání
       const vykani = /Zkuste|Vyberte|Přidejte|Vytvořte|Kontaktujte|Otevřete|Zadejte|nemáte|vidíte|Potvrďte|Použijte/;
       for (const f of [

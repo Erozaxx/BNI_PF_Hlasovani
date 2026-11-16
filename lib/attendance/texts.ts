@@ -30,3 +30,27 @@ export const UNEXCUSED_TEXTS = {
   /** Náhradník z PALMS (K7). */
   substitutePlaceholder: "neuvedeno",
 } as const;
+
+/**
+ * iter-046 (arch 11, gate změna 6): docházka všech a pohled na den. Bez em dash,
+ * bez jmen. „Chyběl(a) bez omluvy“ je stejný štítek jako v zápisu.
+ */
+export const MEMBERS_VIEW_TEXTS = {
+  title: "Docházka členů",
+  countsTitle: "Absence za posledních 6 měsíců",
+  dayTitle: "Den",
+  prev: "‹ předchozí schůzka",
+  next: "další schůzka ›",
+  show: "Zobrazit",
+  dateLabel: "Datum",
+  present: "Přítomen(a)",
+  substitute: (n: string) => `Přišel náhradník ${n}`,
+  substituteUnknown: "Přišel náhradník",
+  excused: "Omluven(a)",
+  excusedWithSub: (n: string) => `Omluven(a), náhradník ${n}`,
+  unexcused: "Chyběl(a) bez omluvy",
+  restPresent: "Ostatní se počítají jako přítomní.",
+  restOpen: "Ostatní se zatím neomluvili.",
+  empty: "–",
+  nobody: "Nikdo.",
+} as const;

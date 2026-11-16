@@ -4,6 +4,7 @@ import { statusLabel } from "@/lib/meetings/statusLabel";
 import { getGuests } from "@/lib/db/queries/guests";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { can } from "@/lib/auth/permissions";
+import { PASSWORD_TEXTS } from "@/lib/auth/password-texts";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +40,20 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-text-main">Dashboard</h1>
+
+      {/* iter-046 (arch 8.6): člen bez hesla dostane výzvu nahoře */}
+      {session.passwordMode === "set" && (
+        <Card>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <p className="text-text-main">{PASSWORD_TEXTS.dashboardCard}</p>
+            <Link href="/settings">
+              <Button variant="secondary" size="sm">
+                {PASSWORD_TEXTS.setButton}
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* Meeting status */}
       {upcomingMeeting ? (

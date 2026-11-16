@@ -10,6 +10,7 @@ import {
   getMemberAuthState,
   getMemberById,
   resetPasswordGuarded,
+  revokeMagicLinkGuarded,
   setMemberRoleGuarded,
 } from "@/lib/db/queries/members";
 import { getManagerContext } from "@/lib/db/queries/member-status";
@@ -28,8 +29,9 @@ import { decideFunctionChange, functionChangeErrorText } from "@/lib/auth/functi
 import {
   ADMIN_ONLY_MESSAGE,
   decidePasswordReset,
-  hasPasswordAccess,
+  isLeadershipAccount,
   hasRealPassword,
+  can,
   isAdminSession,
   mayChangeMember,
   NO_PERMISSION_MESSAGE,
@@ -43,6 +45,7 @@ import {
   rotateSetPasswordLinkUrl,
 } from "@/lib/auth/login-link";
 import { sendSetPasswordLinkEmail } from "@/lib/email/resend";
+import { PASSWORD_TEXTS } from "@/lib/auth/password-texts";
 import { logOpsEvent } from "@/lib/ops/event-log";
 import type { OpsEventInput } from "@/lib/ops/types";
 import type { ActionResult } from "@/lib/types";
@@ -93,23 +96,21 @@ function errClass(err: unknown): string {
 }
 
 /**
- * T-003b: má člen přístup s heslem (role NEBO funkce)? Vrací označení pro mail
- * (`admin`, `moderator`, nebo `function` u držitele funkce bez role), jinak
- * `null`. Jediné rozhodnutí je `hasPasswordAccess` v lib/auth/permissions.ts.
+ * iter-046 (P1): označení pro mail s odkazem na heslo. Heslo smí mít každý
+ * člen, takže vrací vždy hodnotu: `admin`, `moderator`, `function` (držitel
+ * funkce bez role), nebo `member` (běžný člen).
  */
 async function passwordAccessOf(target: {
   id: string;
   managementRole: string | null;
-}): Promise<{ role: "admin" | "moderator" | "function" } | null> {
+}): Promise<{ role: "admin" | "moderator" | "function" | "member" }> {
   const state = await getMemberAuthState(target.id);
   const role =
     target.managementRole === "admin" || target.managementRole === "moderator"
       ? target.managementRole
       : null;
-  if (!hasPasswordAccess({ managementRole: role, hasFunction: !!state?.hasFunction })) {
-    return null;
-  }
-  return { role: role ?? "function" };
+  if (role) return { role };
+  return { role: isLeadershipAccount({ managementRole: null, hasFunction: !!state?.hasFunction }) ? "function" : "member" };
 }
 
 /** Hlášky pro důvody z `decidePasswordReset` (texty stejné jako před iter-043). */
@@ -123,8 +124,8 @@ function passwordResetDeniedText(reason: PasswordResetDenied): string {
       return ADMIN_ONLY_MESSAGE;
     case "not-found":
       return "Člen nebyl nalezen.";
-    case "no-access":
-      return "Heslo mají jen členové vedení.";
+    case "no-email":
+      return PASSWORD_TEXTS.noEmailError;
   }
 }
 
@@ -142,7 +143,7 @@ async function sendSetPasswordLink(opts: {
   memberId: string;
   email: string;
   name: string;
-  role: "admin" | "moderator" | "function";
+  role: "admin" | "moderator" | "function" | "member";
   reason: "promoted" | "reset";
   actorName: string;
 }): Promise<boolean> {
@@ -160,7 +161,7 @@ async function mailSetPasswordLink(opts: {
   memberId: string;
   email: string;
   name: string;
-  role: "admin" | "moderator" | "function";
+  role: "admin" | "moderator" | "function" | "member";
   reason: "promoted" | "reset" | "resend";
   actorName: string;
   url: string;
@@ -251,10 +252,15 @@ export async function setMemberRoleAction(
     // nemá ani funkci (`setMemberRoleGuarded` režim `clear`).
     // MIN-1: zámkový hash (čeká na odkaz „nastav si heslo“) není heslo, člen
     // s ním dostane pozvánku znovu.
-    const hadPassword = hasRealPassword({
+    // iter-046 (Q9 A): běžný člen s vlastním heslem ho při povýšení na roli
+    // neponechá (heslo zvolené bez dozoru vedení práva vedení nedostane), `keep`
+    // jen u cíle, který už funkci má (jeho heslo vedení už zná).
+    const hadRealPassword = hasRealPassword({
       hasHash: !!target.passwordHash,
       pendingSetPasswordLink: await hasPendingSetPasswordLink(target.id),
     });
+    const targetState = await getMemberAuthState(target.id);
+    const hadPassword = hadRealPassword && !!targetState?.hasFunction;
     const password =
       decision.kind === "promote" && !hadPassword
         ? ({ mode: "promote", hash: await lockHash() } as const)
@@ -339,22 +345,27 @@ export async function resetMemberPasswordAction(
     if (denied) return { success: false, error: denied };
 
     const target = await getMemberById(parsedId.data);
-    // T-003b: heslo má držitel role NEBO funkce.
+    // iter-046 (P1): reset jde komukoli s e-mailem.
     const access = target ? await passwordAccessOf(target) : null;
     const decision = decidePasswordReset({
       actorId: actor.memberId,
       actorIsAdmin: isAdminSession(actor),
       actorMayReset: true,
       target: target
-        ? { id: target.id, managementRole: target.managementRole, hasPasswordAccess: !!access }
+        ? { id: target.id, managementRole: target.managementRole, hasEmail: !!target.email?.trim() }
         : null,
     });
     if (!decision.ok || !target || !access) {
-      return { success: false, error: passwordResetDeniedText(decision.ok ? "no-access" : decision.reason) };
+      return { success: false, error: passwordResetDeniedText(decision.ok ? "not-found" : decision.reason) };
     }
 
     const row = await resetPasswordGuarded(target.id, actor.memberId, await lockHash());
     if (!row) return { success: false, error: ROLE_CHANGED_ELSEWHERE };
+
+    // iter-046 (T-005b, rozhodnutí Toma): reset zneplatní i osobní odkaz člena,
+    // stejná funkce jako „Zneplatnit odkaz“. Jinak by ukradený odkaz dál přihlašoval.
+    const revoked = await revokeMagicLinkGuarded(target.id, actor.memberId);
+    if (!revoked) return { success: false, error: ROLE_CHANGED_ELSEWHERE };
 
     // Neaktivnímu se odkaz neposílá (heslo i session jsou už zrušené).
     const mailSent =
@@ -384,7 +395,8 @@ export async function resetMemberPasswordAction(
     }));
 
     revalidatePath("/admin/members");
-    return { success: true, data: { mailSent, email: row.email } };
+    // iter-046 (gate změna 3): e-mail se vrací jen volajícímu, který ho vidí i v seznamu členů.
+    return { success: true, data: { mailSent, email: can(actor, "members.manage") ? row.email : null } };
   } catch (err) {
     console.error(`[resetMemberPasswordAction] failed memberId=${memberId}: ${errClass(err)}`);
     return { success: false, error: "Heslo se nepodařilo zrušit." };
@@ -422,9 +434,6 @@ export async function resendSetPasswordLinkAction(
     const target = await getMemberById(parsedId.data);
     if (!target) return { success: false, error: "Člen nebyl nalezen." };
     const access = await passwordAccessOf(target);
-    if (!access) {
-      return { success: false, error: "Odkaz pro heslo jde jen členovi vedení." };
-    }
     if (!target.email) {
       return { success: false, error: "Člen nemá e-mail. Nejdřív mu ho doplň." };
     }
@@ -464,7 +473,10 @@ export async function resendSetPasswordLinkAction(
         : "Odkaz pro nastavení hesla se nepodařilo poslat znovu.",
     }));
 
-    return { success: true, data: { outcome: "sent", mailSent, email: target.email } };
+    return {
+      success: true,
+      data: { outcome: "sent", mailSent, email: can(actor, "members.manage") ? target.email : null },
+    };
   } catch (err) {
     console.error(`[resendSetPasswordLinkAction] failed memberId=${memberId}: ${errClass(err)}`);
     return { success: false, error: "Odkaz se nepodařilo poslat." };
@@ -497,9 +509,6 @@ export async function issueSetPasswordLinkForCopyAction(
 
     const target = await getMemberById(parsedId.data);
     if (!target) return { success: false, error: "Člen nebyl nalezen." };
-    if (!(await passwordAccessOf(target))) {
-      return { success: false, error: "Odkaz pro heslo jde jen členovi vedení." };
-    }
     if (!isMemberActive(target, pragueToday())) {
       return { success: false, error: INACTIVE_PASSWORD_LINK_TEXT };
     }

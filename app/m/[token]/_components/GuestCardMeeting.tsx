@@ -32,6 +32,8 @@ export interface GuestCardMeetingProps {
   voteSummary: VoteSummary;
   voteDetail: VoteDetailItem[];
   phase: "active" | "voting" | "closed";
+  /** iter-046: člen s medical nehlasuje, tlačítka se nevykreslí. */
+  voteBlocked?: "medical" | null;
 }
 
 export function GuestCardMeeting({
@@ -48,6 +50,7 @@ export function GuestCardMeeting({
   voteSummary,
   voteDetail,
   phase,
+  voteBlocked = null,
 }: GuestCardMeetingProps) {
   const [notes, setNotes] = useState<GuestNote[]>(initialNotes);
 
@@ -58,7 +61,7 @@ export function GuestCardMeeting({
   const showNoteForm = phase === "active" || phase === "voting";
   // Badge is now owned by MeetingVoteButtons in voting phase;
   // show it here only outside voting (e.g. closed phase, after reload).
-  const showVoteButtons = phase === "voting" && votingEnabled;
+  const showVoteButtons = phase === "voting" && votingEnabled && !voteBlocked;
   const showVoteBadgeHere = !showVoteButtons && initialVote !== null;
 
   return (

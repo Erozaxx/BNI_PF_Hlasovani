@@ -74,3 +74,36 @@ export function meetingTokenActionError(
   if (reason === "revoked") return "Hlas se neuložil, odkaz byl zrušen.";
   return "Hlas se neuložil, odkaz už neplatí. Otevři odkaz z posledního mailu.";
 }
+
+/**
+ * iter-046 (arch 6, 11): texty blokace hlasu člena s medical. Medical je
+ * zdravotní údaj, texty říkají jen to, co člen sám potřebuje vědět.
+ */
+export const VOTE_TEXTS = {
+  medical: "Teď máš medical, hlasovat nemůžeš.",
+  /** Hlas neaktivního člena (F-07), bez slova medical. */
+  inactive: "Člen je neaktivní.",
+  /** Odmítnutí poslání nebo obnovení odkazu členovi s medical (vedení). */
+  linkMedical: "Člen má medical, hlasovat teď nemůže.",
+  /** Štítek člena s medical v přehledu odkazů schůzky. */
+  listLabel: "medical, nehlasuje",
+  /** Neutrální varianty pro vedení bez `members.medical` (F-01, L-1): slovo medical se k nim nedostane. */
+  linkExcused: "Člen je omluven(a), hlasovat teď nemůže.",
+  listLabelExcused: "omluven(a), nehlasuje",
+  skipExcused: "přeskočeno: omluven(a)",
+  skipMedical: "přeskočeno: medical",
+} as const;
+
+/**
+ * iter-046 (F-01): důvod `medical` v odpovědi rozesílky jde ven jen s právem
+ * `members.medical`. Ostatním se vrátí neutrální `excused`. Rozhoduje server,
+ * klient jen vykreslí, co dostal.
+ */
+export function redactMedicalOutcome<
+  O extends { status: string; reason?: string }
+>(outcome: O, canSeeMedical: boolean): O | { status: "skipped"; reason: "excused" } {
+  if (!canSeeMedical && outcome.status === "skipped" && outcome.reason === "medical") {
+    return { status: "skipped", reason: "excused" };
+  }
+  return outcome;
+}

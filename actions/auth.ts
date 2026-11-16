@@ -3,10 +3,20 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { compare, hash } from "bcryptjs";
-import { getMemberByEmail, getMemberById, setOwnPassword } from "@/lib/db/queries/members";
+import {
+  getMemberAuthState,
+  getMemberByEmail,
+  getMemberById,
+  setOwnPasswordGuarded,
+} from "@/lib/db/queries/members";
+import { sendPasswordChangedNoticeEmail } from "@/lib/email/resend";
 import { createSession, destroySession } from "@/lib/auth/session";
-import { requirePasswordSession } from "@/lib/auth/guards";
-import { hasPasswordAccess } from "@/lib/auth/permissions";
+import { requireAuth } from "@/lib/auth/guards";
+import {
+  decideOwnPasswordMode,
+  hasRealPassword,
+  isLeadershipAccount,
+} from "@/lib/auth/permissions";
 import { isMemberActive, pragueToday } from "@/lib/members/activity";
 import { getClientIp, throttleClear, throttleHit } from "@/lib/auth/throttle";
 import {
@@ -14,14 +24,16 @@ import {
   THROTTLE_WINDOW_MINUTES,
   findBlockedRule,
   normalizeEmail,
+  passwordChangeThrottleRule,
   passwordLoginPairKey,
   passwordLoginThrottleRules,
+  PASSWORD_TEXTS,
 } from "@/lib/auth/login-link-core";
 import type { ActionResult } from "@/lib/types";
 
 /**
  * Pevný bcrypt hash (cost 12) náhodného řetězce, který nikdo nezná (iter-032,
- * N2). Porovnává se proti němu, když e-mail neexistuje nebo člen nemá roli,
+ * N2). Porovnává se proti němu, když e-mail neexistuje nebo člen nemá heslo,
  * ať doba odpovědi neprozradí, kdo má účet vedení.
  */
 const DUMMY_PASSWORD_HASH =
@@ -42,7 +54,8 @@ const ACCESS_PAUSED_TEXT = "Přístup máš teď pozastavený. Když je to omyl,
  * - dummy bcrypt u neexistujícího e-mailu a člena bez role,
  * - session nese `session_version` z řádku člena,
  * - po úspěchu se smaže jen klíč dvojice,
- * - iter-037 (T-003b): heslo má držitel role NEBO funkce (funkce bez role stačí),
+ * - iter-046 (P1): heslo smí mít každý člen, brána „jen vedení“ je pryč,
+ *   práva dál počítá jen `permissionsFor` z role a funkce v DB,
  *   neaktivní člen se nepřihlásí ani se správným heslem (K18: hláška až po
  *   ověření hesla, bez hesla se o deaktivaci nic nedozví, session nevznikne).
  */
@@ -78,18 +91,11 @@ export async function loginAction(
     return { success: false, error: "Přihlášení se nepovedlo, zkus to znovu." };
   }
 
-  const hasAccess =
-    !!member &&
-    hasPasswordAccess({
-      managementRole: member.managementRole,
-      hasFunction: member.hasFunction,
-    });
-  const usableHash =
-    member && hasAccess && member.passwordHash ? member.passwordHash : DUMMY_PASSWORD_HASH;
+  const usableHash = member?.passwordHash ?? DUMMY_PASSWORD_HASH;
   const passwordValid = await compare(password, usableHash);
 
   // Generic error - no user enumeration
-  if (!member || !hasAccess || !member.passwordHash || !passwordValid) {
+  if (!member || !member.passwordHash || !passwordValid) {
     return { success: false, error: INVALID_CREDENTIALS };
   }
 
@@ -122,14 +128,17 @@ export async function loginAction(
 }
 
 /**
- * Change password action for admin/moderator.
+ * Nastavení a změna vlastního hesla (iter-046, arch 8.4).
  *
- * - Requires an active (verified) management session
- * - Verifies current password via bcrypt.compare
- * - Validates new password (min 8 chars, confirmation match)
- * - iter-032 (5.4, N6, F10): odmítne heslo shodné se současným, jeden UPDATE
- *   uloží hash a zvýší `session_version`, nová cookie s novou verzí drží
- *   aktuální zařízení přihlášené, ostatní session končí.
+ * Režim určuje `decideOwnPasswordMode` z čerstvého stavu v DB:
+ * - `set`: běžný člen bez skutečného hesla, staré heslo se nechce,
+ * - `change`: kdokoli se skutečným heslem, staré heslo + throttle `pw-change`
+ *   (limit 10 za 10 minut, před `compare`),
+ * - `via-link`: vedení bez hesla, v aplikaci si ho nenastaví (jen odkaz od vedení).
+ * Zápis je jeden příkaz s pojistkami (`setOwnPasswordGuarded`), nová cookie
+ * drží aktuální zařízení přihlášené, ostatní session končí. Až po zápisu jde
+ * členovi kontrolní mail (gate změna 2, R6), jeho selhání heslo nezruší a do
+ * logu nejde adresa.
  */
 export async function changePasswordAction(
   currentPassword: string,
@@ -148,7 +157,7 @@ export async function changePasswordAction(
     return { success: false, error: "Nová hesla se neshodují." };
   }
 
-  const auth = await requirePasswordSession();
+  const auth = await requireAuth();
   if (!auth.success) {
     return { success: false, error: auth.error };
   }
@@ -160,10 +169,35 @@ export async function changePasswordAction(
       return { success: false, error: "Uživatel nenalezen." };
     }
 
-    // If member already has a password, verify current password first
-    if (member.passwordHash) {
+    const state = await getMemberAuthState(session.memberId);
+    if (!state) {
+      return { success: false, error: "Uživatel nenalezen." };
+    }
+    const mode = decideOwnPasswordMode({
+      hasRealPassword: hasRealPassword({
+        hasHash: !!member.passwordHash,
+        pendingSetPasswordLink: !!state.pendingSetPassword,
+      }),
+      hasHash: !!member.passwordHash,
+      leadership: isLeadershipAccount({
+        managementRole: member.managementRole,
+        hasFunction: !!state.hasFunction,
+      }),
+    });
+
+    if (mode === "via-link") {
+      return { success: false, error: PASSWORD_TEXTS.viaLinkError };
+    }
+
+    let write: Parameters<typeof setOwnPasswordGuarded>[2] = { mode: "set" };
+    if (mode === "change" && member.passwordHash) {
       if (!currentPassword) {
         return { success: false, error: "Zadej aktuální heslo." };
+      }
+      const rule = passwordChangeThrottleRule(session.memberId);
+      const counts = await throttleHit([rule.key], THROTTLE_WINDOW_MINUTES);
+      if (findBlockedRule([rule], counts)) {
+        return { success: false, error: THROTTLE_BLOCKED_TEXT };
       }
       const currentValid = await compare(currentPassword, member.passwordHash);
       if (!currentValid) {
@@ -173,12 +207,31 @@ export async function changePasswordAction(
       if (sameAsCurrent) {
         return { success: false, error: "Nové heslo musí být jiné než současné." };
       }
+      write = { mode: "change", verifiedHash: member.passwordHash };
     }
 
     const newHash = await hash(newPassword, 12);
-    const updated = await setOwnPassword(session.memberId, newHash);
+    const updated = await setOwnPasswordGuarded(session.memberId, newHash, write);
     if (!updated) {
       return { success: false, error: "Na tohle nemáš oprávnění." };
+    }
+
+    // Kontrolní mail hned po zápisu a před createSession (L-2): výjimka v cookie
+    // ho nesmí spolknout. Sestavení argumentů je uvnitř try (LL-011).
+    if (member.email) {
+      try {
+        const sent = await sendPasswordChangedNoticeEmail({
+          memberId: member.id,
+          to: member.email,
+          name: updated.name,
+        });
+        if (!sent.success) {
+          console.error(`[changePasswordAction] notice mail neodešel memberId=${member.id}`);
+        }
+      } catch (err) {
+        const cls = err instanceof Error ? err.name : typeof err;
+        console.error(`[changePasswordAction] notice mail exception memberId=${member.id}: ${cls}`);
+      }
     }
 
     await createSession(

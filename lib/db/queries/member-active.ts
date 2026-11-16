@@ -18,11 +18,40 @@ import {
 } from "@/lib/auth/permissions";
 
 /** Povolené aliasy tabulky `member` v dotazech. Přidávat jen pevné literály. */
-export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o" | "gm" | "act";
+export type MemberAlias = "member" | "m" | "p" | "hm" | "rm" | "pm" | "t" | "o" | "gm" | "act" | "em";
 
 export function memberActiveSql(alias: MemberAlias): SQL {
   const a = sql.raw(alias);
   return sql`(${a}.deactivated_at IS NULL OR COALESCE(${a}.inactive_until < (now() AT TIME ZONE 'Europe/Prague')::date, false))`;
+}
+
+/**
+ * iter-046 (arch 4.1): medical člena platí v den `day` (SQL protějšek
+ * `isMedicalOn` z lib/members/medical.ts). `day` je pražský dnešek (`TODAY_SQL`)
+ * nebo bind parametr `${date}::date`, alias jen z pevných literálů.
+ */
+export function memberMedicalOnSql(alias: MemberAlias, day: SQL): SQL {
+  const a = sql.raw(alias);
+  return sql`(${a}.medical_until IS NOT NULL AND ${day} BETWEEN ${a}.medical_from AND ${a}.medical_until)`;
+}
+
+/**
+ * iter-046 (gate změna 4): jedna podmínka „medical období platí v den `day`“
+ * pro všechna místa (krok 0 uzávěrky, zápis, souhrny dne, pohled všech).
+ * Období platí jen tam, kde by člen nebyl přítomen: explicitní zápis
+ * `present`, `substitute` nebo `unexcused` i omluva s náhradníkem mají
+ * přednost. `writePresenceGuarded` (`excuse_ok`) používá holé
+ * `memberMedicalOnSql`.
+ */
+export function medicalPeriodAppliesSql(alias: MemberAlias, day: SQL): SQL {
+  const a = sql.raw(alias);
+  return sql`(${memberMedicalOnSql(alias, day)}
+    AND NOT EXISTS (SELECT 1 FROM attendance_record mpr
+                    WHERE mpr.member_id = ${a}.id AND mpr.attendance_date = ${day}
+                      AND mpr.status IN ('present', 'substitute', 'unexcused'))
+    AND NOT EXISTS (SELECT 1 FROM member_absence mpa
+                    WHERE mpa.member_id = ${a}.id AND mpa.absence_date = ${day}
+                      AND mpa.substitute_name IS NOT NULL))`;
 }
 
 /**

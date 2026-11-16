@@ -111,3 +111,14 @@ export function deleteMemberScopeText(settings: ChapterSettings): string {
   const last = parts.pop() as string;
   return `${parts.join(", ")} i ${last}`;
 }
+
+/**
+ * iter-046 (arch 11): nápověda „Přihlášení heslem“ pro všechny členy, dvě věty:
+ * kde se heslo nastaví a kdo ho resetuje. Nápověda vyká.
+ */
+export const HELP_PASSWORD_LOGIN =
+  "Heslo si nastavíte v menu Účet, „Nastavit heslo“, a pak se přihlašujete e-mailem a heslem. Odkaz z mailu funguje dál. Když heslo zapomenete, napište někomu z vedení, pošle vám odkaz pro nové.";
+
+/** iter-046 (arch 11): jedna věta o záložce Členové v Docházce. */
+export const HELP_ATTENDANCE_MEMBERS =
+  "V záložce Členové vidíte počty absencí všech za posledních 6 měsíců a u zvoleného dne, kdo je omluvený, kdo přišel a kdo chyběl bez omluvy.";

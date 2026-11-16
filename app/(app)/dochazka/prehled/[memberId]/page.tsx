@@ -12,7 +12,7 @@ import {
   absenceLine,
   absenceWindowStart,
   formatWeekdayFull,
-  isAbsenceStatus,
+  isCountedAbsence,
 } from "@/lib/attendance/rules";
 import { OVERVIEW_TEXTS } from "@/lib/attendance/sheet";
 import {
@@ -27,9 +27,16 @@ import { AttendanceTabs } from "@/components/attendance/AttendanceTabs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function resultText(status: string, substituteName: string | null, excused: boolean): string {
+function resultText(
+  status: string,
+  substituteName: string | null,
+  excused: boolean,
+  medical: boolean
+): string {
   if (status === "present") return "přítomen";
   if (status === "substitute") return `náhradník ${substituteName ?? ""}`.trim();
+  // iter-046: medical omluva se nepočítá do absencí, vedení ji vidí.
+  if (medical && excused) return "omluven(a), medical";
   return excused && status !== "unexcused" ? "absence, omluven(a)" : "absence, bez omluvy";
 }
 
@@ -60,7 +67,7 @@ export default async function AttendanceMemberDetailPage({
     can(session, "attendance.audit_view") ? listAuditForMember(memberId) : Promise.resolve(null),
   ]);
 
-  const absences = days.filter((d) => isAbsenceStatus(d.status)).length;
+  const absences = days.filter((d) => isCountedAbsence(d)).length;
   const warn = absences >= ABSENCE_LIMIT;
 
   return (
@@ -98,7 +105,7 @@ export default async function AttendanceMemberDetailPage({
                 >
                   {formatWeekdayFull(d.date)}
                 </Link>
-                , {resultText(d.status, d.substituteName, d.excused)}
+                , {resultText(d.status, d.substituteName, d.excused, d.medical)}
               </li>
             ))}
           </ul>
@@ -112,7 +119,10 @@ export default async function AttendanceMemberDetailPage({
         ) : (
           <ul className="space-y-1 text-sm text-text-main">
             {upcoming.map((a) => (
-              <li key={a.date}>{absenceLine(a.date, a.substituteName)}</li>
+              <li key={a.date}>
+                {absenceLine(a.date, a.substituteName)}
+                {a.medical ? ", medical" : ""}
+              </li>
             ))}
           </ul>
         )}

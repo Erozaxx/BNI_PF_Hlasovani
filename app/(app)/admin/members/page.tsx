@@ -15,12 +15,15 @@ import { can, hasRealPassword } from "@/lib/auth/permissions";
 import { listPendingSetPasswordMemberIds } from "@/lib/db/queries/login-links";
 import { roleLabel } from "@/lib/members/labels";
 import { LeadershipPasswordList } from "./LeadershipPasswordList";
+import { MedicalList } from "./MedicalList";
+import { MAX_MEDICAL_DAYS, medicalLabel } from "@/lib/members/medical";
+import { addDaysToDateString } from "@/lib/members/activity";
 
 export default async function AdminMembersPage() {
   // iter-043 (K16 A): s `members.manage` dnešní stránka, jen s `access.password_reset`
   // (moderátor, Člen výboru) zúžený seznam „Hesla vedení“.
   const session = await requirePageSession({
-    anyOf: ["members.manage", "access.password_reset"],
+    anyOf: ["members.manage", "access.password_reset", "members.medical"],
   });
 
   if (!can(session, "members.manage")) {
@@ -31,12 +34,12 @@ export default async function AdminMembersPage() {
     ]);
     const todayPrague = pragueToday();
     const pending = new Set(pendingIds);
+    // iter-046 (P1, gate změna 3): všichni členové, bez e-mailů (jen `hasEmail`).
     const rows = allMembers
-      .filter((m) => m.managementRole !== null || functions.has(m.id))
       .map((m) => ({
         id: m.id,
         name: m.name,
-        email: m.email ?? null,
+        hasEmail: Boolean(m.email?.trim()),
         functionName: functions.get(m.id)?.name ?? null,
         roleLabel: roleLabel(m.managementRole),
         isAdmin: m.managementRole === "admin",
@@ -47,7 +50,30 @@ export default async function AdminMembersPage() {
         isInactive: !isMemberActive(m, todayPrague),
         isSelf: m.id === session.memberId,
       }));
-    return <LeadershipPasswordList rows={rows} />;
+    // iter-046 (arch 4.4): karta Medical pro držitele `members.medical`.
+    // Do klienta jde jen id, jméno a konec ještě neskončeného období.
+    const medicalRows = can(session, "members.medical")
+      ? allMembers
+          .filter((m) => isMemberActive(m, todayPrague) && m.id !== session.memberId)
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            until: medicalLabel(m, todayPrague) ? (m.medicalUntil ?? null) : null,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name, "cs"))
+      : [];
+    return (
+      <div className="space-y-6">
+        {can(session, "access.password_reset") && <LeadershipPasswordList rows={rows} />}
+        {can(session, "members.medical") && (
+          <MedicalList
+            rows={medicalRows}
+            todayPrague={todayPrague}
+            maxDate={addDaysToDateString(todayPrague, MAX_MEDICAL_DAYS)}
+          />
+        )}
+      </div>
+    );
   }
 
   const [members, interviewCounts, dueList, functionMap] = await Promise.all([
@@ -98,6 +124,7 @@ export default async function AdminMembersPage() {
               managementRole: m.managementRole ?? null,
               functionName: functionMap.get(m.id)?.name ?? null,
               inactiveLabel: deactivationLabel(m, today, { withDate: true }),
+              medicalLabel: medicalLabel(m, today),
               attendanceManager: m.attendanceManagerSince != null,
               interviewCount: interviewCounts.get(m.id) ?? 0,
               due5: dueByMember.get(m.id)?.due5 ?? false,

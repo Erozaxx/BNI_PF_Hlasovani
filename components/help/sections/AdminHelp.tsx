@@ -84,7 +84,7 @@ export function AdminHelp({
         intro={
           canManageAccess
             ? undefined
-            : "Admina a funkce členů přiděluje jen admin. Heslo členovi vedení zruší a pošle nový odkaz i Prezident a Viceprezident. Prezident a Viceprezident mají jinak práva admina, účet admina ale měnit nemůžou."
+            : "Admina a funkce členů přiděluje jen admin. Heslo členovi zruší a pošle nový odkaz i Prezident a Viceprezident. Prezident a Viceprezident mají jinak práva admina, účet admina ale měnit nemůžou."
         }
         steps={
           canManageAccess
@@ -95,7 +95,7 @@ export function AdminHelp({
               ]
             : undefined
         }
-        note="Člen výboru má práva moderátora. Prezident a Viceprezident mají práva admina kromě přidělování admina a funkcí, to dělá jen admin. Reset hesla členovi vedení smí i moderátor a funkce Prezident, Viceprezident a Člen výboru. Odkaz ke zkopírování vidí jen admin. Účet admina (roli, funkci, heslo, osobní odkaz, údaje, deaktivaci i smazání) mění jen admin. Člen má nejvýš jednu funkci. Odkazem z mailu se vedení přihlásí jen s právy člena. Funkci Prezident nebo Viceprezident dávejte jen tomu, komu svěříte mazání a správu členů."
+        note="Člen výboru má práva moderátora. Prezident a Viceprezident mají práva admina kromě přidělování admina a funkcí, to dělá jen admin. Reset hesla člena smí i moderátor a funkce Prezident, Viceprezident a Člen výboru. Odkaz ke zkopírování vidí jen admin. Účet admina (roli, funkci, heslo, osobní odkaz, údaje, deaktivaci i smazání) mění jen admin. Člen má nejvýš jednu funkci. Odkazem z mailu se vedení přihlásí jen s právy člena. Funkci Prezident nebo Viceprezident dávejte jen tomu, komu svěříte mazání a správu členů."
         faq={canManageAccess ? [
           {
             q: "Člen zapomněl heslo.",

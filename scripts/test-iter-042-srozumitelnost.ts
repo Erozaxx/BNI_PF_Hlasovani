@@ -88,6 +88,8 @@ function uiTexts(src: string): string[] {
     if (m[4] !== undefined && /[;=]|\bconst\b|\bfunction\b|\breturn\b/.test(text)) continue;
     // Jednoslovné klíče malými písmeny ("clen", "pick_one") jsou kódy, ne text.
     if (/^[a-z_]+$/.test(text.trim())) continue;
+    // iter-046 (P1): URL cesty (`/dochazka/clenove`) jsou kód, ne text pro uživatele.
+    if (/^\/[\w/.-]+/.test(text.trim())) continue;
     if (/\p{L}/u.test(text)) out.push(text);
   }
   return out;
@@ -492,8 +494,10 @@ const tests: TestCase[] = [
       assert.ok(admin.includes('title="Nastavení chapteru"') && admin.includes("{canManageSettings && ("));
       assert.ok(read("app/(app)/help/page.tsx").includes('can(session, "chapter.settings")'));
       // menu a nápověda sedí: Heslo místo Nastavení v bloku Účet
-      assert.ok(read("app/(app)/layout.tsx").includes(">Heslo<"));
-      assert.ok(read("components/layout/MobileNav.tsx").includes("Heslo"));
+      // iter-046 (P1): popisek je z PASSWORD_TEXTS (Nastavit heslo bez hesla, jinak Heslo)
+      assert.ok(read("app/(app)/layout.tsx").includes("{show.passwordLabel}"));
+      assert.ok(read("lib/auth/password-texts.ts").includes('menuChange: "Heslo"'));
+      assert.ok(read("components/layout/MobileNav.tsx").includes("show.passwordLabel"));
       assert.ok(!norm(read("components/help/sections/ModeratorHelp.tsx")).includes("V Nastavení, „Změnit heslo“"));
     },
   },

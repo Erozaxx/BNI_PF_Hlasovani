@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { resendSetPasswordLinkAction, resetMemberPasswordAction } from "@/actions/member-access";
+import { PASSWORD_TEXTS } from "@/lib/auth/password-texts";
 
 /**
  * iter-043 (gate K13 A, K15 A): reset hesla člena vedení pro každého s právem
@@ -12,6 +13,11 @@ import { resendSetPasswordLinkAction, resetMemberPasswordAction } from "@/action
  * Převzatá část z `MemberAccessControls`, jen heslo: „Poslat odkaz pro nové
  * heslo“, potvrzení adresy, výsledek s „Poslat znovu“. Odkaz ke zkopírování
  * tu NENÍ, ten smí jen admin (zkopírovaný odkaz by si volající otevřel sám).
+ *
+ * iter-046 (gate změna 3): `email` je `null` v zúženém seznamu (moderátor bez
+ * funkce e-maily členů nevidí, do klienta nejdou), pak se potvrzuje jménem
+ * a `hasEmail` rozhoduje, jestli reset jde. Plný pohled s `members.manage`
+ * dál dostane `email` a ověřuje adresu zaškrtnutím.
  *
  * Stav drží komponenta, ne stránka: po `router.refresh()` výsledkové okno
  * nesmí zmizet (LL-017).
@@ -23,6 +29,8 @@ interface PasswordResetControlsProps {
   memberId: string;
   memberName: string;
   email: string | null;
+  /** Člen má e-mail (i když ho klient nedostal). */
+  hasEmail: boolean;
   isInactive: boolean;
 }
 
@@ -30,6 +38,7 @@ export function PasswordResetControls({
   memberId,
   memberName,
   email,
+  hasEmail,
   isInactive,
 }: PasswordResetControlsProps) {
   const router = useRouter();
@@ -104,6 +113,8 @@ export function PasswordResetControls({
   }
 
   const resultEmail = result?.email ?? email ?? "";
+  // Bez adresy v klientu se potvrzuje jménem, adresu člen ověřovat nemůže.
+  const showEmail = email !== null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -113,7 +124,7 @@ export function PasswordResetControls({
             variant="secondary"
             size="sm"
             className="min-h-[44px]"
-            disabled={loading}
+            disabled={loading || !hasEmail}
             onClick={startConfirm}
           >
             Poslat odkaz pro nové heslo
@@ -131,18 +142,21 @@ export function PasswordResetControls({
             </p>
           ) : (
             <p>
-              Současné heslo přestane platit hned a člen se odhlásí. Odkaz pro nové heslo odejde
-              na adresu:
+              {showEmail
+                ? "Současné heslo přestane platit hned a člen se odhlásí. Odkaz pro nové heslo odejde na adresu:"
+                : "Současné heslo přestane platit hned a člen se odhlásí."}
             </p>
           )}
-          {isInactive ? null : email ? (
+          {isInactive ? null : !showEmail ? (
+            <p className="text-lg font-semibold break-words">
+              {PASSWORD_TEXTS.confirmReset(memberName)}
+            </p>
+          ) : email ? (
             <p className="text-lg font-semibold break-all">{email}</p>
           ) : (
-            <p className="text-danger">
-              Člen nemá e-mail. Nejdřív mu ho doplňte ve správě členů, odkaz pro heslo jde na e-mail.
-            </p>
+            <p className="text-danger">{PASSWORD_TEXTS.noEmailError}</p>
           )}
-          {email && !isInactive && (
+          {showEmail && email && !isInactive && (
             <label className="flex min-h-[44px] items-start gap-2">
               <input
                 type="checkbox"
@@ -159,7 +173,7 @@ export function PasswordResetControls({
               size="sm"
               className="min-h-[44px]"
               loading={loading}
-              disabled={!isInactive && (!email || !emailConfirmed)}
+              disabled={!isInactive && (!hasEmail || (showEmail && !emailConfirmed))}
               onClick={handleReset}
             >
               Potvrdit
@@ -186,12 +200,31 @@ export function PasswordResetControls({
             <p>Odkaz pro heslo pošli, až bude zase aktivní.</p>
           ) : result.mailSent ? (
             <p>
-              Mail s odkazem pro nastavení hesla odešel na{" "}
-              <strong className="break-all">{resultEmail}</strong>.
+              Mail s odkazem pro nastavení hesla odešel{" "}
+              {resultEmail ? (
+                <>
+                  na <strong className="break-all">{resultEmail}</strong>
+                </>
+              ) : (
+                <>
+                  členovi <strong className="break-words">{memberName}</strong>
+                </>
+              )}
+              .
             </p>
           ) : (
             <p className="text-danger">
-              Mail na <strong className="break-all">{resultEmail}</strong> se nepodařilo odeslat.
+              Mail{" "}
+              {resultEmail ? (
+                <>
+                  na <strong className="break-all">{resultEmail}</strong>
+                </>
+              ) : (
+                <>
+                  pro <strong className="break-words">{memberName}</strong>
+                </>
+              )}{" "}
+              se nepodařilo odeslat.
             </p>
           )}
           {!isInactive && (

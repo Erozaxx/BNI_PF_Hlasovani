@@ -10,8 +10,8 @@
  *   3. validace hesla (nevalidní heslo odkaz nespálí),
  *   4. bcrypt, až teď (L-1: náhodný token nestojí CPU),
  *   5. atomické spotřebování (ze dvou souběžných kliků projde jeden),
- *   6. uložení hesla jen členovi, který roli NEBO funkci v DB pořád má
- *      (a je aktivní, T-003b).
+ *   6. uložení hesla jen aktivnímu členovi (iter-046: role ani funkce se
+ *      nevyžaduje, odkaz vystavuje jen vedení resetem nebo povýšením).
  */
 import {
   LINK_INVALID_TEXT,

@@ -14,6 +14,7 @@ import {
   conflictText,
   confirmExcuseOffSubstituteText,
   formatPragueTime,
+  medicalPeriodText,
   newRowSync,
   nextRequest,
   rowChecked,
@@ -387,20 +388,57 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
       );
       if (!ok) return;
     }
-    setRow(id, { ...before, excused, announcedName: excused ? before.announcedName : null });
+    setRow(id, { ...before, excused, announcedName: excused ? before.announcedName : null, medical: excused && before.medical });
     patchUi(id, { saving: true, message: null });
     try {
       const res = await postJson(endpoint, { op: "excuse", memberId: id, excused });
       const fresh = res.data?.row;
       if (res.status === 200 && res.data?.result === "ok" && fresh) {
         const current = rowsRef.current.find((r) => r.memberId === id) ?? fresh;
-        setRow(id, { ...current, excused: fresh.excused, announcedName: fresh.announcedName });
-        serverRows.current[id] = { ...serverRows.current[id], excused: fresh.excused, announcedName: fresh.announcedName };
+        const fields = {
+          excused: fresh.excused,
+          announcedName: fresh.announcedName,
+          medical: fresh.medical,
+          medicalPeriodUntil: fresh.medicalPeriodUntil,
+        };
+        setRow(id, { ...current, ...fields });
+        serverRows.current[id] = { ...serverRows.current[id], ...fields };
         patchUi(id, { saving: false, message: null });
         if (payload.mode === "history" || payload.excuseMode === "history") void poll();
       } else {
         setRow(id, before);
         patchUi(id, { saving: false, message: res.data?.message ?? SHEET_TEXTS.errSave });
+        if (res.data?.result === "finalized") void poll();
+      }
+    } catch {
+      setRow(id, before);
+      patchUi(id, { saving: false, message: SHEET_TEXTS.errSave });
+    }
+  }
+
+  // ── „Medical“ u omluvy bez náhradníka (iter-046, bez verze) ──
+
+  async function onToggleMedical(row: SheetRow, medical: boolean) {
+    const id = row.memberId;
+    const before = rowsRef.current.find((r) => r.memberId === id) ?? row;
+    setRow(id, { ...before, medical });
+    patchUi(id, { saving: true, message: null });
+    try {
+      const res = await postJson(endpoint, { op: "medical", memberId: id, medical });
+      const fresh = res.data?.row;
+      if (res.status === 200 && res.data?.result === "ok" && fresh) {
+        const current = rowsRef.current.find((r) => r.memberId === id) ?? fresh;
+        setRow(id, { ...current, medical: fresh.medical, medicalPeriodUntil: fresh.medicalPeriodUntil });
+        serverRows.current[id] = {
+          ...serverRows.current[id],
+          medical: fresh.medical,
+          medicalPeriodUntil: fresh.medicalPeriodUntil,
+        };
+        patchUi(id, { saving: false, message: null });
+        if (payload.mode === "history" || payload.excuseMode === "history") void poll();
+      } else {
+        setRow(id, before);
+        patchUi(id, { saving: false, message: res.data?.message ?? res.data?.error ?? SHEET_TEXTS.errSave });
         if (res.data?.result === "finalized") void poll();
       }
     } catch {
@@ -502,6 +540,9 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
                 <div className="min-w-0">
                   <p className="font-medium text-text-main">{row.name}</p>
                   {announced && <p className="text-xs text-text-muted">{announced}</p>}
+                  {row.medicalPeriodUntil && (
+                    <p className="text-xs text-text-muted">{medicalPeriodText(row.medicalPeriodUntil)}</p>
+                  )}
                 </div>
                 {state.saving && (
                   <span className="shrink-0 text-xs text-text-muted" role="status">
@@ -538,10 +579,33 @@ export function AttendanceSheet({ endpoint, initial }: AttendanceSheetProps) {
                       type="checkbox"
                       className="h-5 w-5 accent-primary"
                       checked={row.excused}
-                      disabled={excuseDisabled || state.saving || row.status === "unexcused"}
+                      disabled={
+                        excuseDisabled ||
+                        state.saving ||
+                        row.status === "unexcused" ||
+                        row.medicalPeriodUntil !== null
+                      }
                       onChange={(e) => void onToggleExcuse(row, e.target.checked)}
                     />
                     {SHEET_TEXTS.excused}
+                  </label>
+                )}
+                {/* iter-046 (arch 5.3): Medical jen u omluvy bez náhradníka; z období je zamčené, bez práva `members.medical` také. */}
+                {!checked && row.excused && !row.announcedName && (
+                  <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-text-main">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-primary"
+                      checked={row.medical}
+                      disabled={
+                        excuseDisabled ||
+                        state.saving ||
+                        !payload.canMedical ||
+                        row.medicalPeriodUntil !== null
+                      }
+                      onChange={(e) => void onToggleMedical(row, e.target.checked)}
+                    />
+                    {SHEET_TEXTS.medical}
                   </label>
                 )}
                 {!checked && !row.excused && (

@@ -132,17 +132,16 @@ export async function updateMemberCompany(
  * CTE se jmenuje `prev`, ne `old`: PostgreSQL 18 má v RETURNING vlastní
  * alias `old` a jméno by se s ním potkalo.
  *
+ * iter-046 (L-3): každá skutečná změna adresy zvýší `session_version` (dřív jen
+ * vedení). Běžný člen má teď heslo i session z odkazu, staré session i heslo
+ * po změně schránky přestanou platit.
+ *
  * iter-037 (M-1): e-mail je přihlašovací jméno i adresa pro odkazy, proto účet
  * admina mění jen admin (`actorId`). `null` i pro člena, kterého volající
  * měnit nesmí (akce to pozná předem a řekne proč).
  */
-export async function updateMemberEmail(
-  memberId: string,
-  email: string | null,
-  actorId: string
-): Promise<{ changed: boolean; revokedLinks: number } | null> {
-  const normalized = normalizeEmailForStorage(email);
-  const result = await getDb().execute<{ changed: boolean; revoked_links: number }>(sql`
+export function updateMemberEmailSql(memberId: string, normalized: string | null, actorId: string) {
+  return sql`
     WITH prev AS (
       SELECT id, email FROM member t
       WHERE t.id = ${memberId}::uuid AND ${actorMayChangeSql("t", actorId)}
@@ -151,9 +150,7 @@ export async function updateMemberEmail(
       UPDATE member m SET
         email = ${normalized}::text,
         session_version = CASE
-          WHEN (m.management_role IS NOT NULL
-                OR EXISTS (SELECT 1 FROM member_function mf WHERE mf.member_id = m.id))
-           AND prev.email IS DISTINCT FROM ${normalized}::text
+          WHEN prev.email IS DISTINCT FROM ${normalized}::text
           THEN m.session_version + 1
           ELSE m.session_version END
       FROM prev
@@ -167,7 +164,18 @@ export async function updateMemberEmail(
     )
     SELECT upd.changed, (SELECT count(*)::int FROM revoked) AS revoked_links
     FROM upd
-  `);
+  `;
+}
+
+export async function updateMemberEmail(
+  memberId: string,
+  email: string | null,
+  actorId: string
+): Promise<{ changed: boolean; revokedLinks: number } | null> {
+  const normalized = normalizeEmailForStorage(email);
+  const result = await getDb().execute<{ changed: boolean; revoked_links: number }>(
+    updateMemberEmailSql(memberId, normalized, actorId)
+  );
   const row = result.rows[0];
   if (!row) return null;
   return { changed: !!row.changed, revokedLinks: Number(row.revoked_links) };
@@ -316,11 +324,8 @@ export async function getMemberByPreviousTokenHash(tokenHash: string) {
  * ruční akcí admina (`updateMagicToken` vrací `token_used = false`).
  * Vrací člena, nebo `null` (neexistuje).
  */
-export async function revokeMagicLinkGuarded(
-  memberId: string,
-  actorId: string
-): Promise<{ id: string; name: string } | null> {
-  const result = await getDb().execute<{ id: string; name: string }>(sql`
+export function revokeMagicLinkSql(memberId: string, actorId: string) {
+  return sql`
     WITH upd AS (
       UPDATE member SET
         magic_token_hash = NULL,
@@ -339,7 +344,16 @@ export async function revokeMagicLinkGuarded(
         AND used_at IS NULL
     )
     SELECT id, name FROM upd
-  `);
+  `;
+}
+
+export async function revokeMagicLinkGuarded(
+  memberId: string,
+  actorId: string
+): Promise<{ id: string; name: string } | null> {
+  const result = await getDb().execute<{ id: string; name: string }>(
+    revokeMagicLinkSql(memberId, actorId)
+  );
   return result.rows[0] ?? null;
 }
 
@@ -375,6 +389,9 @@ export async function getMemberAuthState(
       deactivatedAt: member.deactivatedAt,
       inactiveUntil: member.inactiveUntil,
       attendanceManagerSince: member.attendanceManagerSince,
+      // iter-046 (arch 8.3): režim vlastního hesla bez dalšího dotazu.
+      hasHash: sql<boolean>`(${member.passwordHash} IS NOT NULL)`,
+      pendingSetPassword: sql<boolean>`EXISTS (SELECT 1 FROM member_login_link l WHERE l.member_id = ${member.id} AND l.purpose = 'set-password' AND l.used_at IS NULL)`,
       functionName: chapterFunction.name,
       functionPermissions: chapterFunction.permissions,
     })
@@ -390,6 +407,8 @@ export async function getMemberAuthState(
     deactivatedAt: rows[0].deactivatedAt,
     inactiveUntil: rows[0].inactiveUntil,
     attendanceManagerSince: rows[0].attendanceManagerSince,
+    hasHash: !!rows[0].hasHash,
+    pendingSetPassword: !!rows[0].pendingSetPassword,
     hasFunction: rows.some((r) => r.functionName !== null),
     functions: rows
       .filter((r) => r.functionName !== null)
@@ -553,20 +572,17 @@ export async function deleteMemberGuarded(
 }
 
 /**
- * Reset hesla vedení (5.3): zámkový hash, nová verze session. Volající
- * s právem `access.password_reset` (iter-043), cíl člen s rolí nebo funkcí,
- * nikdy volající a účet admina jen pro admina. Staré heslo i všechny session končí hned.
+ * Reset hesla člena (5.3, iter-046 8.5): zámkový hash, nová verze session.
+ * Volající s právem `access.password_reset` (iter-043), cíl kterýkoli člen
+ * s e-mailem (iter-046, P1: heslo smí mít každý), nikdy volající a účet admina
+ * jen pro admina. Staré heslo i všechny session končí hned.
  *
  * Security L-5: nepoužité odkazy `set-password` přestanou platit v tomtéž
  * příkazu. Reset tak funguje jako nouzové zablokování i tehdy, když
  * následné vystavení odkazu nebo mail selže.
  */
-export async function resetPasswordGuarded(
-  targetId: string,
-  actorId: string,
-  lockHash: string
-): Promise<GuardedMemberRow | null> {
-  const result = await getDb().execute<GuardedMemberRow>(sql`
+export function resetPasswordSql(targetId: string, actorId: string, lockHash: string) {
+  return sql`
     WITH upd AS (
       UPDATE member SET
         password_hash   = ${lockHash}::text,
@@ -575,9 +591,7 @@ export async function resetPasswordGuarded(
         AND id <> ${actorId}::uuid
         AND ${actorMayChangeSql("member", actorId)}
         AND ${actorHasPermissionSql(actorId, "access.password_reset")}
-        AND (management_role IS NOT NULL OR EXISTS (
-          SELECT 1 FROM member_function mf WHERE mf.member_id = ${targetId}::uuid
-        ))
+        AND email IS NOT NULL AND email <> ''
       RETURNING id, email, name
     ), revoked AS (
       UPDATE member_login_link SET used_at = now()
@@ -586,45 +600,104 @@ export async function resetPasswordGuarded(
         AND used_at IS NULL
     )
     SELECT id, email, name FROM upd
-  `);
+  `;
+}
+
+export async function resetPasswordGuarded(
+  targetId: string,
+  actorId: string,
+  lockHash: string
+): Promise<GuardedMemberRow | null> {
+  const result = await getDb().execute<GuardedMemberRow>(
+    resetPasswordSql(targetId, actorId, lockHash)
+  );
   return result.rows[0] ?? null;
 }
 
+export type OwnPasswordWrite =
+  | { mode: "set" }
+  | { mode: "change"; verifiedHash: string };
+
 /**
- * Uloží hash hesla člena s přístupem a zvýší verzi session (5.2 bod 5, 5.4).
- *
- * iter-037 (T-003b): přístup = role NEBO funkce (`hasPasswordAccess`), funkce
- * bez role stačí. Neaktivní člen heslo nenastaví (odkaz pak končí jako
- * neplatný). Nula řádků = člen mezitím přišel o roli i funkci, je neaktivní
- * (nebo neexistuje). `managementRole` je `null` u držitele funkce bez role.
+ * iter-046 (arch 8.4): vlastní heslo člena jedním příkazem. Režim `set`: běžný
+ * člen (bez role i funkce) bez hashe (`password_hash IS NULL`). Zámek po
+ * resetu nebo povýšení se heslem ze session nepřepíše (M-1), jde jen odkazem
+ * `set-password` z mailu. Režim `change`: hash se mezitím
+ * nezměnil (`password_hash = verifiedHash`), souběžný reset vedením heslo
+ * přepíše a změna neprojde. Obojí jen pro aktivního člena. Nepoužité odkazy
+ * `set-password` jsou po zápisu použité. `null` = pojistka nepustila.
  */
-export async function setOwnPassword(
-  memberId: string,
-  passwordHash: string
-): Promise<{ sessionVersion: number; managementRole: string | null; name: string } | null> {
-  const rows = await getDb()
-    .update(member)
-    .set({
-      passwordHash,
-      sessionVersion: sql`${member.sessionVersion} + 1`,
-    })
-    .where(
-      and(
-        eq(member.id, memberId),
-        memberActiveSql("member"),
-        sql`(${member.managementRole} IS NOT NULL OR EXISTS (
-          SELECT 1 FROM member_function mf WHERE mf.member_id = ${memberId}::uuid
-        ))`
-      )
+export function setOwnPasswordSql(memberId: string, newHash: string, write: OwnPasswordWrite) {
+  const cond =
+    write.mode === "set"
+      ? sql`AND management_role IS NULL
+        AND NOT EXISTS (SELECT 1 FROM member_function mf WHERE mf.member_id = ${memberId}::uuid)
+        AND password_hash IS NULL`
+      : sql`AND password_hash = ${write.verifiedHash}::text`;
+  return sql`
+    WITH upd AS (
+      UPDATE member SET
+        password_hash   = ${newHash}::text,
+        session_version = session_version + 1
+      WHERE id = ${memberId}::uuid
+        AND ${memberActiveSql("member")}
+        ${cond}
+      RETURNING session_version, management_role, name
+    ), revoked AS (
+      UPDATE member_login_link SET used_at = now()
+      WHERE member_id IN (SELECT ${memberId}::uuid FROM upd)
+        AND purpose = 'set-password'
+        AND used_at IS NULL
     )
-    .returning({
-      sessionVersion: member.sessionVersion,
-      managementRole: member.managementRole,
-      name: member.name,
-    });
-  const row = rows[0];
+    SELECT session_version, management_role, name FROM upd
+  `;
+}
+
+type OwnPasswordRow = { session_version: number; management_role: string | null; name: string };
+
+export async function setOwnPasswordGuarded(
+  memberId: string,
+  newHash: string,
+  write: OwnPasswordWrite
+): Promise<{ sessionVersion: number; managementRole: string | null; name: string } | null> {
+  const result = await getDb().execute<OwnPasswordRow>(setOwnPasswordSql(memberId, newHash, write));
+  const row = result.rows[0];
   if (!row) return null;
-  return { sessionVersion: row.sessionVersion, managementRole: row.managementRole, name: row.name };
+  return {
+    sessionVersion: Number(row.session_version),
+    managementRole: row.management_role,
+    name: row.name,
+  };
+}
+
+/**
+ * iter-046 (arch 8.4): heslo z odkazu „nastav si heslo“ (po resetu nebo
+ * povýšení). Odkaz vystavuje jen vedení, proto se role ani funkce nevyžaduje,
+ * stačí aktivní člen. Odkaz je v tu chvíli už spotřebovaný.
+ */
+export function setPasswordFromLinkSql(memberId: string, newHash: string) {
+  return sql`
+    UPDATE member SET
+      password_hash   = ${newHash}::text,
+      session_version = session_version + 1
+    WHERE id = ${memberId}::uuid
+      AND ${memberActiveSql("member")}
+    RETURNING session_version, management_role, name
+  `;
+}
+
+export async function setPasswordFromLink(
+  memberId: string,
+  newHash: string
+): Promise<{ sessionVersion: number; managementRole: string | null; name: string } | null> {
+  const result = await getDb().execute<OwnPasswordRow>(setPasswordFromLinkSql(memberId, newHash));
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    sessionVersion: Number(row.session_version),
+    managementRole: row.management_role,
+    name: row.name,
+  };
 }
 
 /**

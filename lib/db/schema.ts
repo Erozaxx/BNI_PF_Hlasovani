@@ -90,8 +90,21 @@ export const member = pgTable(
       (): AnyPgColumn => member.id,
       { onDelete: "set null" }
     ),
+    // iter-046 (arch 3.1): medical období. `medical_until` = poslední medical
+    // den včetně. Obojí NULL = bez medical. Logika: lib/members/medical.ts.
+    medicalFrom: date("medical_from"),
+    medicalUntil: date("medical_until"),
+    medicalSetBy: uuid("medical_set_by").references(
+      (): AnyPgColumn => member.id,
+      { onDelete: "set null" }
+    ),
+    medicalSetAt: timestamp("medical_set_at", { withTimezone: true }),
   },
   (table) => ({
+    medicalRange: check(
+      "member_medical_range",
+      sql`(${table.medicalFrom} IS NULL AND ${table.medicalUntil} IS NULL) OR (${table.medicalFrom} IS NOT NULL AND ${table.medicalUntil} IS NOT NULL AND ${table.medicalFrom} <= ${table.medicalUntil})`
+    ),
     inactiveUntilNeedsDeactivation: check(
       "member_inactive_until_needs_deactivation",
       sql`${table.inactiveUntil} IS NULL OR ${table.deactivatedAt} IS NOT NULL`
@@ -142,6 +155,8 @@ export const memberAbsence = pgTable(
       .references(() => member.id, { onDelete: "cascade" }),
     absenceDate: date("absence_date").notNull(),
     substituteName: text("substitute_name"),
+    // iter-046 (arch 3.1): medical omluva (jen bez náhradníka), do absencí se nepočítá.
+    medical: boolean("medical").notNull().default(false),
     createdBy: uuid("created_by").references(() => member.id, { onDelete: "set null" }),
     updatedBy: uuid("updated_by").references(() => member.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -149,6 +164,7 @@ export const memberAbsence = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.memberId, table.absenceDate] }),
+    medicalNoSub: check("ma_medical_no_sub", sql`NOT ${table.medical} OR ${table.substituteName} IS NULL`),
     dateIdx: index("idx_member_absence_date").on(table.absenceDate),
     subLen: check(
       "ma_sub_len",
@@ -321,7 +337,7 @@ export const attendanceAudit = pgTable(
   (table) => ({
     dateIdx: index("idx_attendance_audit_date").on(table.attendanceDate),
     memberIdx: index("idx_attendance_audit_member").on(table.memberId, table.attendanceDate),
-    fieldCheck: check("aa_field", sql`${table.field} IN ('presence', 'absence')`),
+    fieldCheck: check("aa_field", sql`${table.field} IN ('presence', 'absence', 'medical')`),
   })
 );
 

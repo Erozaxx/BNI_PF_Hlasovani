@@ -8,7 +8,7 @@ import {
   eventVote,
   member,
 } from "@/lib/db/schema";
-import { memberActiveSql } from "@/lib/db/queries/member-active";
+import { memberActiveSql, memberMedicalOnSql } from "@/lib/db/queries/member-active";
 
 function getDb() {
   return drizzleHttp(getSql());
@@ -298,6 +298,24 @@ export async function markEventDone(eventId: string): Promise<void> {
  * `addOptionByParticipantAction`, aby už otevřená stránka `/e/...`
  * deaktivovaného člena nic nezapsala (stránka samotná vrací 404).
  */
+/**
+ * iter-046 (arch 6.2 V3): smí účastník akce hlasovat. Externí účastník ano,
+ * člen jen aktivní a dnes bez medical (`memberMayVoteNow`). Neexistující
+ * účastník = `false` (fail closed). `isEventParticipantAllowed` (přidání
+ * možnosti) zůstává beze změny.
+ */
+export async function isEventParticipantAllowedToVote(participantId: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({
+      allowed: sql<boolean>`(${eventParticipant.memberId} IS NULL OR (${memberActiveSql("member")} AND NOT ${memberMedicalOnSql("member", sql`(now() AT TIME ZONE 'Europe/Prague')::date`)}))`,
+    })
+    .from(eventParticipant)
+    .leftJoin(member, eq(eventParticipant.memberId, member.id))
+    .where(eq(eventParticipant.id, participantId))
+    .limit(1);
+  return rows[0]?.allowed === true;
+}
+
 export async function isEventParticipantAllowed(participantId: string): Promise<boolean> {
   const rows = await getDb()
     .select({
