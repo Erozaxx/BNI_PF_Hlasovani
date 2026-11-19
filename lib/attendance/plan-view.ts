@@ -11,8 +11,10 @@ import {
   expandMedicalPeriods,
   planRange,
   scheduleDaysInRange,
+  toPublicPlanEntries,
   type PlanEntry,
   type PlanRange,
+  type PublicPlanEntry,
 } from "@/lib/attendance/plan";
 import { listMedicalPeriods, listMeetingDates, listPlannedAbsences } from "@/lib/db/queries/attendance";
 import { listInternalDays } from "@/lib/db/queries/attendance-internal";
@@ -29,6 +31,14 @@ export interface AbsencePlanData extends PlanRange {
   regularWeekday: number;
 }
 
+/** iter-047: data pro člena bez `attendance.view_all`, jen veřejné řádky. */
+export interface PublicAbsencePlanData extends PlanRange {
+  rows: PublicPlanEntry[];
+  meetingDates: string[];
+  internalDates: string[];
+  regularWeekday: number;
+}
+
 export async function loadAbsencePlan(
   session: PermissionHolder | null | undefined,
   today: string
@@ -36,6 +46,35 @@ export async function loadAbsencePlan(
   if (!can(session, "attendance.view_all")) {
     throw new Error(NO_PERMISSION_MESSAGE);
   }
+  const base = await loadPlanRows(today);
+  return { ...base, canManageInternal: can(session, "attendance.internal_manage") };
+}
+
+/**
+ * iter-047: veřejný pohled pro každého přihlášeného. Ven jdou jen `date`, `name`,
+ * `substituteName` (ořez po odvození medical, ať se neztratí deduplikace).
+ */
+export async function loadAbsencePlanPublic(
+  session: { memberId?: string } | null | undefined,
+  today: string
+): Promise<PublicAbsencePlanData> {
+  if (!session?.memberId) {
+    throw new Error(NO_PERMISSION_MESSAGE);
+  }
+  const base = await loadPlanRows(today);
+  return {
+    minMonth: base.minMonth,
+    maxMonth: base.maxMonth,
+    from: base.from,
+    to: base.to,
+    rows: toPublicPlanEntries(base.rows),
+    meetingDates: base.meetingDates,
+    internalDates: base.internalDates,
+    regularWeekday: base.regularWeekday,
+  };
+}
+
+async function loadPlanRows(today: string): Promise<Omit<AbsencePlanData, "canManageInternal">> {
   const range = planRange(today);
   const [storedRows, meetingDates, internalDates, settings, periods] = await Promise.all([
     listPlannedAbsences(range.from, range.to),
@@ -60,7 +99,6 @@ export async function loadAbsencePlan(
     rows,
     meetingDates,
     internalDates,
-    canManageInternal: can(session, "attendance.internal_manage"),
     regularWeekday: settings.meetingWeekday,
   };
 }

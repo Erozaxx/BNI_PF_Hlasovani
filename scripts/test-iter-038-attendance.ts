@@ -679,8 +679,8 @@ const tests: TestCase[] = [
         "memberDeadlineHelp(settings)",
         "Bez záznamu počítáme, že přijdete. Náhradník se jako absence nepočítá. Na dashboardu vidíte své absence za posledních 6 měsíců.",
         "Kdo vidí, že chybím?",
-        // iter-046 (P1): záložka Členové, odpověď upravena (ostatní vidí omluvu a počet absencí)
-        "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí jen to, že jste na daný den omluvený(á), a počet vašich absencí.",
+        // iter-046 (P1), iter-047 (gate změna 4): odpověď upravena
+        "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí u každé schůzky, jestli jste omluvený(á) a koho posíláte jako náhradníka, po schůzce i chybění bez omluvy. Vidí taky počet vašich absencí. Medical nevidí, ukáže se jim jako omluva.",
         "Proč mám absenci, i když jsem se omluvil(a)?",
         "Omluva bez náhradníka se podle pravidel počítá jako absence. Když pošlete náhradníka, absence to není.",
         "Jak smažu jméno náhradníka?",

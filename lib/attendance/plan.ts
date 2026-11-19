@@ -19,7 +19,13 @@ import {
   monthOf,
   monthStart,
 } from "@/lib/attendance/rules";
-import { DEFAULT_CHAPTER_SETTINGS, nextRegularDay, type ChapterSettings } from "@/lib/chapter/settings";
+import { MEMBERS_VIEW_TEXTS } from "@/lib/attendance/texts";
+import {
+  DEFAULT_CHAPTER_SETTINGS,
+  isRegularDay,
+  nextRegularDay,
+  type ChapterSettings,
+} from "@/lib/chapter/settings";
 
 export const PLAN_TEXTS = {
   title: "Omluvy",
@@ -29,17 +35,28 @@ export const PLAN_TEXTS = {
   link: "Zápis dne",
   prevMonth: "Předchozí měsíc",
   nextMonth: "Další měsíc",
+  /** iter-047 (gate změna 2): věta pod nadpisem pro člena bez `attendance.view_all`. */
+  readOnlyNote: "Svou omluvu zapíšeš v záložce Moje.",
+  /** iter-047: odkaz pod dnem pro člena. */
+  membersLink: "Celý den v záložce Členové",
 } as const;
 
-/** Jedna ohlášená omluva (řádek z `member_absence` s jménem aktivního člena). */
-export interface PlanEntry {
+/**
+ * iter-047 (arch 4.2): veřejný řádek omluvy pro člena bez `attendance.view_all`.
+ * Jen datum, jméno a náhradník. Žádné id člena, `medical` ani datum ohlášení.
+ */
+export interface PublicPlanEntry {
   /** `YYYY-MM-DD`, den omluvy. */
   date: string;
-  /** Jen klíč v seznamu. */
-  memberId: string;
   name: string;
   /** `null` = bez náhradníka. */
   substituteName: string | null;
+}
+
+/** Jedna ohlášená omluva (řádek z `member_absence` s jménem aktivního člena). */
+export interface PlanEntry extends PublicPlanEntry {
+  /** Jen klíč v seznamu. */
+  memberId: string;
   /** `YYYY-MM-DD`, kdy byla omluva zapsána (pražský den). */
   announcedOn: string;
   /** iter-046: medical omluva (uložená, nebo odvozená z období člena). */
@@ -129,14 +146,109 @@ export function planRange(today: string): PlanRange {
   };
 }
 
-/** Mapa datum na omluvy toho dne, jména řazená česky. */
-export function groupPlan(rows: readonly PlanEntry[]): Record<string, PlanEntry[]> {
-  const out: Record<string, PlanEntry[]> = {};
+/** Mapa datum na omluvy toho dne, jména řazená česky (shodná jména podle `memberId`, když je). */
+export function groupPlan<T extends PublicPlanEntry & { memberId?: string }>(
+  rows: readonly T[]
+): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
   for (const r of rows) (out[r.date] ??= []).push(r);
   for (const list of Object.values(out)) {
-    list.sort((a, b) => a.name.localeCompare(b.name, "cs") || a.memberId.localeCompare(b.memberId));
+    list.sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, "cs") || (a.memberId ?? "").localeCompare(b.memberId ?? "")
+    );
   }
   return out;
+}
+
+/**
+ * iter-047 (arch 4.3): ořez řádků vedení na veřejný tvar. Nový objekt po
+ * klíčích, žádný spread, ať se nic dalšího nedostane do klienta.
+ */
+export function toPublicPlanEntries(rows: readonly PublicPlanEntry[]): PublicPlanEntry[] {
+  return rows.map((r) => ({
+    date: r.date,
+    name: r.name,
+    substituteName: r.substituteName?.trim() || null,
+  }));
+}
+
+/** Tvar dat veřejné větve (strukturální, ať `plan.ts` zůstane čistý). */
+export interface PublicPlanShape extends PlanRange {
+  rows: PublicPlanEntry[];
+  meetingDates: string[];
+  internalDates: string[];
+  regularWeekday: number;
+}
+
+/** Props kalendáře v režimu čtení (přesně tyhle klíče jdou do klienta). */
+export interface PublicPlanCalendarProps {
+  readOnly: true;
+  today: string;
+  serverNow: string;
+  minMonth: { year: number; month: number };
+  maxMonth: { year: number; month: number };
+  meetingDates: string[];
+  internalDates: string[];
+  regularWeekday: number;
+  rows: PublicPlanEntry[];
+  canManageInternal: boolean;
+  initialSelected: string;
+}
+
+/** iter-047 (D5): props veřejné větve stránky, nový objekt po klíčích. */
+export function publicPlanCalendarProps(input: {
+  plan: PublicPlanShape;
+  today: string;
+  serverNow: string;
+  requested: string | null;
+  canManageInternal: boolean;
+}): PublicPlanCalendarProps {
+  const { plan, today, serverNow, requested, canManageInternal } = input;
+  const rows = toPublicPlanEntries(plan.rows);
+  return {
+    readOnly: true,
+    today,
+    serverNow,
+    minMonth: plan.minMonth,
+    maxMonth: plan.maxMonth,
+    meetingDates: plan.meetingDates,
+    internalDates: plan.internalDates,
+    regularWeekday: plan.regularWeekday,
+    rows,
+    canManageInternal,
+    initialSelected: pickInitialDay({
+      today,
+      requested,
+      datesWithAbsences: rows.map((r) => r.date),
+      from: plan.from,
+      to: plan.to,
+      settings: { meetingWeekday: plan.regularWeekday },
+    }),
+  };
+}
+
+/**
+ * iter-047 (Q2): odkaz „Celý den v záložce Členové“ jen na schůzkový den v rozsahu
+ * záložky Členové (`[absenceWindowStart, today + MAX_ADVANCE_DAYS]`).
+ */
+export function isPlanMembersDay(
+  date: string,
+  today: string,
+  input: { meetingDates: readonly string[]; internalDates: readonly string[]; regularWeekday: number }
+): boolean {
+  if (date < absenceWindowStart(today) || date > addDaysToDateString(today, MAX_ADVANCE_DAYS)) return false;
+  return (
+    input.meetingDates.includes(date) ||
+    input.internalDates.includes(date) ||
+    isRegularDay(date, { meetingWeekday: input.regularWeekday })
+  );
+}
+
+/** iter-047: štítek řádku pro člena, stejný jako v záložce Členové. */
+export function publicPlanLabel(row: Pick<PublicPlanEntry, "substituteName">): string {
+  const sub = row.substituteName?.trim();
+  return sub ? MEMBERS_VIEW_TEXTS.excusedWithSub(sub) : MEMBERS_VIEW_TEXTS.excused;
 }
 
 /** „1 omluvený“, „3 omluvení“, „5 omluvených“ (do `aria-label`). */

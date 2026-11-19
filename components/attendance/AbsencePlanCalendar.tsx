@@ -22,7 +22,10 @@ import {
   planEntryLine,
   planEntryMeta,
   planSummary,
+  isPlanMembersDay,
+  publicPlanLabel,
   type PlanEntry,
+  type PublicPlanEntry,
 } from "@/lib/attendance/plan";
 import { dayCellClass, dayNumberClass, dayTone } from "@/lib/attendance/internal";
 import { isRegularDay } from "@/lib/chapter/settings";
@@ -38,6 +41,11 @@ import { isRegularDay } from "@/lib/chapter/settings";
  * iter-040: interní dny jsou zeleně, správce s právem `attendance.internal_manage`
  * má pod seznamem dne kartu pro založení a zrušení. Po zrušení (Z2) se dni
  * lokálně srovná počet i seznam omluvených, bez `router.refresh()`.
+ *
+ * iter-047: `readOnly` (člen bez `attendance.view_all`) dostává jen veřejné řádky
+ * (`PublicPlanEntry`). Řádek je „Jméno · Omluven(a)“, bez šedého řádku a bez odkazu
+ * na Zápis, místo něj odkaz do záložky Členové. Komponenta se v tomhle režimu na
+ * `medical` ani `announcedOn` neptá.
  */
 
 export interface AbsencePlanCalendarProps {
@@ -51,7 +59,9 @@ export interface AbsencePlanCalendarProps {
   /** iter-040: dny s interní schůzkou (zeleně). */
   internalDates: string[];
   canManageInternal: boolean;
-  rows: PlanEntry[];
+  rows: readonly (PublicPlanEntry | PlanEntry)[];
+  /** iter-047: režim čtení pro člena bez `attendance.view_all`. */
+  readOnly: boolean;
   /** Vybraný den při otevření. */
   initialSelected: string;
   /** iter-042 (B3): den pravidelné schůzky z nastavení, 0 = neděle ... 6 = sobota (čtvrtek = 4). */
@@ -67,6 +77,7 @@ export function AbsencePlanCalendar({
   internalDates,
   canManageInternal,
   rows,
+  readOnly,
   initialSelected,
   regularWeekday,
 }: AbsencePlanCalendarProps) {
@@ -211,22 +222,38 @@ export function AbsencePlanCalendar({
           <p className="mt-2 text-sm text-text-muted">{PLAN_TEXTS.empty}</p>
         ) : (
           <ul className="mt-2 divide-y divide-border">
-            {entries.map((e) => (
-              <li key={e.memberId} className="py-2">
-                <p className="text-sm text-text-main">
-                  <span className="font-medium">{e.name}</span> · {planEntryLine(e)}
-                </p>
-                <p className="text-xs text-text-muted">{planEntryMeta(e, today)}</p>
-              </li>
-            ))}
+            {entries.map((e, i) =>
+              readOnly ? (
+                <li key={i} className="py-2">
+                  <p className="text-sm text-text-main">
+                    <span className="font-medium">{e.name}</span> · {publicPlanLabel(e)}
+                  </p>
+                </li>
+              ) : (
+                <li key={(e as PlanEntry).memberId} className="py-2">
+                  <p className="text-sm text-text-main">
+                    <span className="font-medium">{e.name}</span> · {planEntryLine(e)}
+                  </p>
+                  <p className="text-xs text-text-muted">{planEntryMeta(e as PlanEntry, today)}</p>
+                </li>
+              )
+            )}
           </ul>
         )}
-        {planCanOpenSheet(selected, today) && (
+        {!readOnly && planCanOpenSheet(selected, today) && (
           <Link
             href={`/dochazka/zapis?d=${selected}`}
             className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-border bg-surface px-3 text-sm text-text-main hover:bg-background focus:outline-none focus:shadow-focus"
           >
             {PLAN_TEXTS.link}
+          </Link>
+        )}
+        {readOnly && isPlanMembersDay(selected, today, { meetingDates, internalDates: [...internals], regularWeekday }) && (
+          <Link
+            href={`/dochazka/clenove?d=${selected}`}
+            className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-border bg-surface px-3 text-sm text-text-main hover:bg-background focus:outline-none focus:shadow-focus"
+          >
+            {PLAN_TEXTS.membersLink}
           </Link>
         )}
       </Card>

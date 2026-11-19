@@ -122,3 +122,7 @@ export const HELP_PASSWORD_LOGIN =
 /** iter-046 (arch 11): jedna věta o záložce Členové v Docházce. */
 export const HELP_ATTENDANCE_MEMBERS =
   "V záložce Členové vidíte počty absencí všech za posledních 6 měsíců a u zvoleného dne, kdo je omluvený, kdo přišel a kdo chyběl bez omluvy.";
+
+/** iter-047 (gate změna 3): jedna věta o záložce Omluvy v Docházce. */
+export const HELP_ATTENDANCE_PLAN =
+  "V záložce Omluvy vidíte, kdo je na který den omluvený a jestli posílá náhradníka. Číslo pod dnem je počet omluvených, klepnutím na den uvidíte jména. Svou omluvu zapíšete v záložce Moje.";
