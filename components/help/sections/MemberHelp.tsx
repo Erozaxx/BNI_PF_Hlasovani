@@ -9,6 +9,7 @@ import {
 } from "@/lib/semafor/texts";
 import {
   HELP_ATTENDANCE_MEMBERS,
+  HELP_ATTENDANCE_PLAN,
   HELP_ATTENDANCE_TERMS,
   HELP_BUTTON_GO_VOTE,
   HELP_PASSWORD_LOGIN,
@@ -325,13 +326,14 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
         faq={[
           { q: "Omluva, nebo absence?", a: HELP_ATTENDANCE_TERMS },
           {
-            q: "Proč nemám záložky Zápis, Omluvy a Přehled?",
-            a: "Záložky vidí jen správci docházky a vedení. Vy máte Moje a Členové.",
+            q: "Proč nemám záložky Zápis a Přehled?",
+            a: "Záložky vidí jen správci docházky a vedení. Vy máte Moje, Členové a Omluvy.",
           },
           { q: "Co je záložka Členové?", a: HELP_ATTENDANCE_MEMBERS },
+          { q: "Co je záložka Omluvy?", a: HELP_ATTENDANCE_PLAN },
           {
             q: "Kdo vidí, že chybím?",
-            a: "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí jen to, že jste na daný den omluvený(á), a počet vašich absencí.",
+            a: "Zápis a přehled vidí správci docházky, Prezident, Viceprezident a admin. Ostatní členové vidí u každé schůzky, jestli jste omluvený(á) a koho posíláte jako náhradníka, po schůzce i chybění bez omluvy. Vidí taky počet vašich absencí. Medical nevidí, ukáže se jim jako omluva.",
           },
           {
             q: "Proč mám absenci, i když jsem se omluvil(a)?",

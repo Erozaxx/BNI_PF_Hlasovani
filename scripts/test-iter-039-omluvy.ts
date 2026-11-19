@@ -179,10 +179,13 @@ const tests: TestCase[] = [
     name: "8. statika stránky: guard attendance.view_all, force-dynamic, bez loading.tsx",
     run: () => {
       const page = read("app/(app)/dochazka/omluvy/page.tsx");
-      assert.ok(page.includes('requirePageSession({\n    permission: "attendance.view_all",\n    denyTo: "/dochazka",\n  })'));
+      // iter-047: stránku vidí každý přihlášený, tvar dat rozhoduje can() na serveru
+      assert.ok(page.includes("requirePageSession()"));
+      assert.ok(!/permission:\s*"attendance\.view_all"/.test(page));
+      assert.ok(page.includes('can(session, "attendance.view_all")'));
       assert.ok(page.includes('export const dynamic = "force-dynamic"'));
       assert.ok(page.includes("loadAbsencePlan(session, today)"));
-      assert.ok(page.includes('<AttendanceTabs active="plan" canViewAll />'));
+      assert.ok(page.includes('<AttendanceTabs active="plan" canViewAll={canViewAll} />'));
       assert.ok(!existsSync(join(ROOT, "app/(app)/dochazka/omluvy/loading.tsx")), "loading.tsx v segmentu (LL-017)");
       assert.ok(!existsSync(join(ROOT, "app/(app)/dochazka/loading.tsx")));
       const code = stripComments(page);
@@ -193,10 +196,14 @@ const tests: TestCase[] = [
     name: "9. statika guardu dotazu: loader ověří právo před dotazem, dotaz se jinde neimportuje",
     run: () => {
       const view = stripComments(read("lib/attendance/plan-view.ts"));
+      // iter-047: guard v každé exportované funkci, dotaz je v neexportované loadPlanRows
       const guard = view.indexOf('can(session, "attendance.view_all")');
       const call = view.indexOf("listPlannedAbsences(");
-      assert.ok(guard > 0 && call > 0 && guard < call, "can() před listPlannedAbsences");
+      const rowsFn = view.indexOf("async function loadPlanRows");
+      assert.ok(guard > 0 && call > 0 && rowsFn > 0 && guard < rowsFn && rowsFn < call, "can() před loadPlanRows s dotazem");
+      assert.ok(!view.includes("export async function loadPlanRows"));
       assert.ok(/if \(!can\(session, "attendance\.view_all"\)\) \{\s*throw new Error/.test(view), "fail closed");
+      assert.ok(/if \(!session\?\.memberId\) \{\s*throw new Error/.test(view), "fail closed (veřejný loader)");
       const users: string[] = [];
       for (const dir of ["app", "components", "actions", "lib"]) {
         for (const f of walk(dir)) {

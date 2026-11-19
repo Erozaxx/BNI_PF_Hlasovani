@@ -11,17 +11,20 @@ export type AttendanceTab = "mine" | "members" | "sheet" | "plan" | "overview";
  *
  * iter-046 (arch 9.4): záložky se ukazují každému. Bez `attendance.view_all`
  * „Moje“ a „Členové“, s ním navíc „Zápis“, „Omluvy“, „Přehled“.
+ *
+ * iter-047: „Omluvy“ vidí každý přihlášený (člen jen ke čtení). Bez práva Moje,
+ * Členové, Omluvy, s ním Moje, Členové, Zápis, Omluvy, Přehled.
  */
 export function AttendanceTabs({ active, canViewAll }: { active: AttendanceTab; canViewAll: boolean }) {
   const tabs: { id: AttendanceTab; href: string; label: string }[] = [
     { id: "mine", href: "/dochazka", label: OVERVIEW_TEXTS.tabMine },
     { id: "members", href: "/dochazka/clenove", label: OVERVIEW_TEXTS.tabMembers },
     ...(canViewAll
-      ? [
-          { id: "sheet" as const, href: "/dochazka/zapis", label: OVERVIEW_TEXTS.tabSheet },
-          { id: "plan" as const, href: "/dochazka/omluvy", label: OVERVIEW_TEXTS.tabPlan },
-          { id: "overview" as const, href: "/dochazka/prehled", label: OVERVIEW_TEXTS.tabOverview },
-        ]
+      ? [{ id: "sheet" as const, href: "/dochazka/zapis", label: OVERVIEW_TEXTS.tabSheet }]
+      : []),
+    { id: "plan", href: "/dochazka/omluvy", label: OVERVIEW_TEXTS.tabPlan },
+    ...(canViewAll
+      ? [{ id: "overview" as const, href: "/dochazka/prehled", label: OVERVIEW_TEXTS.tabOverview }]
       : []),
   ];
   return (
