@@ -1,9 +1,9 @@
-import { eq, and, or, ne, asc, desc, count, inArray, sql } from "drizzle-orm";
+import { eq, and, or, ne, asc, desc, count, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/neon-http";
-import { addMonths, differenceInCalendarDays, isAfter, parseISO } from "date-fns";
 import { getSql } from "@/lib/db/client";
-import { memberActiveSql } from "@/lib/db/queries/member-active";
+import { memberActiveSql, memberMedicalOnSql } from "@/lib/db/queries/member-active";
+import { computeDueEntry } from "@/lib/interviews/due";
 import {
   interview,
   interviewQuestion,
@@ -614,8 +614,6 @@ export async function upsertInterviewAnswer(params: {
 // Due-list (5/10 months, computed-on-read — arch section 7.2)
 // ============================================================
 
-const UPCOMING_WINDOW_DAYS = 14;
-
 export type InterviewDueEntry = {
   memberId: string;
   memberName: string;
@@ -633,8 +631,6 @@ export type InterviewDueEntry = {
   due10SinceDays: number | null;
   upcoming5: boolean;
   upcoming10: boolean;
-  /** iter-037 (K15): neaktivní člen zůstává v přehledu se štítkem „Neaktivní“. */
-  isInactive: boolean;
 };
 
 /**
@@ -660,8 +656,6 @@ export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
       memberEmail: member.email,
       joinedAt: member.joinedAt,
       joinedAtUnverified: sql<boolean>`(${member.joinedAt} = ${member.createdAt}::date)`,
-      // iter-037 (K15): bez data, jen příznak (členové PK, group by id stačí).
-      isInactive: sql<boolean>`NOT ${memberActiveSql("member")}`,
       // COALESCE(..., false) is required: bool_or() over a LEFT JOIN with zero
       // matching interview rows aggregates a single NULL and returns NULL, not
       // false — without this a member with no interviews at all would get
@@ -671,47 +665,21 @@ export async function getInterviewDueList(): Promise<InterviewDueEntry[]> {
     })
     .from(member)
     .leftJoin(interview, eq(interview.memberId, member.id))
+    .where(interviewDueVisibleSql())
     .groupBy(member.id, member.name, member.email, member.joinedAt, member.createdAt)
     .orderBy(asc(member.name));
 
   const today = new Date();
 
-  return rows.map((row) => {
-    const joined = parseISO(row.joinedAt);
-    // due5Date/due10Date are the dates the member ENTERS the relevant month
-    // (4 / 9 completed months), not the dates that month elapses — iter-024.
-    const due5Date = addMonths(joined, 4);
-    const due10Date = addMonths(joined, 9);
+  return rows.map((row) => computeDueEntry(row, today));
+}
 
-    const due5 = !row.hasMonth5Interview && !isAfter(due5Date, today);
-    const due10 = !row.hasMonth10Interview && !isAfter(due10Date, today);
-
-    const upcoming5 =
-      !row.hasMonth5Interview &&
-      !due5 &&
-      differenceInCalendarDays(due5Date, today) <= UPCOMING_WINDOW_DAYS;
-    const upcoming10 =
-      !row.hasMonth10Interview &&
-      !due10 &&
-      differenceInCalendarDays(due10Date, today) <= UPCOMING_WINDOW_DAYS;
-
-    return {
-      memberId: row.memberId,
-      memberName: row.memberName,
-      memberEmail: row.memberEmail,
-      joinedAt: row.joinedAt,
-      joinedAtUnverified: row.joinedAtUnverified,
-      hasMonth5Interview: row.hasMonth5Interview,
-      hasMonth10Interview: row.hasMonth10Interview,
-      due5,
-      due10,
-      due5SinceDays: due5 ? differenceInCalendarDays(today, due5Date) : null,
-      due10SinceDays: due10 ? differenceInCalendarDays(today, due10Date) : null,
-      upcoming5,
-      upcoming10,
-      isInactive: row.isInactive,
-    };
-  });
+/**
+ * iter-048: v seznamu k založení jen aktivní člen bez dnes platného medical
+ * (iter-048: neaktivní a medical se v seznamu k založení neukazují).
+ */
+export function interviewDueVisibleSql(): SQL {
+  return sql`(${memberActiveSql("member")} AND NOT ${memberMedicalOnSql("member", sql`(now() AT TIME ZONE 'Europe/Prague')::date`)})`;
 }
 
 // ============================================================

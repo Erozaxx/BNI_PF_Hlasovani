@@ -72,7 +72,6 @@ export default async function InterviewsPage({
     due10SinceDays: e.due10SinceDays,
     upcoming5: e.upcoming5,
     upcoming10: e.upcoming10,
-    isInactive: e.isInactive,
   }));
 
   // memberId -> which types already have a non-cancelled interview - comfort
