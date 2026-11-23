@@ -277,7 +277,7 @@ export function ModeratorHelp({
 
       <HelpSection
         title="Pohovory s novými členy"
-        intro="V pátém a desátém měsíci členství dělá vedení s členem pohovor. Komu pohovor vychází, ukazuje stránka Pohovory a dashboard. „Na řadě“ znamená, že od vstupu člena uplynulo 5 nebo 10 měsíců, „Blíží se“ že bude na řadě brzy."
+        intro="V pátém a desátém měsíci členství dělá vedení s členem pohovor. Komu pohovor vychází, ukazuje stránka Pohovory a dashboard. „Na řadě“ znamená, že od vstupu člena uplynulo 5 nebo 10 měsíců, „Blíží se“ že bude na řadě brzy. Člen s medical nebo deaktivovaný se na stránce Pohovory ani na dashboardu neukazuje, dokud to trvá. Pak se vrátí s původním termínem. Pohovor s ním založíte i mezitím přes „Založit pohovor“."
         steps={[
           "Klikněte na „Založit pohovor“, vyberte člena, typ (5 nebo 10 měsíců) a vedoucího pohovoru.",
           "V detailu pohovoru pošlete vedoucímu odkaz na formulář tlačítkem „Odeslat odkaz“. Vedoucí ho vyplní bez přihlášení.",
