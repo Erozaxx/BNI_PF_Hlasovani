@@ -103,6 +103,8 @@ const TODAY_MODERATOR: Permission[] = [
   "attendance.internal_manage",
   // iter-043: reset hesla člena vedení (gate K13 A).
   "access.password_reset",
+  // iter-049: klientské situace za jiného člena (gate Q2 A).
+  "situations.manage",
 ];
 
 // Tabulka akce -> právo (arch 6.6, upravená o změny zadání).
@@ -241,8 +243,8 @@ const tests: TestCase[] = [
       // iter-038: +4 práva docházky (attendance.record, view_all, audit_view, edit_history),
       // iter-040: +1 (attendance.internal_manage), iter-041: +2 (semafor.view_all, semafor.import).
       // iter-042: +1 (chapter.settings). iter-043: +1 (access.password_reset). iter-044: +1 (semafor.points).
-      // iter-046 (M2): +1 (members.medical).
-      assert.equal(PERMISSIONS.length, 31);
+      // iter-046 (M2): +1 (members.medical). iter-049: +1 (situations.manage).
+      assert.equal(PERMISSIONS.length, 32);
     },
   },
   {
@@ -1599,7 +1601,7 @@ const tests: TestCase[] = [
     run: () => {
       const del = read("app/(app)/admin/members/DeleteMemberButton.tsx");
       for (const t of [
-        "Vrátit to nepůjde. Smaže se i jeho docházka, omluvy, semafor, hlasy u hostů, pohovory, Burza a jeho případy v Master mindu.",
+        "Vrátit to nepůjde. Smaže se i jeho docházka, omluvy, semafor, hlasy u hostů, pohovory, Burza, jeho případy v Master mindu a klientské situace.",
         "Když člen jen odchází, použij Deaktivovat.",
         'return "pohovorů"',
       ]) assert.ok(del.includes(t), `DeleteMemberButton: ${t}`);

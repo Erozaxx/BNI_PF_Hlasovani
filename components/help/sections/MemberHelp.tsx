@@ -315,6 +315,45 @@ export function MemberHelp({ settings = DEFAULT_CHAPTER_SETTINGS }: MemberHelpPr
       )}
 
       <HelpSection
+        title="Klientské situace"
+        intro="Klientské situace jsou podklad pro mapu společných potřeb klientů v chapteru. Každý člen má tři situace."
+        steps={[
+          <>
+            Otevřete v navigaci <strong>Klientské situace</strong> a klikněte na{" "}
+            <strong>Vyplnit své situace</strong>.
+          </>,
+          "U každé ze tří situací napište, kdo je klient, a přidávejte kartičky: potřeby, obavy, touhy a související potřeby. Kartičku potvrdíte klávesou Enter, další se otevře hned.",
+          <>
+            Mezi situacemi přepínáte tlačítky <strong>Předchozí</strong> a{" "}
+            <strong>Další situace</strong>, na třetí obrazovce se vrátíte tlačítkem{" "}
+            <strong>Zpět na přehled</strong>.
+          </>,
+        ]}
+        faq={[
+          {
+            q: "Kdy se text uloží?",
+            a: "Každá kartička se uloží hned po Enteru nebo po opuštění pole, tlačítko pro uložení všeho neexistuje. Když se uložení nepovede, text v poli zůstane a objeví se Zkusit znovu.",
+          },
+          {
+            q: "Co se stane s textem z workshopu?",
+            a: "Zůstává v rámečku nad formulářem a aplikace ho nepřepíše. Převzatou kartičku můžete upravit, u upravené je vidět původní znění.",
+          },
+          {
+            q: "Kdo situace vidí a upravuje?",
+            a: "Situace všech vidí každý přihlášený člen. Upravujete jen své, za vás je může doplnit vedení.",
+          },
+          {
+            q: "Jak dostanu všechny situace do Excelu?",
+            a: "Na přehledu Klientské situace pod seznamem členů klikněte na Stáhnout tabulku (CSV). Soubor otevřete v Excelu, každá kartička je jeden řádek.",
+          },
+          {
+            q: "Co když mi vyprší přihlášení?",
+            a: "Text v poli zůstane. Zkopírujte si ho, přihlaste se znovu a vložte ho.",
+          },
+        ]}
+      />
+
+      <HelpSection
         title="Docházka"
         steps={[
           "V menu Docházka klepněte na den.",

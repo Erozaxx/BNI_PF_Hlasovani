@@ -81,6 +81,11 @@ export const PERMISSIONS = [
   // Výchozí sada FUNKCE (Člen výboru), P a VP značkou, admin vždy; ne role
   // moderátor ani příznak Správce docházky.
   "members.medical",
+  // iter-049 (gate Q2 A): klientské situace, zápis za jiného člena a data pro
+  // mapu. Je v sadě role moderátor, takže ho má i Člen výboru (spread do výchozí
+  // sady funkce), Prezident a Viceprezident značkou a admin vždy. Jen po
+  // přihlášení heslem, přihlášení odkazem má práva prázdná.
+  "situations.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -107,6 +112,8 @@ export const MODERATOR_ROLE_PERMISSIONS: readonly Permission[] = [
   "attendance.internal_manage",
   // iter-043 (gate K13 A): reset hesla člena vedení.
   "access.password_reset",
+  // iter-049 (gate Q2 A): klientské situace za jiného člena.
+  "situations.manage",
 ];
 
 /** Role `moderator` dává právo `permission` (SQL pojistka čte sadu role odsud, ne z opsaného seznamu). */

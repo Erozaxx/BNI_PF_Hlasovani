@@ -64,6 +64,7 @@ export default async function AppLayout({
           <NavLink href="/meetings">Schůzky</NavLink>
           {show.mastermind && <NavLink href="/mastermind">Master mind</NavLink>}
           {show.burza && <NavLink href="/burza">Burza pomoci</NavLink>}
+          <NavLink href="/situace">Klientské situace</NavLink>
           {show.semafor && <NavLink href="/semafor">Semafor</NavLink>}
           <NavLink href="/dochazka">Docházka</NavLink>
           {show.events && <NavLink href="/events">Akce</NavLink>}

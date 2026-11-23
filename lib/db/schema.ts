@@ -1647,3 +1647,94 @@ export const memberFunction = pgTable(
   })
 );
 
+
+// ============================================================
+// KLIENTSKÉ SITUACE (iter-049). Pravdou je scripts/migrate-iter-049-situace.ts
+// (DDL v lib/situations/ddl.ts). Aplikace nepoužívá drizzle pro zápis, SQL je
+// v lib/db/queries/client-situations.ts. `original` je neměnný snímek
+// z workshopu, píše ho jen importní skript. `client_situation_item.id` posílá
+// klient (idempotence dvojího odeslání), pořadí kartiček je `created_at, id`.
+// ============================================================
+export const clientSituation = pgTable(
+  "client_situation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    slot: smallint("slot").notNull(),
+    sourceId: text("source_id"),
+    client: text("client").notNull().default(""),
+    title: text("title").notNull().default(""),
+    description: text("description").notNull().default(""),
+    original: jsonb("original"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedBy: uuid("updated_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    slotCheck: check("cs_slot", sql`${table.slot} BETWEEN 1 AND 3`),
+    memberSlot: unique("cs_member_slot").on(table.memberId, table.slot),
+    sourceUnique: unique("cs_source_id").on(table.sourceId),
+    lengths: check(
+      "cs_lengths",
+      sql`char_length(${table.client}) <= 80 AND char_length(${table.title}) <= 120 AND char_length(${table.description}) <= 1000`
+    ),
+  })
+);
+
+export const clientSituationItem = pgTable(
+  "client_situation_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    situationId: uuid("situation_id")
+      .notNull()
+      .references(() => clientSituation.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    text: text("text").notNull(),
+    importedText: text("imported_text"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedBy: uuid("updated_by").references(() => member.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    kindCheck: check(
+      "csi_kind",
+      sql`${table.kind} IN ('trait', 'need', 'fear', 'desire', 'related')`
+    ),
+    textCheck: check(
+      "csi_text",
+      sql`char_length(btrim(${table.text})) BETWEEN 1 AND 300`
+    ),
+    situationKindCreated: index("csi_situation_kind_created").on(
+      table.situationId,
+      table.kind,
+      table.createdAt,
+      table.id
+    ),
+  })
+);
+
+export const clientSituationSource = pgTable("client_situation_source", {
+  memberId: uuid("member_id")
+    .primaryKey()
+    .references(() => member.id, { onDelete: "cascade" }),
+  sourceName: text("source_name").notNull(),
+  filledForm: boolean("filled_form").notNull(),
+  competences: jsonb("competences").notNull().default(sql`'[]'::jsonb`),
+  importedAt: timestamp("imported_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

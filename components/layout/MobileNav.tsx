@@ -107,6 +107,13 @@ export function MobileNav({ show, name }: MobileNavProps) {
             Burza pomoci
           </Link>
         )}
+        <Link
+          href="/situace"
+          className="block px-3 py-2 rounded-lg text-sm hover:bg-background"
+          onClick={() => setOpen(false)}
+        >
+          Klientské situace
+        </Link>
         {show.semafor && (
           <Link
             href="/semafor"

@@ -24,6 +24,7 @@ export default async function HelpPageRoute() {
       showSemaforPointsHelp={showPoints}
       showSemaforCommitteeHelp={showCommittee}
       showMedicalHelp={can(session, "members.medical")}
+      showSituationsHelp={can(session, "situations.manage")}
       settings={settings}
       canManageSettings={can(session, "chapter.settings")}
     />

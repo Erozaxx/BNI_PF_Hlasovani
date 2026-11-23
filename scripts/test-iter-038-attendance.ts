@@ -312,7 +312,7 @@ const tests: TestCase[] = [
       for (const p of ATT_PERMS) assert.ok((PERMISSIONS as readonly string[]).includes(p), p);
       for (const p of ATT_PERMS) assert.ok(!DEFAULT_FUNCTION_PERMISSIONS.includes(p), `výchozí sada: ${p}`);
       // iter-046 (M2): +members.medical
-      assert.equal(PERMISSIONS.length, 31, "iter-046: +members.medical, iter-044: +semafor.points, iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
+      assert.equal(PERMISSIONS.length, 32, "iter-049: +situations.manage, iter-046: +members.medical, iter-044: +semafor.points, iter-043: +access.password_reset, iter-040: +attendance.internal_manage, iter-041: +semafor.view_all, +semafor.import, iter-042: +chapter.settings");
       // jediné místo, kde příznak mění práva, je permissionsFor
       const src = stripComments(read("lib/auth/permissions.ts"));
       assert.ok(/input\.attendanceManager/.test(src));
@@ -1811,7 +1811,13 @@ const tests: TestCase[] = [
       const at = mw.indexOf("if (!session.memberId) {");
       assert.ok(at > 0);
       const branch = mw.slice(at, mw.indexOf("return response;", at));
-      assert.ok(/pathname === "\/api\/attendance" \|\| pathname\.startsWith\("\/api\/attendance\/"\)/.test(branch), "jen API docházky");
+      // iter-049: podmínka je rozepsaná na víc řádků a má třetí větev (sonda situací)
+      const cond = branch.replace(/\s+/g, " ");
+      assert.ok(cond.includes('pathname === "/api/attendance" || pathname.startsWith("/api/attendance/")'), "API docházky");
+      assert.ok(cond.includes('|| pathname === "/api/situace/session"'), "sonda situací (iter-049)");
+      assert.ok(cond.includes('|| pathname === "/api/situace/export/json"'), "export JSON situací (iter-049 QA12)");
+      assert.ok(cond.includes('|| pathname === "/api/situace/export/csv"'), "export CSV situací (iter-049 QA12)");
+      assert.ok(!/pathname\.startsWith\("\/api\/situace/.test(branch), "ne celé /api/situace");
       assert.ok(/NextResponse\.json\(\s*\{ error: "Na tohle nemáš oprávnění\." \},\s*\{ status: 401/.test(branch));
       // redirect na /login pro všechno ostatní zůstává ZA výjimkou
       assert.ok(branch.indexOf("status: 401") < branch.indexOf("NextResponse.redirect(loginUrl)"));
