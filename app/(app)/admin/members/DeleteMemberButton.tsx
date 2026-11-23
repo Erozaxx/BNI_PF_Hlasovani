@@ -36,7 +36,7 @@ export function DeleteMemberButton({
     const interviewWarning =
       interviewCount > 0 ? ` Má ${interviewCount} ${pohovorLabel(interviewCount)}.` : "";
     const confirmed = window.confirm(
-      `Smazat člena ${memberName}? Vrátit to nepůjde. Smaže se i jeho docházka, omluvy, semafor, hlasy u hostů, pohovory, Burza a jeho případy v Master mindu.${interviewWarning} Když člen jen odchází, použij Deaktivovat.`
+      `Smazat člena ${memberName}? Vrátit to nepůjde. Smaže se i jeho docházka, omluvy, semafor, hlasy u hostů, pohovory, Burza, jeho případy v Master mindu a klientské situace.${interviewWarning} Když člen jen odchází, použij Deaktivovat.`
     );
     if (!confirmed) return;
 

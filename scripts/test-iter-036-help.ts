@@ -164,7 +164,8 @@ const tests: TestCase[] = [
       assert.ok(!MODERATOR.includes("jde jen stáhnout a zapsat znovu"));
       assert.ok(MEMBER.includes("Jak případ smažu?") && MEMBER.includes("<strong>Smazat případ</strong>"));
       assert.ok(MEMBER.includes("Zařazený případ smaže vedení."));
-      assert.ok(!/Stáhnout|stáhnu|stáhne vedení/.test(MEMBER), "slovo Stáhnout u případu");
+      // iter-049: tlačítko „Stáhnout tabulku (CSV)“ patří Klientským situacím, ne případům
+      assert.ok(!/Stáhnout|stáhnu|stáhne vedení/.test(MEMBER.replaceAll("Stáhnout tabulku (CSV)", "")), "slovo Stáhnout u případu");
       assert.ok(read("components/mastermind/RemoveCaseButton.tsx").includes("UI_TEXTS.removeButton"));
       assert.equal(read("lib/mastermind/rules.ts").includes('removeButton: "Smazat případ"'), true);
     },

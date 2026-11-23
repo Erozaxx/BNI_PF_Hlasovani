@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Allow public paths (exact match only — no prefix matching)
+  // Allow public paths (exact match only - no prefix matching)
   if (PUBLIC_PATHS_EXACT.has(pathname)) {
     return NextResponse.next();
   }
@@ -80,24 +80,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow timer view pages (public read-only display) — LL-005
+  // Allow timer view pages (public read-only display) - LL-005
   if (pathname.startsWith("/t/")) {
     return NextResponse.next();
   }
 
-  // Allow timer API endpoints (state polling + control) — LL-005
+  // Allow timer API endpoints (state polling + control) - LL-005
   // Control endpoint (/api/t/[token]/control) is protected by control_token bearer auth in route handler
   if (pathname.startsWith("/api/t/")) {
     return NextResponse.next();
   }
 
   // Allow interview fill-form magic link paths (leader access via scoped
-  // token, no iron-session) — LL-005 (iter-020, T-008)
+  // token, no iron-session) - LL-005 (iter-020, T-008)
   if (pathname.startsWith("/i/") || pathname.startsWith("/api/i/")) {
     return NextResponse.next();
   }
 
-  // Public info pages about chapter rules (no session, static) — LL-005 (iter-029)
+  // Public info pages about chapter rules (no session, static) - LL-005 (iter-029)
   // Exact "/pravidla" or anything under "/pravidla/" (incl. /pravidla/zdroje/*.pdf,
   // logo and OG images). NOT "/pravidlaX", NOT "/pravidla-x", NOT "/api/...".
   if (pathname === "/pravidla" || pathname.startsWith("/pravidla/")) {
@@ -113,7 +113,14 @@ export async function middleware(request: NextRequest) {
     // iter-038 (T-003e, QA N1): API docházky bez session vrací 401 JSON, ne 307
     // na HTML stránku (klientský fetch by dostal HTML). Přihlášený bez práva
     // dostane 403 z route. Ostatní API a všechny stránky se přesměrují jako dřív.
-    if (pathname === "/api/attendance" || pathname.startsWith("/api/attendance/")) {
+    // iter-049 (review M-1, QA12): sonda a oba exporty situací, 401 místo přesměrování (přesné cesty).
+    if (
+      pathname === "/api/attendance" ||
+      pathname.startsWith("/api/attendance/") ||
+      pathname === "/api/situace/session" ||
+      pathname === "/api/situace/export/json" ||
+      pathname === "/api/situace/export/csv"
+    ) {
       return NextResponse.json(
         { error: "Na tohle nemáš oprávnění." },
         { status: 401, headers: { "Cache-Control": "no-store" } }

@@ -26,6 +26,8 @@ interface ModeratorHelpProps {
   semaforCommittee?: boolean;
   /** iter-046: právo `members.medical`: sekce „Medical“. */
   medical?: boolean;
+  /** iter-049: právo `situations.manage`: sekce „Klientské situace pro vedení“. */
+  situations?: boolean;
   /** iter-042: nastavení chapteru (den a začátek schůzky, zapnuté části). Bez něj platí výchozí stav. */
   settings?: ChapterSettings;
 }
@@ -41,6 +43,7 @@ export function ModeratorHelp({
   semaforPoints = false,
   semaforCommittee = false,
   medical = false,
+  situations = false,
   settings = DEFAULT_CHAPTER_SETTINGS,
 }: ModeratorHelpProps = {}) {
   const sources = bonusSources(settings);
@@ -52,6 +55,28 @@ export function ModeratorHelp({
           title="Medical"
           intro={`${MEDICAL_TEXTS.intro} Nastavíte ho v menu Členové: u člena zvolte datum „Medical do“ a uložte, „Zrušit medical“ ho vypne.`}
           note="Medical vidí vedení a správci docházky. Ostatní členové vidí jen omluvu a počet absencí."
+        />
+      )}
+
+      {situations && (
+        <HelpSection
+          title="Klientské situace pro vedení"
+          intro="Za jiného člena situace vyplníte v menu Klientské situace, blok Pro vedení, výběr Vyplnit za člena. Nahoře pak uvidíte, za koho vyplňujete. Funguje to jen po přihlášení heslem, přes odkaz z mailu blok Pro vedení není."
+          note="Funkce s ručně upraveným seznamem práv potřebuje právo situations.manage doplnit admin ve správě funkcí. Člen výboru, Prezident a Viceprezident ho mají."
+          faq={[
+            {
+              q: "Jak dostanu data do mapy?",
+              a: "V bloku Pro vedení stáhněte Data pro mapu (JSON) a uložte je jako situace.json do složky mapy místo původního souboru. Před assemble.sh pusťte npx tsx scripts/check-iter-049-export.ts s cestami k situace.json, vztahy.json a pozice.json. Když hlásí chybějící odkazy, mapu nesestavujte.",
+            },
+            {
+              q: "Co se po doplnění situací změní v mapě?",
+              a: "U nových a doplněných situací ukáže mapa pod nadpisem Původní znění text složený z aktuálních údajů. Věta o členech, kteří 22. 10. formulář nevyplnili, je po doplnění zastaralá. check_vztahy.py po úpravách hlásí neshody, to je očekávané.",
+            },
+            {
+              q: "Co když člen odchází?",
+              a: "Raději ho deaktivujte než smažte. Smazáním člena se smažou i jeho klientské situace.",
+            },
+          ]}
         />
       )}
 
