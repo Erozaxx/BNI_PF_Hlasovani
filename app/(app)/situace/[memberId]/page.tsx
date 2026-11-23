@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { can } from "@/lib/auth/permissions";
 import { getSituationMember, getSituationsForMember } from "@/lib/db/queries/client-situations";
+import { GUIDE_LINK_TEXT, GUIDE_PATH } from "@/lib/situations/guide";
 import { UI_TEXTS, canEditSituations, isUuid, readOriginal, type Slot } from "@/lib/situations/rules";
 import { SituationEditor } from "@/components/situations/SituationEditor";
 
@@ -57,6 +58,12 @@ export default async function SituationDetailPage({
         </Link>
         <h1 className="text-2xl font-bold text-text-main">{UI_TEXTS.pageTitle}</h1>
         <p className="text-sm text-text-muted">{member.name}</p>
+        <Link
+          href={GUIDE_PATH}
+          className="inline-flex min-h-[44px] items-center text-sm font-medium text-navy underline hover:text-primary-hover focus:outline-none focus:shadow-focus"
+        >
+          {GUIDE_LINK_TEXT}
+        </Link>
       </div>
 
       {canEdit && !isOwn && (
